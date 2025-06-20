@@ -173,7 +173,7 @@
               <label>Bài hát hiện tại:</label>
             </div>
             <div class="current-track-content">
-              <span>{{ currentSong?.name || 'Không có' }}</span>
+              <span>{{ currentSongFormatted }}</span>
               <button 
                 v-if="currentSong" 
                 @click="scrollToCurrentSong" 
@@ -612,8 +612,11 @@ const updateDiscordStatus = async () => {
   if (!discordEnabled.value || !currentSong.value) return
 
   try {
+    const { artist, title } = getArtistAndTitle(currentSong.value.name)
+    const formattedName = `${artist} - ${title}`
+    
     await window.electronAPI.discordUpdateStatus({
-      name: currentSong.value.name,
+      name: formattedName,
       beatmapsetId: currentSong.value.beatmapsetId
     })
   } catch (error) {
@@ -896,6 +899,12 @@ const getPlayModeTitle = () => {
   if (repeatOne.value) return 'Repeat one'
   return 'Repeat'
 }
+
+const currentSongFormatted = computed(() => {
+  if (!currentSong.value) return 'Không có'
+  const { artist, title } = getArtistAndTitle(currentSong.value.name)
+  return `${artist} - ${title}`
+})
 
 onMounted(async () => {
   await loadSongs()
