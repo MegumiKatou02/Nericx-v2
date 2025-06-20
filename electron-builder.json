@@ -1,0 +1,15 @@
+{
+    "appId": "com.nericx.nericx",
+    "files": ["dist-electron", "dist-vue"],
+    "icon": "./iconhe.jpg",
+    "mac": {
+        "target": "dmg"
+    },
+    "linux": {
+        "target": "AppImage",
+        "category": "Utility"
+    },
+    "win": {
+        "target": ["portable", "msi"]
+    }
+}

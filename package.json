@@ -1,0 +1,45 @@
+{
+  "name": "nericx",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Link and listen to music with osu!",
+  "author": "Yukiookii",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "npm-run-all --parallel dev:vue dev:electron",
+    "dev:vue": "vite",
+    "dev:electron": "npm run transpile:electron && cross-env NODE_ENV=development electron .",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "transpile:electron": "tsc --project src/electron/tsconfig.json",
+    "dist:mac": "npm run transpile:electron && npm run build && electron-builder --mac --arm64",
+    "dist:linux": "npm run transpile:electron && npm run build && electron-builder --linux --x64",
+    "dist:win": "npm run transpile:electron && npm run build && electron-builder -- win --x64"
+  },
+  "dependencies": {
+    "@types/archiver": "^6.0.3",
+    "@types/discord-rpc": "^4.0.9",
+    "@types/sqlite3": "^3.1.11",
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^11.10.0",
+    "discord-rpc": "^4.0.1",
+    "howler": "^2.2.4",
+    "music-metadata": "^11.3.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/howler": "^2.2.12",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/tsconfig": "^0.7.0",
+    "cross-env": "^7.0.3",
+    "electron": "^36.5.0",
+    "electron-builder": "^26.0.12",
+    "npm-run-all": "^4.1.5",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0",
+    "vue-tsc": "^2.2.4"
+  }
+}
