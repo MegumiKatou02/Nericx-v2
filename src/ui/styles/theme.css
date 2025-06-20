@@ -5,6 +5,7 @@
   --bg-tertiary: #40444b;
   --border-color: #4f545c;
   --text-primary: #ffffff;
+  --text-primary-transparent: #cccccc;
   --text-secondary: #dcddde;
   --text-muted: #b9bbbe;
   --accent-color: #7289da;
@@ -20,6 +21,7 @@
   --bg-tertiary: #e9ecef;
   --border-color: #dee2e6;
   --text-primary: #2c3e50;
+  --text-primary-transparent: #777777;
   --text-secondary: #495057;
   --text-muted: #6c757d;
   --accent-color: #007bff;

@@ -105,49 +105,63 @@
             </button>
             <button @click="toggleAdvancedControls" class="control-btn advanced-btn" :class="{ 'active': showAdvancedControls }">
               <i :class="showAdvancedControls ? 'fas fa-chevron-up' : 'fas fa-cog'"></i>
-              <span>{{ showAdvancedControls ? 'Ẩn tùy chỉnh' : 'Tùy chỉnh nhạc' }}</span>
+              <span>{{ showAdvancedControls ? 'Ẩn tùy chỉnh' : 'Tuỳ chỉnh nhạc' }}</span>
             </button>
           </div>
 
           <div v-if="showAdvancedControls" class="advanced-controls">
-            <div class="navigation-controls">
-              <button @click="previousSong" class="nav-control-btn" title="Bài trước">
-                <i class="fas fa-step-backward"></i>
-              </button>
-              <button @click="nextSong" class="nav-control-btn" title="Bài kế tiếp">
-                <i class="fas fa-step-forward"></i>
-              </button>
+            <div class="controls-grid">
+              <!-- Navigation Row -->
+              <div class="navigation-controls">
+                <button @click="previousSong" class="nav-control-btn" title="Bài trước">
+                  <i class="fas fa-step-backward"></i>
+                </button>
+                <button @click="nextSong" class="nav-control-btn" title="Bài kế tiếp">
+                  <i class="fas fa-step-forward"></i>
+                </button>
+              </div>
+
+              <!-- Volume Control -->
+              <div class="volume-control compact">
+                <div class="control-header compact">
+                  <i class="fas fa-volume-up"></i>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    :value="volume * 100"
+                    @input="onVolumeChange"
+                    class="range-slider compact"
+                    title="Âm lượng"
+                  >
+                  <span class="volume-value">{{ Math.round(volume * 100) }}%</span>
+                </div>
+              </div>
             </div>
 
-            <div class="volume-control">
-              <div class="control-header">
-                <i class="fas fa-volume-up"></i>
-                <label>Âm lượng:</label>
+            <!-- Time Progress -->
+            <div class="time-control compact">
+              <div class="progress-container">
+                <span class="current-time">{{ formatTime(currentTime) }}</span>
+                <div class="progress-bar-container">
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    :value="(currentTime / duration) * 100" 
+                    @input="onSeek"
+                    class="progress-bar"
+                    title="Tiến độ bài hát"
+                  >
+                  <div class="progress-track">
+                    <div 
+                      class="progress-fill" 
+                      :style="{ width: (currentTime / duration) * 100 + '%' }"
+                    ></div>
+                  </div>
+                </div>
+                <span class="total-time">{{ formatTime(duration) }}</span>
               </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                :value="volume * 100"
-                @input="onVolumeChange"
-                class="range-slider"
-              >
-            </div>
-
-            <div class="time-control">
-              <div class="control-header">
-                <i class="fas fa-clock"></i>
-                <label>Thời gian:</label>
-              </div>
-              <span class="time-display">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                :value="(currentTime / duration) * 100" 
-                @input="onSeek"
-                class="range-slider progress-slider"
-              >
             </div>
           </div>
         </div>
@@ -1266,7 +1280,8 @@ onUnmounted(() => {
   border-radius: 8px;
   border: 1px solid var(--accent-color-transparent);
   background: var(--bg-tertiary);
-  color: var(--text-primary);
+  /* color: var(--text-primary); */
+  color: var(--text-primary-transparent);
   cursor: pointer;
   transition: all 0.3s ease;
   font-size: 0.9em;
@@ -1413,170 +1428,90 @@ button:not(.control-btn):not(.nav-button):not(.scroll-to-song-btn):hover {
 .advanced-controls {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px;
+  gap: 12px;
+  padding: 12px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-color-transparent);
+}
+
+.controls-grid {
+  display: flex;
+  gap: 15px;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .navigation-controls {
   display: flex;
-  gap: 12px;
-  justify-content: flex-start;
+  gap: 8px;
   align-items: center;
 }
 
-.nav-control-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid var(--accent-color-transparent);
-  background: var(--bg-secondary);
-  color: var(--accent-color);
-  background: var(--bg-secondary) !important;
-  border-color: var(--accent-color-transparent) !important;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.volume-control.compact {
+  flex: 1;
+  min-width: 120px;
+}
+
+.control-header.compact {
   display: flex;
   align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-  outline: none;
-}
-
-.nav-control-btn:hover {
-  background: var(--accent-color);
-  color: white;
-  border-color: var(--accent-color);
-  transform: scale(1.1);
-  box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.4);
-}
-
-.nav-control-btn:active {
-  transform: scale(1.05);
-}
-
-.nav-control-btn:focus {
-  outline: none;
-}
-
-.nav-control-btn i {
-  transition: all 0.3s ease;
-}
-
-.nav-control-btn:hover i {
-  transform: scale(1.1);
-}
-
-.nav-control-btn::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  transform: translate(-50%, -50%);
-  transition: width 0.3s ease, height 0.3s ease;
-}
-
-.nav-control-btn:active::before {
-  width: 40px;
-  height: 40px;
-}
-
-.volume-control,
-.time-control {
-  display: flex;
-  flex-direction: column;
   gap: 8px;
 }
 
-.control-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.control-header.compact input[type="range"] {
+  flex: 1;
+  margin: 0 8px;
+}
+
+.volume-value {
+  font-size: 0.8em;
   color: var(--text-muted);
-  font-size: 0.9em;
-}
-
-.control-header i {
-  color: var(--accent-color);
-  font-size: 1em;
-  min-width: 16px;
-}
-
-.control-header label {
-  color: var(--text-muted);
-  font-size: 0.9em;
-  margin: 0;
-}
-
-.time-display {
-  color: var(--text-primary);
-  font-family: 'Courier New', monospace;
-  font-size: 0.9em;
+  min-width: 35px;
+  text-align: right;
   font-weight: 500;
-  padding: 4px 8px;
+}
+
+.time-control.compact {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.time-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.time-display.compact {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85em;
+  font-weight: 500;
+  color: var(--text-primary);
   background: var(--bg-secondary);
-  border-radius: 4px;
-  text-align: center;
+  padding: 2px 6px;
+  border-radius: 3px;
   border: 1px solid var(--accent-color-transparent);
 }
 
-.range-slider {
-  width: 100%;
+.range-slider.compact {
+  height: 4px;
+  opacity: 0.8;
+}
+
+.range-slider.compact:hover {
   height: 6px;
-  border-radius: 3px;
-  background: var(--bg-secondary);
-  outline: none;
-  opacity: 0.7;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.range-slider:hover {
   opacity: 1;
-  height: 8px;
 }
 
-.range-slider::-webkit-slider-thumb {
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--accent-color);
-  cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  transition: all 0.2s ease;
+.range-slider.compact::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
 }
 
-.range-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.4);
-}
-
-.range-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--accent-color);
-  cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-
-.progress-slider::-webkit-slider-track {
-  background: linear-gradient(
-    to right,
-    var(--accent-color) 0%,
-    var(--accent-color) calc(var(--progress, 0) * 1%),
-    var(--bg-secondary) calc(var(--progress, 0) * 1%),
-    var(--bg-secondary) 100%
-  );
+.range-slider.compact::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
 }
 
 .track-info {
@@ -1607,6 +1542,7 @@ button:not(.control-btn):not(.nav-button):not(.scroll-to-song-btn):hover {
 }
 
 .info-header i {
+  display: none; /* note */
   color: var(--accent-color);
   font-size: 1em;
   min-width: 16px;
@@ -1751,6 +1687,226 @@ label {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.nav-control-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-color-transparent);
+  background: var(--bg-secondary) !important;
+  border-color: var(--accent-color-transparent) !important;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  outline: none;
+}
+
+.nav-control-btn:hover {
+  background: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+  transform: scale(1.1);
+  box-shadow: 0 3px 12px rgba(var(--accent-rgb), 0.4);
+}
+
+.nav-control-btn:active {
+  transform: scale(1.05);
+}
+
+.nav-control-btn i {
+  font-size: 0.9em;
+  transition: all 0.3s ease;
+}
+
+.nav-control-btn:hover i {
+  transform: scale(1.1);
+}
+
+.volume-control,
+.time-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.control-header i {
+  color: var(--accent-color);
+  font-size: 1em;
+  min-width: 16px;
+}
+
+.control-header label {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  margin: 0;
+}
+
+.time-display {
+  color: var(--text-primary);
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  font-weight: 500;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  text-align: center;
+  border: 1px solid var(--accent-color-transparent);
+}
+
+.range-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  outline: none;
+  opacity: 0.7;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.range-slider:hover {
+  opacity: 1;
+  height: 8px;
+}
+
+.range-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.range-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.4);
+}
+
+.range-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.progress-slider::-webkit-slider-track {
+  background: linear-gradient(
+    to right,
+    var(--accent-color) 0%,
+    var(--accent-color) calc(var(--progress, 0) * 1%),
+    var(--bg-secondary) calc(var(--progress, 0) * 1%),
+    var(--bg-secondary) 100%
+  );
+}
+
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.current-time,
+.total-time {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  min-width: 40px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.progress-bar-container {
+  flex: 1;
+  position: relative;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.progress-track {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--bg-secondary);
+  border-radius: 2px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  border: 1px solid var(--accent-color-transparent);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-color), var(--accent-hover));
+  border-radius: 2px;
+  transition: width 0.1s ease;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  background: var(--accent-color);
+  border-radius: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: all 0.2s ease;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.progress-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  background: transparent;
+}
+
+.progress-bar-container:hover .progress-track {
+  height: 6px;
+}
+
+.progress-bar-container:hover .progress-fill::after {
+  opacity: 1;
+}
+
+.progress-bar-container:hover .progress-fill {
+  background: linear-gradient(90deg, var(--accent-color), var(--accent-color));
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.4);
 }
 </style>
 
