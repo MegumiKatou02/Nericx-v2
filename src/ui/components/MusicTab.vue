@@ -44,6 +44,16 @@
         </div>
 
         <div class="songs-list" ref="songsListRef">
+          <div v-if="sortedSongs.length === 0" class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-music"></i>
+            </div>
+            <div class="empty-title">Không có gì</div>
+            <div class="empty-subtitle">
+              {{ searchQuery ? 'Không tìm thấy bài hát nào phù hợp' : 'Chưa có bài hát nào trong danh sách' }}
+            </div>
+          </div>
+          
           <div 
             v-for="song in sortedSongs" 
             :key="song.path"
@@ -112,28 +122,28 @@
           <div v-if="showAdvancedControls" class="advanced-controls">
             <div class="controls-grid">
               <!-- Navigation Row -->
-              <div class="navigation-controls">
-                <button @click="previousSong" class="nav-control-btn" title="Bài trước">
-                  <i class="fas fa-step-backward"></i>
-                </button>
-                <button @click="nextSong" class="nav-control-btn" title="Bài kế tiếp">
-                  <i class="fas fa-step-forward"></i>
-                </button>
-              </div>
+            <div class="navigation-controls">
+              <button @click="previousSong" class="nav-control-btn" title="Bài trước">
+                <i class="fas fa-step-backward"></i>
+              </button>
+              <button @click="nextSong" class="nav-control-btn" title="Bài kế tiếp">
+                <i class="fas fa-step-forward"></i>
+              </button>
+            </div>
 
               <!-- Volume Control -->
               <div class="volume-control compact">
                 <div class="control-header compact">
                   <i class="fas fa-volume-up"></i>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="100" 
-                    :value="volume * 100"
-                    @input="onVolumeChange"
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                :value="volume * 100"
+                @input="onVolumeChange"
                     class="range-slider compact"
                     title="Âm lượng"
-                  >
+              >
                   <span class="volume-value">{{ Math.round(volume * 100) }}%</span>
                 </div>
               </div>
@@ -144,12 +154,12 @@
               <div class="progress-container">
                 <span class="current-time">{{ formatTime(currentTime) }}</span>
                 <div class="progress-bar-container">
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="100" 
-                    :value="(currentTime / duration) * 100" 
-                    @input="onSeek"
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                :value="(currentTime / duration) * 100" 
+                @input="onSeek"
                     class="progress-bar"
                     title="Tiến độ bài hát"
                   >
@@ -170,7 +180,7 @@
           <div class="current-track">
             <div class="info-header">
               <i class="fas fa-music"></i>
-              <label>Bài hát hiện tại:</label>
+            <label>Bài hát hiện tại:</label>
             </div>
             <div class="current-track-content">
               <span>{{ currentSongFormatted }}</span>
@@ -188,10 +198,10 @@
           <div v-if="discordEnabled" class="discord-status">
             <div class="info-header">
               <i class="fab fa-discord"></i>
-              <label>Trạng thái Discord:</label>
-            </div>
-            <span class="status-text connected">{{ discordStatus }}</span>
+            <label>Trạng thái Discord:</label>
           </div>
+            <span class="status-text connected">{{ discordStatus }}</span>
+        </div>
           <div v-else class="discord-status">
             <div class="info-header">
               <i class="fab fa-discord"></i>
@@ -642,22 +652,22 @@ const toggleDiscord = async () => {
   isDiscordLoading.value = true
 
   try {
-    if (discordEnabled.value) {
-      discordEnabled.value = false
-      await clearDiscordStatus()
-      try {
-        await window.electronAPI.discordDestroy()
-      } catch (error) {
-        console.error('Failed to destroy Discord client:', error)
-      }
-      discordStatus.value = 'Đã tắt'
-    } else {
-      await initDiscord()
-      if (discordEnabled.value && currentSong.value && isPlaying.value) {
-        setTimeout(async () => {
-          await updateDiscordStatus()
-        }, 500)
-      }
+  if (discordEnabled.value) {
+    discordEnabled.value = false
+    await clearDiscordStatus()
+    try {
+      await window.electronAPI.discordDestroy()
+    } catch (error) {
+      console.error('Failed to destroy Discord client:', error)
+    }
+    discordStatus.value = 'Đã tắt'
+  } else {
+    await initDiscord()
+    if (discordEnabled.value && currentSong.value && isPlaying.value) {
+      setTimeout(async () => {
+        await updateDiscordStatus()
+      }, 500)
+    }
     }
   } catch (error) {
     console.error('Discord toggle error:', error)
@@ -879,17 +889,17 @@ const selectOption = (option: SortOption) => {
 const scrollToCurrentSong = () => {
   if (!currentSong.value) return
   
-  selectedSong.value = currentSong.value
-  
+    selectedSong.value = currentSong.value
+    
   const currentIndex = sortedSongs.value.findIndex(song => song.path === currentSong.value?.path)
-  if (currentIndex !== -1) {
-    const songElement = document.querySelector('.song-item.playing')
-    if (songElement) {
-      songElement.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'nearest',
-        inline: 'nearest'
-      })
+    if (currentIndex !== -1) {
+      const songElement = document.querySelector('.song-item.playing')
+      if (songElement) {
+        songElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'nearest',
+          inline: 'nearest'
+        })
     }
   }
 }
@@ -1926,6 +1936,59 @@ label {
 .progress-bar-container:hover .progress-fill {
   background: linear-gradient(90deg, var(--accent-color), var(--accent-color));
   box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.4);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+  text-align: center;
+  padding: 40px 20px;
+  opacity: 0.7;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  color: var(--accent-color);
+  margin-bottom: 20px;
+  position: relative;
+  animation: float 3s ease-in-out infinite;
+}
+
+.empty-icon i {
+  background: linear-gradient(45deg, var(--accent-color), var(--accent-hover));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(var(--accent-rgb), 0.3));
+}
+
+.empty-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  opacity: 0.9;
+}
+
+.empty-subtitle {
+  font-size: 1rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 </style>
 

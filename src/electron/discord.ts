@@ -22,15 +22,21 @@ async function initDiscord(): Promise<{ success: boolean; message?: string }> {
   }
 }
 
-async function updateStatus(songInfo: { name: string; beatmapsetId?: string }) {
+async function updateStatus(songInfo: { name: string; beatmapsetId?: string; imagePath?: string }) {
   if (!client) return
 
   const activity: any = {
     details: songInfo.name,
     state: 'Nghe nhạc trong Nericx',
-    largeImageKey: 'image1',
-    largeImageText: 'osu!',
     startTimestamp: Date.now()
+  }
+
+  if (songInfo.beatmapsetId) {
+    activity.largeImageKey = `https://assets.ppy.sh/beatmaps/${songInfo.beatmapsetId}/covers/cover.jpg`
+    activity.largeImageText = songInfo.name
+  } else {
+    activity.largeImageKey = 'image1'
+    activity.largeImageText = 'osu!'
   }
 
   if (songInfo.beatmapsetId) {
