@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveFile: (sourcePath: string, fileName: string) => ipcRenderer.invoke('save-file', sourcePath, fileName),
   copyFile: (filePath: string) => ipcRenderer.invoke('copy-file', filePath),
   
+  setWindowTransparency: (enabled: boolean, opacity: number) => ipcRenderer.invoke('set-window-transparency', enabled, opacity),
+  getWindowOpacity: () => ipcRenderer.invoke('get-window-opacity'),
+  
   discordInit: () => ipcRenderer.invoke('discord:init'),
   discordUpdateStatus: (songInfo: any) => ipcRenderer.invoke('discord:update-status', songInfo),
   discordClear: () => ipcRenderer.invoke('discord:clear'),

@@ -56,6 +56,36 @@
           </div>
         </div>
       </div>
+
+      <div class="setting-option">
+        <label>Độ trong suốt:</label>
+        <div class="transparency-section">
+          <div class="transparency-toggle">
+            <button 
+              :class="{ active: transparencyEnabled }" 
+              @click="toggleTransparency"
+            >
+              {{ transparencyEnabled ? 'Bật' : 'Tắt' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-option" v-if="transparencyEnabled">
+        <label>Độ mờ:</label>
+        <div class="opacity-section">
+          <input 
+            type="range" 
+            min="0.3" 
+            max="1" 
+            step="0.01" 
+            :value="opacity" 
+            @input="setOpacity(parseFloat(($event.target as HTMLInputElement).value))"
+            class="opacity-slider"
+          >
+          <span class="opacity-value">{{ Math.round(opacity * 100) }}%</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -65,6 +95,8 @@ import { ref, onMounted } from 'vue'
 
 const theme = ref('dark')
 const accentColor = ref('#7289da')
+const transparencyEnabled = ref(false)
+const opacity = ref(1.0)
 
 const presetColors = [
   { name: 'Discord Blue', value: '#7289da' },
@@ -126,6 +158,47 @@ const updateCSSVariables = (color: string) => {
   root.style.setProperty('--accent-hover', darkerColor)
 }
 
+const updateAppTransparency = async () => {
+  const root = document.documentElement
+  const body = document.body
+  
+  if (transparencyEnabled.value) {
+    body.style.setProperty('--app-opacity', opacity.value.toString())
+    root.style.setProperty('--app-background-opacity', (opacity.value * 0.9).toString())
+    
+    body.classList.add('app-transparent')
+    
+    try {
+      await window.electronAPI.setWindowTransparency(true, opacity.value)
+    } catch (error) {
+      console.error('Error setting window transparency:', error)
+    }
+  } else {
+    body.style.setProperty('--app-opacity', '1')
+    root.style.setProperty('--app-background-opacity', '1')
+    body.classList.remove('app-transparent')
+    
+    try {
+      await window.electronAPI.setWindowTransparency(false, 1.0)
+    } catch (error) {
+      console.error('Error disabling window transparency:', error)
+    }
+  }
+}
+
+const toggleTransparency = async () => {
+  transparencyEnabled.value = !transparencyEnabled.value
+  await window.electronAPI.setConfig('transparencyEnabled', transparencyEnabled.value.toString())
+  await window.electronAPI.setConfig('opacity', opacity.value.toString())
+  await updateAppTransparency()
+}
+
+const setOpacity = async (value: number) => {
+  opacity.value = value
+  await window.electronAPI.setConfig('opacity', value.toString())
+  await updateAppTransparency()
+}
+
 onMounted(async () => {
   try {
     const savedTheme = await window.electronAPI.getConfig('theme')
@@ -138,6 +211,20 @@ onMounted(async () => {
     if (savedAccentColor) {
       accentColor.value = savedAccentColor
       updateCSSVariables(savedAccentColor)
+    }
+
+    const savedTransparency = await window.electronAPI.getConfig('transparencyEnabled')
+    if (savedTransparency !== undefined) {
+      transparencyEnabled.value = savedTransparency === 'true'
+    }
+
+    const savedOpacity = await window.electronAPI.getConfig('opacity')
+    if (savedOpacity !== undefined) {
+      opacity.value = parseFloat(savedOpacity) || 1.0
+    }
+
+    if (transparencyEnabled.value) {
+      await updateAppTransparency()
     }
   } catch (error) {
     console.error('Error loading config:', error)
@@ -342,5 +429,147 @@ h3 {
 .light .color-input:focus {
   border-color: var(--accent-color, #007bff);
   outline: none;
+}
+
+.transparency-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.transparency-toggle button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 60px;
+}
+
+.dark .transparency-toggle button {
+  background: #40444b;
+  color: #dcddde;
+}
+
+.light .transparency-toggle button {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.dark .transparency-toggle button.active {
+  background: var(--accent-color, #7289da);
+  color: white;
+  box-shadow: 0 0 10px rgba(114, 137, 218, 0.3);
+}
+
+.light .transparency-toggle button.active {
+  background: var(--accent-color, #007bff);
+  color: white;
+  box-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+}
+
+.dark .transparency-toggle button:hover:not(.active) {
+  background: #4f545c;
+}
+
+.light .transparency-toggle button:hover:not(.active) {
+  background: #dee2e6;
+}
+
+.opacity-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
+}
+
+.opacity-slider {
+  flex: 1;
+  max-width: 200px;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.dark .opacity-slider {
+  background: #40444b;
+}
+
+.light .opacity-slider {
+  background: #dee2e6;
+}
+
+.opacity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-color, #7289da);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.opacity-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.opacity-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-color, #7289da);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.opacity-value {
+  font-weight: 600;
+  min-width: 45px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.dark .opacity-value {
+  color: #dcddde;
+}
+
+.light .opacity-value {
+  color: #495057;
+}
+
+/* Global styles để áp dụng transparency cho toàn app */
+:global(body.app-transparent) {
+  opacity: var(--app-opacity, 1);
+  transition: opacity 0.3s ease;
+}
+
+:global(body.app-transparent .app-background) {
+  background-color: rgba(47, 49, 54, var(--app-background-opacity, 1)) !important;
+}
+
+:global([data-theme="light"] body.app-transparent .app-background) {
+  background-color: rgba(255, 255, 255, var(--app-background-opacity, 1)) !important;
+}
+
+:global(body.app-transparent .setting-section) {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+:global(body.app-transparent .dark .setting-section) {
+  background: rgba(54, 57, 63, var(--app-background-opacity, 0.8)) !important;
+  border: 1px solid rgba(79, 84, 92, var(--app-background-opacity, 0.6));
+}
+
+:global(body.app-transparent .light .setting-section) {
+  background: rgba(248, 249, 250, var(--app-background-opacity, 0.8)) !important;
+  border: 1px solid rgba(222, 226, 230, var(--app-background-opacity, 0.6));
 }
 </style> 

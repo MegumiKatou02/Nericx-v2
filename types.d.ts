@@ -15,6 +15,9 @@ declare global {
     saveFile(sourcePath: string, fileName: string): Promise<{ success: boolean; message: string }>
     copyFile(filePath: string): Promise<{ success: boolean; message: string }>
     
+    setWindowTransparency(enabled: boolean, opacity: number): Promise<boolean>
+    getWindowOpacity(): Promise<number>
+    
     discordInit(): Promise<{ success: boolean; message?: string }>
     discordUpdateStatus(songInfo: any): Promise<void>
     discordClear(): Promise<void>

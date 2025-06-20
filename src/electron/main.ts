@@ -23,6 +23,7 @@ function createWindow() {
     minHeight: 660,
     // resizable: false,
     frame: false,
+    transparent: true,
     webPreferences: {
       preload: getPreloadPath(),
       webSecurity: false,
@@ -182,3 +183,22 @@ player.on('allMetadataUpdated', () => {
 })
 
 setupDiscordHandlers();
+
+ipcMain.handle('set-window-transparency', async (_, enabled: boolean, opacity: number) => {
+  if (mainWindow) {
+    if (enabled) {
+      mainWindow.setOpacity(opacity)
+    } else {
+      mainWindow.setOpacity(1.0)
+    }
+    return true
+  }
+  return false
+})
+
+ipcMain.handle('get-window-opacity', async () => {
+  if (mainWindow) {
+    return mainWindow.getOpacity()
+  }
+  return 1.0
+})
