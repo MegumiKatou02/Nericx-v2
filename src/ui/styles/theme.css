@@ -1,5 +1,6 @@
 :root[data-theme="dark"] {
   --bg-primary: #2f3136;
+  --bg-primary-transparent: #d6d6d6;
   --bg-secondary: #36393f;
   --bg-tertiary: #40444b;
   --border-color: #4f545c;
@@ -14,6 +15,7 @@
 
 :root[data-theme="light"] {
   --bg-primary: #ffffff;
+  --bg-primary-transparent: #777777;
   --bg-secondary: #f8f9fa;
   --bg-tertiary: #e9ecef;
   --border-color: #dee2e6;

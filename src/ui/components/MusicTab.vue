@@ -120,24 +120,33 @@
             </div>
 
             <div class="volume-control">
-              <label>Âm lượng:</label>
+              <div class="control-header">
+                <i class="fas fa-volume-up"></i>
+                <label>Âm lượng:</label>
+              </div>
               <input 
                 type="range" 
                 min="0" 
                 max="100" 
                 :value="volume * 100"
                 @input="onVolumeChange"
+                class="range-slider"
               >
             </div>
 
             <div class="time-control">
-              <span>{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
+              <div class="control-header">
+                <i class="fas fa-clock"></i>
+                <label>Thời gian:</label>
+              </div>
+              <span class="time-display">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
               <input 
                 type="range" 
                 min="0" 
                 max="100" 
                 :value="(currentTime / duration) * 100" 
                 @input="onSeek"
+                class="range-slider progress-slider"
               >
             </div>
           </div>
@@ -145,7 +154,10 @@
 
         <div class="track-info">
           <div class="current-track">
-            <label>Bài hát hiện tại:</label>
+            <div class="info-header">
+              <i class="fas fa-music"></i>
+              <label>Bài hát hiện tại:</label>
+            </div>
             <div class="current-track-content">
               <span>{{ currentSong?.name || 'Không có' }}</span>
               <button 
@@ -154,18 +166,24 @@
                 class="scroll-to-song-btn"
                 title="Đi đến bài hát đang phát"
               >
-                <i class="fas fa-crosshairs"></i>
+                <i class="fas fa-location-arrow"></i>
               </button>
             </div>
           </div>
 
           <div v-if="discordEnabled" class="discord-status">
-            <label>Trạng thái Discord:</label>
-            <span>{{ discordStatus }}</span>
+            <div class="info-header">
+              <i class="fab fa-discord"></i>
+              <label>Trạng thái Discord:</label>
+            </div>
+            <span class="status-text connected">{{ discordStatus }}</span>
           </div>
           <div v-else class="discord-status">
-            <label>Trạng thái Discord:</label>
-            <span>Chưa kết nối</span>
+            <div class="info-header">
+              <i class="fab fa-discord"></i>
+              <label>Trạng thái Discord:</label>
+            </div>
+            <span class="status-text disconnected">Chưa kết nối</span>
           </div>
         </div>
       </div>
@@ -1205,15 +1223,19 @@ onUnmounted(() => {
 }
 
 .cover-image:hover::before {
-  /* content: '🔍';  Thích thì thêm :vv */
+  content: '\f002';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   font-size: 2em;
+  color: white;
   z-index: 10;
-  opacity: 1;
+  opacity: 0.7;
   transition: all 0.3s ease;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
 }
 
 .cover-image img {
@@ -1469,11 +1491,92 @@ button:not(.control-btn):not(.nav-button):not(.scroll-to-song-btn):hover {
 .time-control {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 8px;
 }
 
-input[type="range"] {
+.control-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.control-header i {
+  color: var(--accent-color);
+  font-size: 1em;
+  min-width: 16px;
+}
+
+.control-header label {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  margin: 0;
+}
+
+.time-display {
+  color: var(--text-primary);
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  font-weight: 500;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  text-align: center;
+  border: 1px solid var(--accent-color-transparent);
+}
+
+.range-slider {
   width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  outline: none;
+  opacity: 0.7;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.range-slider:hover {
+  opacity: 1;
+  height: 8px;
+}
+
+.range-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.range-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.4);
+}
+
+.range-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.progress-slider::-webkit-slider-track {
+  background: linear-gradient(
+    to right,
+    var(--accent-color) 0%,
+    var(--accent-color) calc(var(--progress, 0) * 1%),
+    var(--bg-secondary) calc(var(--progress, 0) * 1%),
+    var(--bg-secondary) 100%
+  );
 }
 
 .track-info {
@@ -1496,14 +1599,52 @@ input[type="range"] {
   justify-content: space-between;
 }
 
+.info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.info-header i {
+  color: var(--accent-color);
+  font-size: 1em;
+  min-width: 16px;
+}
+
+.info-header label {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  margin: 0;
+}
+
+.status-text {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.status-text.connected {
+  color: var(--bg-primary-transparent);
+  background-color: var(--bg-secondary);
+  border-color: var(--accent-color-transparent);
+}
+
+.status-text.disconnected {
+  color: var(--bg-primary-transparent);
+  background-color: var(--bg-secondary);
+  border-color: var(--accent-color-transparent);
+}
+
 .scroll-to-song-btn {
   padding: 6px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid var(--accent-color-transparent);
-  background: transparent;
+  background: var(--bg-secondary);
   color: var(--accent-color);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1511,13 +1652,44 @@ input[type="range"] {
   height: 28px;
   flex-shrink: 0;
   outline: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.scroll-to-song-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: var(--accent-color);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s ease;
+  z-index: 0;
+}
+
+.scroll-to-song-btn:hover::before {
+  width: 40px;
+  height: 40px;
 }
 
 .scroll-to-song-btn:hover {
-  background: var(--accent-color);
   color: white;
   border-color: var(--accent-color);
   transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
+}
+
+.scroll-to-song-btn i {
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.scroll-to-song-btn:hover i {
+  transform: scale(1.1);
 }
 
 label {
