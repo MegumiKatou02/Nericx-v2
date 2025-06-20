@@ -15,6 +15,7 @@
           <div class="search-box">
             <i class="fas fa-search search-icon"></i>
             <input 
+              ref="searchInputRef"
               v-model="searchQuery" 
               @input="filterSongs"
               type="text" 
@@ -295,6 +296,7 @@ const songsListRef = ref<HTMLElement | null>(null)
 const isLoading = ref<boolean>(false)
 const songsCache = ref<Song[]>([])
 const isDropdownOpen = ref(false)
+const searchInputRef = ref<HTMLInputElement | null>(null)
 
 interface SortOption {
   value: string;
@@ -649,6 +651,17 @@ const closeImageViewer = () => {
 }
 
 const handleKeyDown = async (event: KeyboardEvent) => {
+  if (event.ctrlKey && event.key === 'k') {
+    event.preventDefault()
+    searchInputRef.value?.focus()
+    searchInputRef.value?.select()
+    return
+  }
+
+  if (document.activeElement === searchInputRef.value) {
+    return
+  }
+
   if (!filteredSongs.value.length) return
 
   const currentIndex = selectedSong.value 
@@ -696,6 +709,14 @@ const handleKeyDown = async (event: KeyboardEvent) => {
       if (selectedSong.value) {
         await playSong(selectedSong.value)
       }
+      break
+
+    case 'Escape':
+      if (searchQuery.value) {
+        searchQuery.value = ''
+        filterSongs()
+      }
+      searchInputRef.value?.blur()
       break
   }
 }
