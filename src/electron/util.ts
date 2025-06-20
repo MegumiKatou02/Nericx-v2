@@ -3,6 +3,7 @@ import { join, basename } from 'path'
 import archiver from 'archiver'
 import { open } from 'sqlite'
 import sqlite3 from 'sqlite3'
+import { app } from 'electron'
 
 export const isDev = () => process.env.NODE_ENV === 'development'
 
@@ -20,10 +21,14 @@ export const createZip = (sourcePath: string, outputPath: string): Promise<void>
   })
 }
 
+const getConfigPath = () => {
+  return join(app.getPath('userData'), 'config.db')
+}
+
 export const getOsuPath = async (): Promise<string | null> => {
   try {
     const db = await open({
-      filename: './config.db',
+      filename: getConfigPath(),
       driver: sqlite3.Database
     })
 
@@ -83,7 +88,7 @@ export const createBackup = async (
 export const initDatabase = async (): Promise<void> => {
   try {
     const db = await open({
-      filename: './config.db',
+      filename: getConfigPath(),
       driver: sqlite3.Database
     })
 
@@ -95,13 +100,11 @@ export const initDatabase = async (): Promise<void> => {
     `)
 
     await db.run(
-      `INSERT INTO config (key, value) VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+      `INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)`,
       'theme', 'dark'
     )
     await db.run(
-      `INSERT INTO config (key, value) VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+      `INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)`,
       'accentColor', '#7289da'
     )
 

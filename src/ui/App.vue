@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, provide } from 'vue'
 import GeneralTab from './components/GeneralTab.vue'
 import BackupTab from './components/BackupTab.vue'
 import MusicTab from './components/MusicTab.vue'
@@ -34,6 +34,14 @@ const updateCSSVariables = (color: string) => {
   root.style.setProperty('--accent-hover', darkerColor)
 }
 
+const updateTheme = (theme: string) => {
+  currentTheme.value = theme
+  document.documentElement.setAttribute('data-theme', theme)
+}
+
+provide('updateCSSVariables', updateCSSVariables)
+provide('updateTheme', updateTheme)
+
 const toggleMenu = () => {
   isMenuOpen.value = !isMenuOpen.value
 }
@@ -54,8 +62,7 @@ onMounted(async () => {
   try {
     const savedTheme = await window.electronAPI.getConfig('theme')
     if (savedTheme) {
-      currentTheme.value = savedTheme
-      document.documentElement.setAttribute('data-theme', savedTheme)
+      updateTheme(savedTheme)
     }
     
     const savedAccentColor = await window.electronAPI.getConfig('accentColor')
@@ -63,7 +70,7 @@ onMounted(async () => {
       updateCSSVariables(savedAccentColor)
     }
   } catch (error) {
-    console.error('Error loading theme:', error)
+    console.error('Error loading initial theme:', error)
   }
 
   const handleKeyDown = (event: KeyboardEvent) => {

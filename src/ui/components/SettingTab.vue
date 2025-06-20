@@ -91,12 +91,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, inject } from 'vue'
 
 const theme = ref('dark')
 const accentColor = ref('#7289da')
 const transparencyEnabled = ref(false)
 const opacity = ref(1.0)
+
+// Inject functions từ App.vue
+const updateCSSVariables = inject('updateCSSVariables') as (color: string) => void
+const updateTheme = inject('updateTheme') as (theme: string) => void
 
 const presetColors = [
   { name: 'Discord Blue', value: '#7289da' },
@@ -114,7 +118,7 @@ const presetColors = [
 const setTheme = async (newTheme: string) => {
   theme.value = newTheme
   await window.electronAPI.setConfig('theme', newTheme)
-  document.documentElement.setAttribute('data-theme', newTheme)
+  updateTheme(newTheme)
 }
 
 const setAccentColor = async (color: string) => {
@@ -139,23 +143,6 @@ const validateHexColor = (event: Event) => {
   } else {
     input.value = accentColor.value
   }
-}
-
-const updateCSSVariables = (color: string) => {
-  const root = document.documentElement
-  
-  const hex = color.replace('#', '')
-  const r = parseInt(hex.substr(0, 2), 16)
-  const g = parseInt(hex.substr(2, 2), 16)
-  const b = parseInt(hex.substr(4, 2), 16)
-  
-  root.style.setProperty('--accent-color', color)
-  root.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`)
-  root.style.setProperty('--accent-color-transparent', `rgba(${r}, ${g}, ${b}, 0.2)`)
-  root.style.setProperty('--accent-hover-transparent', `rgba(${r}, ${g}, ${b}, 0.1)`)
-  
-  const darkerColor = `rgb(${Math.max(0, r - 20)}, ${Math.max(0, g - 20)}, ${Math.max(0, b - 20)})`
-  root.style.setProperty('--accent-hover', darkerColor)
 }
 
 const updateAppTransparency = async () => {
@@ -204,13 +191,11 @@ onMounted(async () => {
     const savedTheme = await window.electronAPI.getConfig('theme')
     if (savedTheme) {
       theme.value = savedTheme
-      document.documentElement.setAttribute('data-theme', savedTheme)
     }
     
     const savedAccentColor = await window.electronAPI.getConfig('accentColor')
     if (savedAccentColor) {
       accentColor.value = savedAccentColor
-      updateCSSVariables(savedAccentColor)
     }
 
     const savedTransparency = await window.electronAPI.getConfig('transparencyEnabled')

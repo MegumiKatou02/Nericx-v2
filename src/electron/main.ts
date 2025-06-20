@@ -15,6 +15,10 @@ const __dirname = path.dirname(__filename)
 
 let mainWindow: BrowserWindow | null = null
 
+const getConfigPath = () => {
+  return path.join(app.getPath('userData'), 'config.db')
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1000,
@@ -64,14 +68,18 @@ ipcMain.handle('create-backup', async (_, args: {
 
 ipcMain.handle('get-config', async (_, key: string) => {
   try {
+    const configPath = getConfigPath()
+    console.log('Getting config from:', configPath, 'key:', key)
+    
     const db = await open({
-      filename: './config.db',
+      filename: configPath,
       driver: sqlite3.Database
     })
 
     const result = await db.get('SELECT value FROM config WHERE key = ?', key)
     await db.close()
     
+    console.log('Config result for', key, ':', result?.value)
     return result ? result.value : null
   } catch (error) {
     console.error('Error getting config:', error)
@@ -81,14 +89,18 @@ ipcMain.handle('get-config', async (_, key: string) => {
 
 ipcMain.handle('set-config', async (_, key: string, value: string) => {
   try {
+    const configPath = getConfigPath()
+    console.log('Setting config to:', configPath, 'key:', key, 'value:', value)
+    
     const db = await open({
-      filename: './config.db',
+      filename: configPath,
       driver: sqlite3.Database
     })
 
     await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', key, value)
     await db.close()
     
+    console.log('Config saved successfully')
     return true
   } catch (error) {
     console.error('Error setting config:', error)
