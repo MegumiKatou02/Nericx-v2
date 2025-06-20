@@ -22,16 +22,27 @@ async function initDiscord(): Promise<{ success: boolean; message?: string }> {
   }
 }
 
-async function updateStatus(songInfo: { name: string }) {
+async function updateStatus(songInfo: { name: string; beatmapsetId?: string }) {
   if (!client) return
 
-  await client.setActivity({
+  const activity: any = {
     details: songInfo.name,
     state: 'Nghe nhạc trong Nericx',
     largeImageKey: 'image1',
     largeImageText: 'osu!',
     startTimestamp: Date.now()
-  })
+  }
+
+  if (songInfo.beatmapsetId) {
+    activity.buttons = [
+      {
+        label: 'Xem Beatmap',
+        url: `https://osu.ppy.sh/beatmapsets/${songInfo.beatmapsetId}`
+      }
+    ]
+  }
+
+  await client.setActivity(activity)
 }
 
 async function clearStatus() {

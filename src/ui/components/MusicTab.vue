@@ -581,7 +581,8 @@ const updateDiscordStatus = async () => {
 
   try {
     await window.electronAPI.discordUpdateStatus({
-      name: currentSong.value.name
+      name: currentSong.value.name,
+      beatmapsetId: currentSong.value.beatmapsetId
     })
   } catch (error) {
     console.error('Failed to update Discord status:', error)
