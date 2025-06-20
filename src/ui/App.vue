@@ -88,13 +88,17 @@ onMounted(async () => {
           event.preventDefault()
           currentTab.value = 'music'
           break
-        case '5':
-          event.preventDefault()
-          currentTab.value = 'setting'
-          break
         case '4':
           event.preventDefault()
           currentTab.value = 'keyboard'
+          break
+        case '/':
+          event.preventDefault()
+          currentTab.value = 'keyboard'
+          break
+        case '5':
+          event.preventDefault()
+          currentTab.value = 'setting'
           break
       }
     }

@@ -445,16 +445,16 @@ const handleSongEnd = async () => {
   if (repeatOne.value && currentSong.value) {
     await playSong(currentSong.value)
   } else if (shuffleMode.value) {
-    const currentIndex = filteredSongs.value.findIndex(song => song.path === currentSong.value?.path)
+    const currentIndex = sortedSongs.value.findIndex(song => song.path === currentSong.value?.path)
     let nextIndex
     do {
-      nextIndex = Math.floor(Math.random() * filteredSongs.value.length)
-    } while (nextIndex === currentIndex && filteredSongs.value.length > 1)
-    await playSong(filteredSongs.value[nextIndex])
+      nextIndex = Math.floor(Math.random() * sortedSongs.value.length)
+    } while (nextIndex === currentIndex && sortedSongs.value.length > 1)
+    await playSong(sortedSongs.value[nextIndex])
   } else {
-    const currentIndex = filteredSongs.value.findIndex(song => song.path === currentSong.value?.path)
-    const nextIndex = (currentIndex + 1) % filteredSongs.value.length
-    await playSong(filteredSongs.value[nextIndex])
+    const currentIndex = sortedSongs.value.findIndex(song => song.path === currentSong.value?.path)
+    const nextIndex = (currentIndex + 1) % sortedSongs.value.length
+    await playSong(sortedSongs.value[nextIndex])
   }
 }
 
@@ -484,41 +484,41 @@ const playSong = async (song: Song) => {
 }
 
 const nextSong = async () => {
-  if (filteredSongs.value.length === 0) return
+  if (sortedSongs.value.length === 0) return
   
   const currentIndex = currentSong.value 
-    ? filteredSongs.value.findIndex(song => song.path === currentSong.value?.path)
+    ? sortedSongs.value.findIndex(song => song.path === currentSong.value?.path)
     : -1
   
   let nextIndex
   if (shuffleMode.value) {
     do {
-      nextIndex = Math.floor(Math.random() * filteredSongs.value.length)
-    } while (nextIndex === currentIndex && filteredSongs.value.length > 1)
+      nextIndex = Math.floor(Math.random() * sortedSongs.value.length)
+    } while (nextIndex === currentIndex && sortedSongs.value.length > 1)
   } else {
-    nextIndex = (currentIndex + 1) % filteredSongs.value.length
+    nextIndex = (currentIndex + 1) % sortedSongs.value.length
   }
   
-  await playSong(filteredSongs.value[nextIndex])
+  await playSong(sortedSongs.value[nextIndex])
 }
 
 const previousSong = async () => {
-  if (filteredSongs.value.length === 0) return
+  if (sortedSongs.value.length === 0) return
   
   const currentIndex = currentSong.value 
-    ? filteredSongs.value.findIndex(song => song.path === currentSong.value?.path)
+    ? sortedSongs.value.findIndex(song => song.path === currentSong.value?.path)
     : -1
   
   let prevIndex
   if (shuffleMode.value) {
     do {
-      prevIndex = Math.floor(Math.random() * filteredSongs.value.length)
-    } while (prevIndex === currentIndex && filteredSongs.value.length > 1)
+      prevIndex = Math.floor(Math.random() * sortedSongs.value.length)
+    } while (prevIndex === currentIndex && sortedSongs.value.length > 1)
   } else {
-    prevIndex = currentIndex <= 0 ? filteredSongs.value.length - 1 : currentIndex - 1
+    prevIndex = currentIndex <= 0 ? sortedSongs.value.length - 1 : currentIndex - 1
   }
   
-  await playSong(filteredSongs.value[prevIndex])
+  await playSong(sortedSongs.value[prevIndex])
 }
 
 const togglePlay = async () => {
@@ -698,10 +698,10 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     return
   }
 
-  if (!filteredSongs.value.length && !['u', 'i', 'o', 'x'].includes(event.key.toLowerCase())) return
+  if (!sortedSongs.value.length && !['u', 'i', 'o', 'x'].includes(event.key.toLowerCase())) return
 
   const currentIndex = selectedSong.value 
-    ? filteredSongs.value.findIndex(song => song.path === selectedSong.value?.path)
+    ? sortedSongs.value.findIndex(song => song.path === selectedSong.value?.path)
     : -1
 
   switch (event.key) {
@@ -752,7 +752,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     case 'ArrowUp':
       event.preventDefault()
       if (currentIndex > 0) {
-        const prevSong = filteredSongs.value[currentIndex - 1]
+        const prevSong = sortedSongs.value[currentIndex - 1]
         selectSong(prevSong)
         nextTick(() => {
           const songElement = document.querySelector('.song-item.selected')
@@ -769,8 +769,8 @@ const handleKeyDown = async (event: KeyboardEvent) => {
 
     case 'ArrowDown':
       event.preventDefault()
-      if (currentIndex < filteredSongs.value.length - 1) {
-        const nextSong = filteredSongs.value[currentIndex + 1]
+      if (currentIndex < sortedSongs.value.length - 1) {
+        const nextSong = sortedSongs.value[currentIndex + 1]
         selectSong(nextSong)
         nextTick(() => {
           const songElement = document.querySelector('.song-item.selected')
@@ -831,19 +831,19 @@ const selectOption = (option: SortOption) => {
 }
 
 const scrollToCurrentSong = () => {
-  if (currentSong.value && songsListRef.value) {
-    selectedSong.value = currentSong.value
-    
-    const currentIndex = filteredSongs.value.findIndex(song => song.path === currentSong.value?.path)
-    if (currentIndex !== -1) {
-      const songElement = document.querySelector('.song-item.playing')
-      if (songElement) {
-        songElement.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'nearest',
-          inline: 'nearest'
-        })
-      }
+  if (!currentSong.value) return
+  
+  selectedSong.value = currentSong.value
+  
+  const currentIndex = sortedSongs.value.findIndex(song => song.path === currentSong.value?.path)
+  if (currentIndex !== -1) {
+    const songElement = document.querySelector('.song-item.playing')
+    if (songElement) {
+      songElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'nearest',
+        inline: 'nearest'
+      })
     }
   }
 }
