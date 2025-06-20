@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import GeneralTab from './components/GeneralTab.vue'
 import BackupTab from './components/BackupTab.vue'
 import MusicTab from './components/MusicTab.vue'
 import SettingTab from './components/SettingTab.vue'
+import KeyboardTab from './components/KeyboardTab.vue'
 import './styles/theme.css'
 
 const fontAwesome = document.createElement('link')
@@ -14,6 +15,7 @@ document.head.appendChild(fontAwesome)
 const currentTab = ref('general')
 const isMenuOpen = ref(true)
 const currentTheme = ref('dark')
+const keyHandler = ref<((event: KeyboardEvent) => void) | null>(null)
 
 const updateCSSVariables = (color: string) => {
   const root = document.documentElement
@@ -62,6 +64,42 @@ onMounted(async () => {
     }
   } catch (error) {
     console.error('Error loading theme:', error)
+  }
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.ctrlKey) {
+      switch (event.key) {
+        case '1':
+          event.preventDefault()
+          currentTab.value = 'general'
+          break
+        case '2':
+          event.preventDefault()
+          currentTab.value = 'backup'
+          break
+        case '3':
+          event.preventDefault()
+          currentTab.value = 'music'
+          break
+        case '4':
+          event.preventDefault()
+          currentTab.value = 'setting'
+          break
+        case '5':
+          event.preventDefault()
+          currentTab.value = 'keyboard'
+          break
+      }
+    }
+  }
+
+  keyHandler.value = handleKeyDown
+  document.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  if (keyHandler.value) {
+    document.removeEventListener('keydown', keyHandler.value)
   }
 })
 </script>
@@ -120,12 +158,21 @@ onMounted(async () => {
           </div>
           <div 
             class="menu-item" 
+            :class="{ active: currentTab === 'keyboard' }"
+            @click="currentTab = 'keyboard'"
+          >
+            <i class="fas fa-keyboard"></i>
+            <span v-show="isMenuOpen">Phím tắt</span>
+          </div>
+          <div 
+            class="menu-item" 
             :class="{ active: currentTab === 'setting' }"
             @click="currentTab = 'setting'"
           >
             <i class="fas fa-cog"></i>
             <span v-show="isMenuOpen">Cài đặt</span>
           </div>
+          
         </div>
       </nav>
 
@@ -133,6 +180,7 @@ onMounted(async () => {
         <GeneralTab v-show="currentTab === 'general'" />
         <BackupTab v-show="currentTab === 'backup'" />
         <MusicTab v-show="currentTab === 'music'" />
+        <KeyboardTab v-show="currentTab === 'keyboard'" />
         <SettingTab v-show="currentTab === 'setting'" />
       </div>
     </div>

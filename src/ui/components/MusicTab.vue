@@ -503,8 +503,7 @@ const previousSong = async () => {
 }
 
 const togglePlay = async () => {
-  if (!currentSong.value && filteredSongs.value.length > 0) {
-    await playSong(filteredSongs.value[0])
+  if (!currentSong.value) {
     return
   }
 
@@ -653,6 +652,7 @@ const closeImageViewer = () => {
 const handleKeyDown = async (event: KeyboardEvent) => {
   if (event.ctrlKey && event.key === 'k') {
     event.preventDefault()
+    event.stopPropagation()
     searchInputRef.value?.focus()
     searchInputRef.value?.select()
     return
@@ -662,13 +662,57 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     return
   }
 
-  if (!filteredSongs.value.length) return
+  if (!filteredSongs.value.length && !['u', 'i', 'o', 'x'].includes(event.key.toLowerCase())) return
 
   const currentIndex = selectedSong.value 
     ? filteredSongs.value.findIndex(song => song.path === selectedSong.value?.path)
     : -1
 
   switch (event.key) {
+    case 'u':
+    case 'U':
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      await togglePlay()
+      break
+
+    case 'i':
+    case 'I':
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      stopMusic()
+      break
+
+    case 'o':
+    case 'O':
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      await toggleDiscord()
+      break
+
+    case 'x':
+    case 'X':
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      togglePlayMode()
+      break
+
+    case 'ArrowLeft':
+      event.preventDefault()
+      event.stopPropagation()
+      await previousSong()
+      break
+
+    case 'ArrowRight':
+      event.preventDefault()
+      event.stopPropagation()
+      await nextSong()
+      break
+
     case 'ArrowUp':
       event.preventDefault()
       if (currentIndex > 0) {
@@ -1027,6 +1071,7 @@ onUnmounted(() => {
   position: relative;
   min-height: 0;
   max-height: calc(100vh - 200px);
+  outline: none;
 }
 
 .songs-list::-webkit-scrollbar {

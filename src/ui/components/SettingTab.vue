@@ -544,7 +544,6 @@ h3 {
   color: #495057;
 }
 
-/* Global styles để áp dụng transparency cho toàn app */
 :global(body.app-transparent) {
   opacity: var(--app-opacity, 1);
   transition: opacity 0.3s ease;

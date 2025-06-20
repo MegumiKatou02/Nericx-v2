@@ -28,7 +28,7 @@ async function updateStatus(songInfo: { name: string }) {
   await client.setActivity({
     details: songInfo.name,
     state: 'Nghe nhạc trong Nericx',
-    largeImageKey: 'osu_logo',
+    largeImageKey: 'image1',
     largeImageText: 'osu!',
     startTimestamp: Date.now()
   })
