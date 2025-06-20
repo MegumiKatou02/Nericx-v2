@@ -86,9 +86,22 @@
             <button @click="togglePlayMode" class="control-btn mode-btn" :title="getPlayModeTitle()">
               <span v-html="playModeIcon"></span>
             </button>
-            <button @click="toggleDiscord" class="control-btn discord-btn" :class="{ 'active': discordEnabled }">
-              <i class="fab fa-discord"></i>
-              <span>{{ discordEnabled ? 'Tắt Discord' : 'Bật Discord' }}</span>
+            <button 
+              @click="toggleDiscord" 
+              class="control-btn discord-btn" 
+              :class="{ 
+                'active': discordEnabled, 
+                'loading': isDiscordLoading,
+                'cooldown': discordCooldownActive 
+              }"
+              :disabled="isDiscordLoading || discordCooldownActive"
+            >
+              <i :class="isDiscordLoading ? 'fas fa-spinner fa-spin' : 'fab fa-discord'"></i>
+              <span>
+                {{ isDiscordLoading ? 'Đang xử lý...' : 
+                   discordCooldownActive ? 'Chờ...' :
+                   discordEnabled ? 'Tắt Discord' : 'Bật Discord' }}
+              </span>
             </button>
             <button @click="toggleAdvancedControls" class="control-btn advanced-btn" :class="{ 'active': showAdvancedControls }">
               <i :class="showAdvancedControls ? 'fas fa-chevron-up' : 'fas fa-cog'"></i>
@@ -149,6 +162,10 @@
           <div v-if="discordEnabled" class="discord-status">
             <label>Trạng thái Discord:</label>
             <span>{{ discordStatus }}</span>
+          </div>
+          <div v-else class="discord-status">
+            <label>Trạng thái Discord:</label>
+            <span>Chưa kết nối</span>
           </div>
         </div>
       </div>
@@ -289,6 +306,8 @@ const currentTime = ref(0)
 const duration = ref(0)
 const discordEnabled = ref(false)
 const discordStatus = ref('Chưa kết nối')
+const isDiscordLoading = ref(false)
+const discordCooldownActive = ref(false)
 const shuffleMode = ref(false)
 const repeatOne = ref(false)
 const filteredSongs = ref<Song[]>([])
@@ -580,22 +599,39 @@ const clearDiscordStatus = async () => {
 }
 
 const toggleDiscord = async () => {
-  if (discordEnabled.value) {
-    discordEnabled.value = false
-    await clearDiscordStatus()
-    try {
-      await window.electronAPI.discordDestroy()
-    } catch (error) {
-      console.error('Failed to destroy Discord client:', error)
+  if (discordCooldownActive.value || isDiscordLoading.value) {
+    return
+  }
+
+  isDiscordLoading.value = true
+
+  try {
+    if (discordEnabled.value) {
+      discordEnabled.value = false
+      await clearDiscordStatus()
+      try {
+        await window.electronAPI.discordDestroy()
+      } catch (error) {
+        console.error('Failed to destroy Discord client:', error)
+      }
+      discordStatus.value = 'Đã tắt'
+    } else {
+      await initDiscord()
+      if (discordEnabled.value && currentSong.value && isPlaying.value) {
+        setTimeout(async () => {
+          await updateDiscordStatus()
+        }, 500)
+      }
     }
-    discordStatus.value = 'Đã tắt'
-  } else {
-    await initDiscord()
-    if (discordEnabled.value && currentSong.value && isPlaying.value) {
-      setTimeout(async () => {
-        await updateDiscordStatus()
-      }, 500)
-    }
+  } catch (error) {
+    console.error('Discord toggle error:', error)
+  } finally {
+    isDiscordLoading.value = false
+    
+    discordCooldownActive.value = true
+    setTimeout(() => {
+      discordCooldownActive.value = false
+    }, 2000)
   }
 }
 
@@ -1298,6 +1334,22 @@ onUnmounted(() => {
   background: var(--accent-color);
   color: white;
   border-color: var(--accent-color);
+}
+
+.discord-btn.loading,
+.discord-btn.cooldown {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.discord-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.discord-btn.loading .fa-spinner {
+  animation: spin 1s linear infinite;
 }
 
 .advanced-btn {
