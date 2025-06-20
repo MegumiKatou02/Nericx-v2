@@ -731,7 +731,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     return
   }
 
-  if (!sortedSongs.value.length && !['u', 'i', 'o', 'x'].includes(event.key.toLowerCase())) return
+  if (!sortedSongs.value.length && !['u', 'i', 'o', 'x', 'p', 'q'].includes(event.key.toLowerCase())) return
 
   const currentIndex = selectedSong.value 
     ? sortedSongs.value.findIndex(song => song.path === selectedSong.value?.path)
@@ -768,6 +768,16 @@ const handleKeyDown = async (event: KeyboardEvent) => {
       event.stopPropagation()
       event.stopImmediatePropagation()
       togglePlayMode()
+      break
+
+    case 'p':
+    case 'P':
+    case 'q':
+    case 'Q':
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      toggleAdvancedControls()
       break
 
     case 'ArrowLeft':

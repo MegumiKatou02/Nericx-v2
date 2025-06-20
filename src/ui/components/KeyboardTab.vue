@@ -44,6 +44,14 @@
                   <span class="desc">Chuyển đổi Normal → Shuffle → Repeat</span>
                 </div>
               </div>
+
+              <div class="shortcut-item">
+                <span class="key">P / Q</span>
+                <div class="shortcut-info">
+                  <span class="action">Tùy chỉnh nhạc</span>
+                  <span class="desc">Bật/tắt advanced controls (volume, progress)</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -147,16 +155,16 @@
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 4</span>
                 <div class="shortcut-info">
-                  <span class="action">Tab Cài đặt</span>
-                  <span class="desc">Chuyển đến tab Cài đặt</span>
+                  <span class="action">Tab Phím tắt</span>
+                  <span class="desc">Chuyển đến tab Phím tắt (hiện tại)</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 5</span>
                 <div class="shortcut-info">
-                  <span class="action">Tab Phím tắt</span>
-                  <span class="desc">Chuyển đến tab Phím tắt</span>
+                  <span class="action">Tab Cài đặt</span>
+                  <span class="desc">Chuyển đến tab Cài đặt</span>
                 </div>
               </div>
             </div>
