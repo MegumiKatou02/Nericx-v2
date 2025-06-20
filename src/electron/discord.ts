@@ -44,6 +44,10 @@ async function updateStatus(songInfo: { name: string; beatmapsetId?: string; ima
       {
         label: 'Xem Beatmap',
         url: `https://osu.ppy.sh/beatmapsets/${songInfo.beatmapsetId}`
+      },
+      {
+        label: 'Github',
+        url: `https://github.com/MegumiKatou02/Nericx-v2`
       }
     ]
   }
