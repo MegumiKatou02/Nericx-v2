@@ -263,8 +263,18 @@ class AudioPlayer {
 
       return new Promise((resolve) => {
         const fixedPath = song.path.replace(/\\/g, '/')
-        const srcPath = new URL(`file:///${fixedPath}`).href
-        // console.log('Đang thử phát file:', srcPath)
+        
+        // handle encode path
+        let srcPath: string
+        try {
+          const encodedPath = fixedPath.split('/').map(part => encodeURIComponent(part)).join('/')
+          srcPath = `file:///${encodedPath}`
+        } catch (error) {
+          console.warn('Encoding thất bại, sử dụng fallback:', error)
+          srcPath = new URL(`file:///${fixedPath}`).href
+        }
+        
+        console.log('Đang thử phát file:', srcPath)
         
         this.audio = new Audio(srcPath)
         this.audio.volume = this.volume
@@ -313,18 +323,26 @@ class AudioPlayer {
 
   seek(position: number) {
     if (this.audio && position >= 0 && position <= 1) {
-      this.audio.currentTime = position * this.audio.duration
-      return true
+      const duration = this.audio.duration
+      if (!isNaN(duration) && isFinite(duration) && duration > 0) {
+        const newTime = position * duration
+        if (!isNaN(newTime) && isFinite(newTime) && newTime >= 0 && newTime <= duration) {
+          this.audio.currentTime = newTime
+          return true
+        }
+      }
     }
     return false
   }
 
   getCurrentTime(): number {
-    return this.audio?.currentTime || 0
+    const currentTime = this.audio?.currentTime || 0
+    return isNaN(currentTime) || !isFinite(currentTime) ? 0 : currentTime
   }
 
   getDuration(): number {
-    return this.audio?.duration || 0
+    const duration = this.audio?.duration || 0
+    return isNaN(duration) || !isFinite(duration) ? 0 : duration
   }
 
   isPlaying(): boolean {
