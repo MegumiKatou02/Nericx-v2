@@ -225,16 +225,67 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import type { Song } from '../../electron/type.js'
 import ImageViewer from './ImageViewer.vue'
 
 class AudioPlayer {
   private audio: HTMLAudioElement | null = null
   private volume: number = 0.5
+  private audioContext: AudioContext | null = null
+  private sourceNode: MediaElementAudioSourceNode | null = null
+  private gainNode: GainNode | null = null
+  private compressorNode: DynamicsCompressorNode | null = null
+  private analyserNode: AnalyserNode | null = null
+  private normalizationEnabled: boolean = true
+  // private targetLUFS: number = -16
 
   constructor() {
     this.initAudio()
+    this.initAudioContext()
+  }
+
+  private initAudioContext() {
+    try {
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    } catch (error) {
+      console.warn('Web Audio API not supported:', error)
+    }
+  }
+
+  private setupAudioNodes() {
+    if (!this.audioContext || !this.audio) return
+
+    try {
+      this.sourceNode = this.audioContext.createMediaElementSource(this.audio)
+      this.gainNode = this.audioContext.createGain()
+      this.compressorNode = this.audioContext.createDynamicsCompressor()
+      this.analyserNode = this.audioContext.createAnalyser()
+
+      this.compressorNode.threshold.setValueAtTime(-24, this.audioContext.currentTime)
+      this.compressorNode.knee.setValueAtTime(30, this.audioContext.currentTime)
+      this.compressorNode.ratio.setValueAtTime(12, this.audioContext.currentTime)
+      this.compressorNode.attack.setValueAtTime(0.003, this.audioContext.currentTime)
+      this.compressorNode.release.setValueAtTime(0.25, this.audioContext.currentTime)
+
+      this.analyserNode.fftSize = 2048
+      this.analyserNode.smoothingTimeConstant = 0.8
+
+      if (this.normalizationEnabled) {
+        this.sourceNode.connect(this.compressorNode)
+        this.compressorNode.connect(this.gainNode)
+        this.gainNode.connect(this.analyserNode)
+        this.analyserNode.connect(this.audioContext.destination)
+      } else {
+        this.sourceNode.connect(this.gainNode)
+        this.gainNode.connect(this.analyserNode)
+        this.analyserNode.connect(this.audioContext.destination)
+      }
+
+      this.gainNode.gain.setValueAtTime(this.volume, this.audioContext.currentTime)
+    } catch (error) {
+      console.warn('Error setting up audio nodes:', error)
+    }
   }
 
   public getAudio() {
@@ -245,49 +296,80 @@ class AudioPlayer {
     return this.volume
   }
 
+  public isNormalizationEnabled() {
+    return this.normalizationEnabled
+  }
+
+  public toggleNormalization(enabled: boolean) {
+    this.normalizationEnabled = enabled
+    if (this.audio && this.audioContext) {
+      this.setupAudioNodes()
+    }
+  }
+
+  public getAudioLevel(): number {
+    if (!this.analyserNode) return 0
+    
+    const bufferLength = this.analyserNode.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+    this.analyserNode.getByteFrequencyData(dataArray)
+    
+    let sum = 0
+    for (let i = 0; i < bufferLength; i++) {
+      sum += dataArray[i] * dataArray[i]
+    }
+    const rms = Math.sqrt(sum / bufferLength)
+    return rms / 255 
+  }
+
   private initAudio() {
     if (this.audio) {
       this.audio.pause()
       this.audio.src = ''
     }
     this.audio = null
+    this.sourceNode = null
+    this.gainNode = null
+    this.compressorNode = null
+    this.analyserNode = null
   }
 
   async play(song: Song): Promise<{ success: boolean; message: string }> {
     try {
-      if (this.audio) {
-        this.audio.pause()
-        this.audio.src = ''
-        this.audio = null
-        await new Promise(resolve => setTimeout(resolve, 10))
+      this.initAudio()
+      this.audio = new Audio()
+      
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        await this.audioContext.resume()
       }
-
+      
+      const fixedPath = song.path.replace(/\\/g, '/')
+      
+      let srcPath: string
+      try {
+        const encodedPath = fixedPath.split('/').map(part => encodeURIComponent(part)).join('/')
+        srcPath = `file:///${encodedPath}`
+      } catch (error) {
+        console.warn('Encoding thất bại, sử dụng fallback:', error)
+        srcPath = new URL(`file:///${fixedPath}`).href
+      }
+      
+      this.audio.src = srcPath
+      this.audio.volume = this.volume
+      
+      this.setupAudioNodes()
+      
       return new Promise((resolve) => {
-        const fixedPath = song.path.replace(/\\/g, '/')
-        
-        // handle encode path
-        let srcPath: string
-        try {
-          const encodedPath = fixedPath.split('/').map(part => encodeURIComponent(part)).join('/')
-          srcPath = `file:///${encodedPath}`
-        } catch (error) {
-          console.warn('Encoding thất bại, sử dụng fallback:', error)
-          srcPath = new URL(`file:///${fixedPath}`).href
-        }
-        
-        this.audio = new Audio(srcPath)
-        this.audio.volume = this.volume
-
-        this.audio.onloadedmetadata = () => {
+        this.audio!.onloadedmetadata = () => {
           resolve({ success: true, message: song.name })
         }
 
-        this.audio.onerror = () => {
+        this.audio!.onerror = () => {
           const errorMessage = this.audio?.error?.message || 'Không thể phát file này'
           resolve({ success: false, message: `Lỗi khi tải bài hát: ${errorMessage}` })
         }
 
-        this.audio.play()
+        this.audio!.play()
       })
     } catch (error) {
       return { 
@@ -313,10 +395,13 @@ class AudioPlayer {
     }
   }
 
-  setVolume(value: number) {
-    this.volume = value
+  setVolume(volume: number) {
+    this.volume = Math.max(0, Math.min(1, volume))
     if (this.audio) {
-      this.audio.volume = value
+      this.audio.volume = this.volume
+    }
+    if (this.gainNode) {
+      this.gainNode.gain.setValueAtTime(this.volume, this.audioContext!.currentTime)
     }
   }
 
@@ -376,6 +461,8 @@ const songsCache = ref<Song[]>([])
 const isDropdownOpen = ref(false)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const musicTabRef = ref<HTMLElement | null>(null)
+const normalizationEnabled = ref(false)
+const audioLevel = ref(0)
 
 interface SortOption {
   value: string;
@@ -726,6 +813,10 @@ const updateProgress = () => {
   if (isPlaying.value) {
     currentTime.value = audioPlayer.getCurrentTime()
     duration.value = audioPlayer.getDuration()
+    
+    if (normalizationEnabled.value) {
+      audioLevel.value = audioPlayer.getAudioLevel()
+    }
   }
   requestAnimationFrame(updateProgress)
 }
@@ -965,6 +1056,25 @@ const currentSongFormatted = computed(() => {
   return `${artist} - ${title}`
 })
 
+let normalizationCheckInterval: NodeJS.Timeout | null = null
+
+const startNormalizationWatcher = () => {
+  normalizationCheckInterval = setInterval(async () => {
+    try {
+      const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
+      if (savedNormalization !== undefined) {
+        const newValue = savedNormalization === 'true'
+        if (newValue !== normalizationEnabled.value) {
+          normalizationEnabled.value = newValue
+          audioPlayer.toggleNormalization(normalizationEnabled.value)
+        }
+      }
+    } catch (error) {
+      console.error('Error checking normalization setting:', error)
+    }
+  }, 1000)
+}
+
 const focusTab = () => {
   nextTick(() => {
     setTimeout(() => {
@@ -983,6 +1093,18 @@ defineExpose({
 onMounted(async () => {
   await loadSongs()
   requestAnimationFrame(updateProgress)
+  
+  try {
+    const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
+    if (savedNormalization !== undefined) {
+      normalizationEnabled.value = savedNormalization === 'true'
+      audioPlayer.toggleNormalization(normalizationEnabled.value)
+    }
+  } catch (error) {
+    console.error('Error loading normalization setting:', error)
+  }
+  
+  startNormalizationWatcher()
   
   nextTick(() => {
     if (musicTabRef.value) {
@@ -1018,6 +1140,9 @@ onUnmounted(() => {
   document.removeEventListener('click', () => {
     isDropdownOpen.value = false
   })
+  if (normalizationCheckInterval) {
+    clearInterval(normalizationCheckInterval)
+  }
 })
 </script>
 

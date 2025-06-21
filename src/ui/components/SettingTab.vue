@@ -87,6 +87,26 @@
         </div>
       </div>
     </div>
+
+    <div class="setting-section">
+      <h3>Âm thanh</h3>
+      <div class="setting-option">
+        <label>Cân bằng âm lượng:</label>
+        <div class="normalization-section">
+          <div class="normalization-toggle">
+            <button 
+              :class="{ active: normalizationEnabled }" 
+              @click="toggleNormalization"
+            >
+              {{ normalizationEnabled ? 'Bật' : 'Tắt' }}
+            </button>
+          </div>
+          <div class="normalization-description">
+            <span>Tự động điều chỉnh âm lượng giữa các bài hát để đảm bảo âm lượng đồng đều</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -97,6 +117,7 @@ const theme = ref('dark')
 const accentColor = ref('#7289da')
 const transparencyEnabled = ref(false)
 const opacity = ref(1.0)
+const normalizationEnabled = ref(false)
 
 // Inject functions từ App.vue
 const updateCSSVariables = inject('updateCSSVariables') as (color: string) => void
@@ -173,16 +194,21 @@ const updateAppTransparency = async () => {
   }
 }
 
+const setOpacity = async (value: number) => {
+  opacity.value = value
+  await window.electronAPI.setConfig('opacity', value.toString())
+  await updateAppTransparency()
+}
+
+const toggleNormalization = async () => {
+  normalizationEnabled.value = !normalizationEnabled.value
+  await window.electronAPI.setConfig('normalizationEnabled', normalizationEnabled.value.toString())
+}
+
 const toggleTransparency = async () => {
   transparencyEnabled.value = !transparencyEnabled.value
   await window.electronAPI.setConfig('transparencyEnabled', transparencyEnabled.value.toString())
   await window.electronAPI.setConfig('opacity', opacity.value.toString())
-  await updateAppTransparency()
-}
-
-const setOpacity = async (value: number) => {
-  opacity.value = value
-  await window.electronAPI.setConfig('opacity', value.toString())
   await updateAppTransparency()
 }
 
@@ -206,6 +232,11 @@ onMounted(async () => {
     const savedOpacity = await window.electronAPI.getConfig('opacity')
     if (savedOpacity !== undefined) {
       opacity.value = parseFloat(savedOpacity) || 1.0
+    }
+
+    const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
+    if (savedNormalization !== undefined) {
+      normalizationEnabled.value = savedNormalization === 'true'
     }
 
     if (transparencyEnabled.value) {
@@ -555,5 +586,55 @@ h3 {
 :global(body.app-transparent .light .setting-section) {
   background: rgba(248, 249, 250, var(--app-background-opacity, 0.8)) !important;
   border: 1px solid rgba(222, 226, 230, var(--app-background-opacity, 0.6));
+}
+
+.normalization-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.normalization-toggle button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 60px;
+}
+
+.dark .normalization-toggle button {
+  background: #40444b;
+  color: #dcddde;
+}
+
+.light .normalization-toggle button {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.dark .normalization-toggle button.active {
+  background: var(--accent-color, #7289da);
+  color: white;
+  box-shadow: 0 0 10px rgba(114, 137, 218, 0.3);
+}
+
+.light .normalization-toggle button.active {
+  background: var(--accent-color, #007bff);
+  color: white;
+  box-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+}
+
+.dark .normalization-toggle button:hover:not(.active) {
+  background: #4f545c;
+}
+
+.light .normalization-toggle button:hover:not(.active) {
+  background: #dee2e6;
+}
+
+.normalization-description {
+  font-size: 12px;
+  color: #6c757d;
 }
 </style> 
