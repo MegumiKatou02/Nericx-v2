@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, provide } from 'vue'
+import { ref, onMounted, onUnmounted, provide, watch, nextTick } from 'vue'
 import GeneralTab from './components/GeneralTab.vue'
 import BackupTab from './components/BackupTab.vue'
 import MusicTab from './components/MusicTab.vue'
@@ -16,6 +16,7 @@ const currentTab = ref('general')
 const isMenuOpen = ref(true)
 const currentTheme = ref('dark')
 const keyHandler = ref<((event: KeyboardEvent) => void) | null>(null)
+const musicTabRef = ref<{ focusTab: () => void } | null>(null)
 
 const updateCSSVariables = (color: string) => {
   const root = document.documentElement
@@ -108,6 +109,18 @@ onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown)
 })
 
+watch(currentTab, (newTab) => {
+  if (newTab === 'music') {
+    nextTick(() => {
+      setTimeout(() => {
+        if (musicTabRef.value && musicTabRef.value.focusTab) {
+          musicTabRef.value.focusTab()
+        }
+      }, 100)
+    })
+  }
+})
+
 onUnmounted(() => {
   if (keyHandler.value) {
     document.removeEventListener('keydown', keyHandler.value)
@@ -190,7 +203,7 @@ onUnmounted(() => {
       <div class="main-content">
         <GeneralTab v-show="currentTab === 'general'" />
         <BackupTab v-show="currentTab === 'backup'" />
-        <MusicTab v-show="currentTab === 'music'" />
+        <MusicTab v-show="currentTab === 'music'" ref="musicTabRef" />
         <KeyboardTab v-show="currentTab === 'keyboard'" />
         <SettingTab v-show="currentTab === 'setting'" />
       </div>

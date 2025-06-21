@@ -1,5 +1,5 @@
 <template>
-  <div class="music-tab" @keydown="handleKeyDown" tabindex="0">
+  <div class="music-tab" @keydown="handleKeyDown" tabindex="0" ref="musicTabRef">
     <div v-if="!osuPath" class="warning">
       Vui lòng cấu hình đường dẫn Osu! trong tab Chung trước
     </div>
@@ -224,7 +224,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
 import ImageViewer from './ImageViewer.vue'
 
@@ -273,8 +273,6 @@ class AudioPlayer {
           console.warn('Encoding thất bại, sử dụng fallback:', error)
           srcPath = new URL(`file:///${fixedPath}`).href
         }
-        
-        console.log('Đang thử phát file:', srcPath)
         
         this.audio = new Audio(srcPath)
         this.audio.volume = this.volume
@@ -376,6 +374,7 @@ const isLoading = ref<boolean>(false)
 const songsCache = ref<Song[]>([])
 const isDropdownOpen = ref(false)
 const searchInputRef = ref<HTMLInputElement | null>(null)
+const musicTabRef = ref<HTMLElement | null>(null)
 
 interface SortOption {
   value: string;
@@ -934,14 +933,31 @@ const currentSongFormatted = computed(() => {
   return `${artist} - ${title}`
 })
 
+const focusTab = () => {
+  nextTick(() => {
+    setTimeout(() => {
+      if (musicTabRef.value) {
+        musicTabRef.value.focus()
+        console.log('Music tab focused via expose method')
+      }
+    }, 50)
+  })
+}
+
+defineExpose({
+  focusTab
+})
+
 onMounted(async () => {
   await loadSongs()
   requestAnimationFrame(updateProgress)
   
-  const musicTab = document.querySelector('.music-tab') as HTMLElement
-  if (musicTab) {
-    musicTab.focus()
-  }
+  nextTick(() => {
+    if (musicTabRef.value) {
+      musicTabRef.value.focus()
+      console.log('Music tab focused')
+    }
+  })
 
   const handleClickOutside = (e: MouseEvent) => {
     const target = e.target as HTMLElement
