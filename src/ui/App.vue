@@ -134,68 +134,63 @@ onMounted(async () => {
     console.error('Error loading initial theme:', error)
   }
 
-  // Console warning
-  const showDevToolsWarning = () => {
-    console.clear()
-    console.log('%c⚠️ CẢNH BÁO BẢO MẬT ⚠️', 'color: #ff4757; font-size: 40px; font-weight: bold;')
-    console.log('%c🚫 DỪNG LẠI! 🚫', 'color: #ff3838; font-size: 30px; font-weight: bold;')
-    console.log('%cĐây là tính năng dành cho nhà phát triển.', 'color: #ff6b9d; font-size: 16px; font-weight: bold;')
-    console.log('%cNếu ai đó yêu cầu bạn sao chép/dán code ở đây, đó có thể là lừa đảo!', 'color: #ffa502; font-size: 16px; font-weight: bold;')
-    console.log('%c🔒 Nericx - Bảo vệ quyền riêng tư của bạn', 'color: #7289da; font-size: 18px; font-weight: bold;')
-  }
+  let lastDevToolsCheck = 0
+  const DEVTOOLS_CHECK_INTERVAL = 5000
 
-  let devToolsOpen = false
-  
-  const originalLog = console.log
-  const originalWarn = console.warn
-  const originalError = console.error
-  
-  console.log = function(...args) {
-    if (!devToolsOpen) {
-      devToolsOpen = true
-      setTimeout(() => {
-        showDevToolsWarning()
-      }, 100)
+  const devToolsDetection = () => {
+    const now = Date.now()
+    if (now - lastDevToolsCheck < DEVTOOLS_CHECK_INTERVAL) {
+      return
     }
-    return originalLog.apply(console, args)
-  }
-  
-  console.warn = function(...args) {
-    if (!devToolsOpen) {
-      devToolsOpen = true
-      setTimeout(() => {
-        showDevToolsWarning()
-      }, 100)
-    }
-    return originalWarn.apply(console, args)
-  }
-  
-  console.error = function(...args) {
-    if (!devToolsOpen) {
-      devToolsOpen = true
-      setTimeout(() => {
-        showDevToolsWarning()
-      }, 100)
-    }
-    return originalError.apply(console, args)
-  }
-
-  const detectDevTools = () => {
-    const start = Date.now()
-    debugger
-    const end = Date.now()
     
-    if (end - start > 100) {
-      if (!devToolsOpen) {
-        devToolsOpen = true
-        showDevToolsWarning()
+    lastDevToolsCheck = now
+    
+    let devtools = {
+      open: false,
+      orientation: null as string | null
+    }
+    
+    const threshold = 160
+    
+    setInterval(() => {
+      if (window.outerHeight - window.innerHeight > threshold || 
+          window.outerWidth - window.innerWidth > threshold) {
+        devtools.open = true
+        devtools.orientation = window.outerHeight - window.innerHeight > threshold ? 'vertical' : 'horizontal'
+      } else {
+        devtools.open = false
+        devtools.orientation = null
+      }
+    }, 1000)
+    
+    if (devtools.open) {
+      const originalLog = console.log
+      const originalWarn = console.warn
+      const originalError = console.error
+      
+      console.log = function(...args) {
+        if (process.env.NODE_ENV === 'development') {
+          originalLog.apply(console, args)
+        }
+      }
+      
+      console.warn = function(...args) {
+        if (process.env.NODE_ENV === 'development') {
+          originalWarn.apply(console, args)
+        }
+      }
+      
+      console.error = function(...args) {
+        if (process.env.NODE_ENV === 'development') {
+          originalError.apply(console, args)
+        }
       }
     }
   }
-  
-  setTimeout(detectDevTools, 1000)
 
-  //
+  if (process.env.NODE_ENV === 'development') {
+    devToolsDetection()
+  }
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.ctrlKey) {

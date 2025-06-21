@@ -459,6 +459,7 @@ const searchInputRef = ref<HTMLInputElement | null>(null)
 const musicTabRef = ref<HTMLElement | null>(null)
 const normalizationEnabled = ref(false)
 const audioLevel = ref(0)
+const progressUpdateId = ref<number | null>(null)
 
 const updateMiniPlayer = inject('updateMiniPlayer') as ((song: any, playing: boolean, time: number, dur: number) => void) | undefined
 
@@ -609,6 +610,7 @@ const playSong = async (song: Song) => {
     currentSong.value = song
     selectedSong.value = song
     isPlaying.value = true
+    startProgressUpdate()
     updateDiscordStatus()
     
     nextTick(() => {
@@ -677,6 +679,7 @@ const togglePlay = async () => {
   } else {
     audioPlayer.resume()
     isPlaying.value = true
+    startProgressUpdate()
   }
   
   if (updateMiniPlayer) {
@@ -690,8 +693,9 @@ const stopMusic = () => {
   }
   audioPlayer.stop()
   isPlaying.value = false
+  currentTime.value = 0
+  duration.value = 0
   currentSong.value = null
-  clearDiscordStatus()
   
   if (updateMiniPlayer) {
     updateMiniPlayer(null, false, 0, 0)
@@ -827,8 +831,15 @@ const updateProgress = () => {
     if (updateMiniPlayer) {
       updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
     }
+        
+    requestAnimationFrame(updateProgress)
   }
-  requestAnimationFrame(updateProgress)
+}
+
+const startProgressUpdate = () => {
+  if (isPlaying.value) {
+    requestAnimationFrame(updateProgress)
+  }
 }
 
 const showImageViewer = ref(false)
@@ -1070,6 +1081,8 @@ let normalizationCheckInterval: NodeJS.Timeout | null = null
 
 const startNormalizationWatcher = () => {
   normalizationCheckInterval = setInterval(async () => {
+    if (!isPlaying.value) return
+    
     try {
       const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
       if (savedNormalization !== undefined) {
@@ -1082,7 +1095,7 @@ const startNormalizationWatcher = () => {
     } catch (error) {
       console.error('Error checking normalization setting:', error)
     }
-  }, 1000)
+  }, 5000) // Reduced frequency from 1s to 5s
 }
 
 const focusTab = () => {
@@ -1102,7 +1115,6 @@ defineExpose({
 
 onMounted(async () => {
   await loadSongs()
-  requestAnimationFrame(updateProgress)
   
   try {
     const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
@@ -1139,20 +1151,26 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (audioPlayer.getAudio()) {
-    audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
-  }
-  audioPlayer.destroy()
-  if (discordEnabled.value) {
-    clearDiscordStatus()
-  }
-  window.electronAPI.removeMusicMetadataListener()
-  document.removeEventListener('click', () => {
-    isDropdownOpen.value = false
-  })
   if (normalizationCheckInterval) {
     clearInterval(normalizationCheckInterval)
   }
+  
+  if (progressUpdateId.value) {
+    cancelAnimationFrame(progressUpdateId.value)
+  }
+  
+  if (audioPlayer.getAudio()) {
+    audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
+    audioPlayer.destroy()
+  }
+  
+  if (discordEnabled.value) {
+    clearDiscordStatus()
+  }
+  
+  window.electronAPI.removeMusicMetadataListener()
+  
+  console.log('MusicTab cleanup completed')
 })
 </script>
 
