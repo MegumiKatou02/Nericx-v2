@@ -1,7 +1,6 @@
 <template>
   <div v-if="isVisible" class="image-viewer-overlay" @click="closeViewer">
     <div class="image-viewer-container" @click.stop>
-      <!-- Header với controls -->
       <div class="image-viewer-header">
         <div class="image-info">
           <span class="image-title">{{ imageName }}</span>
@@ -29,7 +28,6 @@
         </div>
       </div>
 
-      <!-- Container ảnh -->
       <div class="image-container" ref="imageContainerRef">
         <img 
           :src="imageUrl" 
@@ -48,7 +46,6 @@
         />
       </div>
 
-      <!-- Footer với thông tin ảnh -->
       <div class="image-viewer-footer">
         <span class="image-size">{{ imageSize }}</span>
         <span class="navigation-hint">Scroll để zoom, kéo để di chuyển</span>

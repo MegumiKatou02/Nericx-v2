@@ -9,7 +9,6 @@
     </div>
 
     <div class="sections-container">
-      <!-- Music Tab Shortcuts -->
       <div class="shortcut-section">
         <div class="section-header">
           <i class="fas fa-music"></i>
@@ -17,7 +16,6 @@
         </div>
         
         <div class="shortcuts-grid">
-          <!-- Playback Controls -->
           <div class="shortcut-category">
             <h3>Điều khiển phát nhạc</h3>
             <div class="shortcut-items">
@@ -55,7 +53,6 @@
             </div>
           </div>
 
-          <!-- Navigation Controls -->
           <div class="shortcut-category">
             <h3>Điều hướng</h3>
             <div class="shortcut-items">
@@ -85,7 +82,6 @@
             </div>
           </div>
 
-          <!-- Search & Discord -->
           <div class="shortcut-category">
             <h3>Tìm kiếm & Discord</h3>
             <div class="shortcut-items">
@@ -117,7 +113,6 @@
         </div>
       </div>
 
-      <!-- General Shortcuts -->
       <div class="shortcut-section">
         <div class="section-header">
           <i class="fas fa-cog"></i>
@@ -201,7 +196,6 @@
         </div>
       </div>
 
-      <!-- Tips Section -->
       <div class="tips-section">
         <div class="section-header">
           <i class="fas fa-lightbulb"></i>

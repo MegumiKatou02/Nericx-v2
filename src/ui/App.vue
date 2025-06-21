@@ -18,13 +18,167 @@ const currentTheme = ref('dark')
 const keyHandler = ref<((event: KeyboardEvent) => void) | null>(null)
 const musicTabRef = ref<{ focusTab: () => void } | null>(null)
 
-// Mini player state
 const miniPlayerVisible = ref(false)
 const miniPlayerCollapsed = ref(false)
 const currentSong = ref<any>(null)
 const isPlaying = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
+
+const isDragging = ref(false)
+const dragStarted = ref(false)
+const position = ref({ x: 0, y: 0 })
+const dragOffset = ref({ x: 0, y: 0 })
+const animationId = ref<number | null>(null)
+
+const initializeMiniPlayerPosition = () => {
+  const margin = 20
+  position.value = {
+    x: window.innerWidth - 320 - margin,
+    y: window.innerHeight - 100 - margin
+  }
+}
+
+const startDrag = (event: MouseEvent | TouchEvent) => {
+  event.preventDefault()
+  
+  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX
+  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY
+  
+  isDragging.value = true
+  dragStarted.value = false
+  
+  dragOffset.value = {
+    x: clientX - position.value.x,
+    y: clientY - position.value.y
+  }
+  
+  document.addEventListener('mousemove', onDrag, { passive: false })
+  document.addEventListener('mouseup', stopDrag, { passive: true })
+  document.addEventListener('touchmove', onDrag, { passive: false })
+  document.addEventListener('touchend', stopDrag, { passive: true })
+  
+  document.body.style.userSelect = 'none'
+  document.body.style.webkitUserSelect = 'none'
+}
+
+const onDrag = (event: MouseEvent | TouchEvent) => {
+  if (!isDragging.value) return
+  
+  event.preventDefault()
+  dragStarted.value = true
+  
+  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX
+  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY
+  
+  if (animationId.value) {
+    cancelAnimationFrame(animationId.value)
+  }
+  
+  animationId.value = requestAnimationFrame(() => {
+    position.value = {
+      x: clientX - dragOffset.value.x,
+      y: clientY - dragOffset.value.y
+    }
+  })
+}
+
+const stopDrag = () => {
+  if (!isDragging.value) return
+  
+  isDragging.value = false
+  
+  if (animationId.value) {
+    cancelAnimationFrame(animationId.value)
+    animationId.value = null
+  }
+  
+  document.removeEventListener('mousemove', onDrag)
+  document.removeEventListener('mouseup', stopDrag)
+  document.removeEventListener('touchmove', onDrag)
+  document.removeEventListener('touchend', stopDrag)
+  
+  document.body.style.userSelect = ''
+  document.body.style.webkitUserSelect = ''
+  
+  if (dragStarted.value) {
+    snapToCorner()
+  }
+}
+
+const snapToCorner = () => {
+  const margin = 20
+  const playerWidth = miniPlayerCollapsed.value ? 80 : 320
+  const playerHeight = 80 
+  
+  const windowWidth = window.innerWidth
+  const windowHeight = window.innerHeight
+  
+  const centerX = position.value.x + playerWidth / 2
+  const centerY = position.value.y + playerHeight / 2
+  
+  let targetX: number
+  let targetY: number
+  
+  if (centerX < windowWidth / 2) {
+    targetX = margin
+  } else {
+    targetX = windowWidth - playerWidth - margin
+  }
+  
+  if (centerY < windowHeight / 2) {
+    targetY = margin + 32
+  } else {
+    targetY = windowHeight - playerHeight - margin
+  }
+  
+  animateToPosition(targetX, targetY)
+}
+
+const animateToPosition = (targetX: number, targetY: number) => {
+  const startX = position.value.x
+  const startY = position.value.y
+  const duration = 300 
+  const startTime = performance.now()
+  
+  const animate = (currentTime: number) => {
+    const elapsed = currentTime - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    
+    const easeOut = 1 - Math.pow(1 - progress, 3)
+    
+    position.value = {
+      x: startX + (targetX - startX) * easeOut,
+      y: startY + (targetY - startY) * easeOut
+    }
+    
+    if (progress < 1) {
+      requestAnimationFrame(animate)
+    }
+  }
+  
+  requestAnimationFrame(animate)
+}
+
+const handleMiniPlayerClick = () => {
+  if (!dragStarted.value) {
+    switchToMusicTab()
+  }
+}
+
+const handleResize = () => {
+  const margin = 20
+  const playerWidth = miniPlayerCollapsed.value ? 80 : 320
+  const playerHeight = 80
+  
+  const maxX = window.innerWidth - playerWidth - margin
+  const maxY = window.innerHeight - playerHeight - margin
+  
+  position.value = {
+    x: Math.min(Math.max(margin, position.value.x), maxX),
+    y: Math.min(Math.max(margin + 32, position.value.y), maxY) // +32 for title bar
+  }
+}
 
 const updateCSSVariables = (color: string) => {
   const root = document.documentElement
@@ -133,6 +287,9 @@ onMounted(async () => {
   } catch (error) {
     console.error('Error loading initial theme:', error)
   }
+
+  initializeMiniPlayerPosition()
+  window.addEventListener('resize', handleResize, { passive: true })
 
   let lastDevToolsCheck = 0
   const DEVTOOLS_CHECK_INTERVAL = 5000
@@ -246,6 +403,19 @@ onUnmounted(() => {
   if (keyHandler.value) {
     document.removeEventListener('keydown', keyHandler.value)
   }
+  
+  document.removeEventListener('mousemove', onDrag)
+  document.removeEventListener('mouseup', stopDrag)
+  document.removeEventListener('touchmove', onDrag)
+  document.removeEventListener('touchend', stopDrag)
+  window.removeEventListener('resize', handleResize)
+  
+  if (animationId.value) {
+    cancelAnimationFrame(animationId.value)
+  }
+  
+  document.body.style.userSelect = ''
+  document.body.style.webkitUserSelect = ''
 })
 </script>
 
@@ -331,9 +501,12 @@ onUnmounted(() => {
     <div 
       v-if="miniPlayerVisible" 
       class="mini-player" 
-      :class="{ collapsed: miniPlayerCollapsed }"
+      :class="{ collapsed: miniPlayerCollapsed, dragging: isDragging }"
+      :style="{ transform: `translate(${position.x}px, ${position.y}px)` }"
+      @mousedown="startDrag"
+      @touchstart="startDrag"
     >
-      <div class="mini-player-content" @click="switchToMusicTab">
+      <div class="mini-player-content" @click="handleMiniPlayerClick">
         <div class="song-cover" v-if="currentSong?.image">
           <img :src="'file://' + currentSong.image" :alt="currentSong.name" />
         </div>
@@ -556,47 +729,62 @@ onUnmounted(() => {
 
 .mini-player {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  top: 0;
+  left: 0;
+  width: 320px;
   background: var(--bg-secondary);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--accent-color-transparent);
-  z-index: 1000;
-  transition: all 0.3s ease;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  z-index: 1000;
+  border: 1px solid var(--accent-color-transparent);
   user-select: none;
-  max-width: 320px;
-  min-width: 280px;
+  cursor: grab;
+}
+
+.mini-player:hover {
+  background: var(--bg-hover);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.mini-player.dragging {
+  cursor: grabbing;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  transition: none;
 }
 
 .mini-player.collapsed {
-  max-width: 80px;
-  min-width: 80px;
+  width: 60px;
+  height: 60px;
 }
 
 .mini-player-content {
   display: flex;
   align-items: center;
-  gap: 12px;
   padding: 12px;
+  gap: 12px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
+  transition: all 0.2s ease;
 }
 
-.mini-player-content:hover {
-  background: var(--accent-color-transparent);
+.mini-player.collapsed .mini-player-content {
+  padding: 8px;
+  justify-content: center;
 }
 
 .song-cover {
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
   border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
-  position: relative;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .song-cover img {
@@ -606,44 +794,39 @@ onUnmounted(() => {
 }
 
 .song-cover.placeholder {
-  background: var(--bg-tertiary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   color: var(--text-muted);
-  font-size: 1.2em;
+  font-size: 20px;
 }
 
 .song-info {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  color: var(--text-primary);
 }
 
 .song-title {
   font-weight: 600;
-  color: var(--text-primary);
-  font-size: 0.9em;
+  font-size: 14px;
+  margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--text-primary);
 }
 
 .song-artist {
+  font-size: 12px;
   color: var(--text-muted);
-  font-size: 0.8em;
+  margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .song-time {
-  color: var(--accent-color);
-  font-size: 0.75em;
-  font-family: 'Courier New', monospace;
-  font-weight: 500;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 
 .progress-bar {
@@ -653,11 +836,13 @@ onUnmounted(() => {
   right: 0;
   height: 3px;
   background: var(--bg-tertiary);
+  border-radius: 0 0 12px 12px;
 }
 
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--accent-color), var(--accent-hover));
+  border-radius: 0 0 12px 12px;
   transition: width 0.1s ease;
 }
 
@@ -666,12 +851,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 2px;
   margin-left: auto;
-  flex-shrink: 0;
 }
 
 .wave-bar {
   width: 3px;
-  height: 16px;
   background: var(--accent-color);
   border-radius: 2px;
   animation: wave 1.2s ease-in-out infinite;
@@ -686,62 +869,88 @@ onUnmounted(() => {
 }
 
 @keyframes wave {
-  0%, 100% {
-    transform: scaleY(0.3);
-  }
-  50% {
-    transform: scaleY(1);
-  }
+  0%, 100% { height: 8px; }
+  50% { height: 16px; }
 }
 
 .collapse-btn {
   position: absolute;
-  top: -10px;
-  right: 8px;
+  top: -8px;
+  right: -8px;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
-  background: var(--accent-color);
-  color: white;
   border: none;
-  cursor: pointer;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8em;
-  transition: all 0.3s ease;
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.2s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  z-index: 1001;
-  opacity: 0.7;
+  border: 1px solid var(--accent-color-transparent);
 }
 
 .collapse-btn:hover {
-  background: var(--accent-hover);
+  background: var(--accent-color);
+  color: var(--text-primary);
   transform: scale(1.1);
+  border-color: var(--accent-color);
 }
 
-.mini-player.collapsed .song-info,
-.mini-player.collapsed .progress-bar,
-.mini-player.collapsed .playing-indicator {
-  display: none;
+[data-theme="light"] .mini-player {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
 }
 
-.mini-player.collapsed .mini-player-content {
-  justify-content: center;
-  padding: 8px;
+[data-theme="light"] .mini-player:hover {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
-.mini-player.collapsed .song-cover {
-  width: 40px;
-  height: 40px;
+[data-theme="light"] .mini-player.dragging {
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
 }
 
-.mini-player:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+[data-theme="light"] .collapse-btn {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.mini-player:hover .collapse-btn {
-  opacity: 1;
+[data-theme="dark"] .mini-player {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .mini-player:hover {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .mini-player.dragging {
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+}
+
+@media (max-width: 768px) {
+  .mini-player {
+    width: 280px;
+  }
+  
+  .mini-player.collapsed {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .song-cover {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .song-title {
+    font-size: 13px;
+  }
+  
+  .song-artist {
+    font-size: 11px;
+  }
 }
 </style>

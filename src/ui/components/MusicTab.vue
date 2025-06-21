@@ -1103,7 +1103,7 @@ const focusTab = () => {
     setTimeout(() => {
       if (musicTabRef.value) {
         musicTabRef.value.focus()
-        console.log('Music tab focused via expose method')
+        // console.log('Music tab focused via expose method')
       }
     }, 50)
   })
@@ -1131,7 +1131,7 @@ onMounted(async () => {
   nextTick(() => {
     if (musicTabRef.value) {
       musicTabRef.value.focus()
-      console.log('Music tab focused')
+      // console.log('Music tab focused')
     }
   })
 
@@ -1170,7 +1170,7 @@ onUnmounted(() => {
   
   window.electronAPI.removeMusicMetadataListener()
   
-  console.log('MusicTab cleanup completed')
+  // console.log('MusicTab cleanup completed')
 })
 </script>
 
