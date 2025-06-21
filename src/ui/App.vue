@@ -462,7 +462,7 @@ onUnmounted(() => {
   <div class="app-container" :class="currentTheme">
     <div class="title-bar">
       <div class="title-bar-drag">
-        <img src="/iconhe.jpg" class="app-icon" alt="App Icon" />
+        <img src="/iconhe.ico" class="app-icon" alt="App Icon" />
         <span class="app-title">Nericx</span>
       </div>
       <div class="window-controls">

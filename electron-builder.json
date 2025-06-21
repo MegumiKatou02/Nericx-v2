@@ -2,7 +2,7 @@
     "appId": "com.nericx.nericx",
     "files": ["dist-electron", "dist-vue"],
     "asarUnpack": ["dist-electron/preload.cjs"],
-    "icon": "./iconhe.jpg",
+    "icon": "./iconhe.ico",
     "directories": {
         "output": "dist"
     },
