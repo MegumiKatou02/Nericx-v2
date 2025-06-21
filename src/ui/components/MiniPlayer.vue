@@ -60,19 +60,17 @@ const emit = defineEmits<{
   'toggle-collapse': []
 }>()
 
-// Drag functionality
 const isDragging = ref(false)
 const dragStarted = ref(false)
 const position = ref({ x: 0, y: 0 })
 const dragOffset = ref({ x: 0, y: 0 })
 const animationId = ref<number | null>(null)
 
-// Initialize position to bottom-right corner
 const initializePosition = () => {
   const margin = 20
   position.value = {
-    x: window.innerWidth - 320 - margin, // 320px is max-width of mini-player
-    y: window.innerHeight - 100 - margin // Approximate height
+    x: window.innerWidth - 320 - margin,
+    y: window.innerHeight - 100 - margin
   }
 }
 
@@ -95,7 +93,6 @@ const startDrag = (event: MouseEvent | TouchEvent) => {
   document.addEventListener('touchmove', onDrag, { passive: false })
   document.addEventListener('touchend', stopDrag, { passive: true })
   
-  // Prevent text selection during drag
   document.body.style.userSelect = 'none'
   document.body.style.webkitUserSelect = 'none'
 }
@@ -109,7 +106,6 @@ const onDrag = (event: MouseEvent | TouchEvent) => {
   const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX
   const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY
   
-  // Use requestAnimationFrame for smooth dragging
   if (animationId.value) {
     cancelAnimationFrame(animationId.value)
   }
@@ -127,23 +123,19 @@ const stopDrag = () => {
   
   isDragging.value = false
   
-  // Clean up animation frame
   if (animationId.value) {
     cancelAnimationFrame(animationId.value)
     animationId.value = null
   }
   
-  // Remove event listeners
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
   document.removeEventListener('touchmove', onDrag)
   document.removeEventListener('touchend', stopDrag)
   
-  // Restore text selection
   document.body.style.userSelect = ''
   document.body.style.webkitUserSelect = ''
   
-  // Snap to corner after drag ends
   if (dragStarted.value) {
     snapToCorner()
   }
@@ -152,7 +144,7 @@ const stopDrag = () => {
 const snapToCorner = () => {
   const margin = 20
   const playerWidth = props.collapsed ? 80 : 320
-  const playerHeight = 80 // Approximate height
+  const playerHeight = 80
   
   const windowWidth = window.innerWidth
   const windowHeight = window.innerHeight
@@ -163,24 +155,18 @@ const snapToCorner = () => {
   let targetX: number
   let targetY: number
   
-  // Determine which corner is closest
   if (centerX < windowWidth / 2) {
-    // Left side
     targetX = margin
   } else {
-    // Right side
     targetX = windowWidth - playerWidth - margin
   }
   
   if (centerY < windowHeight / 2) {
-    // Top side
-    targetY = margin + 32 // Account for title bar
+    targetY = margin + 32
   } else {
-    // Bottom side
     targetY = windowHeight - playerHeight - margin
   }
   
-  // Animate to target position
   animateToPosition(targetX, targetY)
 }
 
@@ -194,7 +180,6 @@ const animateToPosition = (targetX: number, targetY: number) => {
     const elapsed = currentTime - startTime
     const progress = Math.min(elapsed / duration, 1)
     
-    // Easing function (ease-out)
     const easeOut = 1 - Math.pow(1 - progress, 3)
     
     position.value = {
@@ -211,13 +196,11 @@ const animateToPosition = (targetX: number, targetY: number) => {
 }
 
 const handleContentClick = () => {
-  // Only emit switch-to-music if not dragging
   if (!dragStarted.value) {
     emit('switch-to-music')
   }
 }
 
-// Handle window resize to keep mini-player in bounds
 const handleResize = () => {
   const margin = 20
   const playerWidth = props.collapsed ? 80 : 320
@@ -232,7 +215,6 @@ const handleResize = () => {
   }
 }
 
-// Helper functions
 const getArtistAndTitle = (songName: string) => {
   const parts = songName.split(' - ')
   if (parts.length >= 2) {
@@ -271,19 +253,16 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  // Clean up event listeners
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
   document.removeEventListener('touchmove', onDrag)
   document.removeEventListener('touchend', stopDrag)
   window.removeEventListener('resize', handleResize)
   
-  // Clean up animation frame
   if (animationId.value) {
     cancelAnimationFrame(animationId.value)
   }
   
-  // Restore text selection
   document.body.style.userSelect = ''
   document.body.style.webkitUserSelect = ''
 })
