@@ -122,7 +122,6 @@
 
           <div v-if="showAdvancedControls" class="advanced-controls">
             <div class="controls-grid">
-              <!-- Navigation Row -->
             <div class="navigation-controls">
               <button @click="previousSong" class="nav-control-btn" title="Bài trước">
                 <i class="fas fa-step-backward"></i>
@@ -132,7 +131,6 @@
               </button>
             </div>
 
-              <!-- Volume Control -->
               <div class="volume-control compact">
                 <div class="control-header compact">
                   <i class="fas fa-volume-up"></i>
@@ -150,7 +148,6 @@
               </div>
             </div>
 
-            <!-- Time Progress -->
             <div class="time-control compact">
               <div class="progress-container">
                 <span class="current-time">{{ formatTime(currentTime) }}</span>
@@ -214,7 +211,6 @@
       </div>
     </div>
 
-    <!-- Image Viewer Component -->
     <ImageViewer 
       :is-visible="showImageViewer" 
       :image-url="currentImageUrl"
@@ -225,7 +221,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, inject } from 'vue'
 import type { Song } from '../../electron/type.js'
 import ImageViewer from './ImageViewer.vue'
 
@@ -464,6 +460,8 @@ const musicTabRef = ref<HTMLElement | null>(null)
 const normalizationEnabled = ref(false)
 const audioLevel = ref(0)
 
+const updateMiniPlayer = inject('updateMiniPlayer') as ((song: any, playing: boolean, time: number, dur: number) => void) | undefined
+
 interface SortOption {
   value: string;
   label: string;
@@ -680,6 +678,10 @@ const togglePlay = async () => {
     audioPlayer.resume()
     isPlaying.value = true
   }
+  
+  if (updateMiniPlayer) {
+    updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
+  }
 }
 
 const stopMusic = () => {
@@ -690,6 +692,10 @@ const stopMusic = () => {
   isPlaying.value = false
   currentSong.value = null
   clearDiscordStatus()
+  
+  if (updateMiniPlayer) {
+    updateMiniPlayer(null, false, 0, 0)
+  }
 }
 
 const togglePlayMode = () => {
@@ -816,6 +822,10 @@ const updateProgress = () => {
     
     if (normalizationEnabled.value) {
       audioLevel.value = audioPlayer.getAudioLevel()
+    }
+  
+    if (updateMiniPlayer) {
+      updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
     }
   }
   requestAnimationFrame(updateProgress)
