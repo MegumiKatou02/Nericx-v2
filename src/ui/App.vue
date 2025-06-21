@@ -33,9 +33,11 @@ const animationId = ref<number | null>(null)
 
 const initializeMiniPlayerPosition = () => {
   const margin = 20
+  const playerWidth = 320
+  const playerHeight = 80
   position.value = {
-    x: window.innerWidth - 320 - margin,
-    y: window.innerHeight - 100 - margin
+    x: window.innerWidth - playerWidth - margin,
+    y: window.innerHeight - playerHeight - margin
   }
 }
 
@@ -108,8 +110,8 @@ const stopDrag = () => {
 
 const snapToCorner = () => {
   const margin = 20
-  const playerWidth = miniPlayerCollapsed.value ? 80 : 320
-  const playerHeight = 80 
+  const playerWidth = miniPlayerCollapsed.value ? 60 : 320
+  const playerHeight = miniPlayerCollapsed.value ? 60 : 80
   
   const windowWidth = window.innerWidth
   const windowHeight = window.innerHeight
@@ -168,15 +170,15 @@ const handleMiniPlayerClick = () => {
 
 const handleResize = () => {
   const margin = 20
-  const playerWidth = miniPlayerCollapsed.value ? 80 : 320
-  const playerHeight = 80
+  const playerWidth = miniPlayerCollapsed.value ? 60 : 320
+  const playerHeight = miniPlayerCollapsed.value ? 60 : 80
   
   const maxX = window.innerWidth - playerWidth - margin
   const maxY = window.innerHeight - playerHeight - margin
   
   position.value = {
     x: Math.min(Math.max(margin, position.value.x), maxX),
-    y: Math.min(Math.max(margin + 32, position.value.y), maxY) // +32 for title bar
+    y: Math.min(Math.max(margin + 32, position.value.y), maxY)
   }
 }
 
@@ -218,7 +220,36 @@ const switchToMusicTab = () => {
 }
 
 const toggleMiniPlayerCollapse = () => {
+  const wasCollapsed = miniPlayerCollapsed.value
   miniPlayerCollapsed.value = !miniPlayerCollapsed.value
+  
+  // Adjust position when expanding/collapsing to prevent going out of bounds
+  nextTick(() => {
+    const margin = 20
+    const newPlayerWidth = miniPlayerCollapsed.value ? 60 : 320
+    const newPlayerHeight = miniPlayerCollapsed.value ? 60 : 80
+    
+    const maxX = window.innerWidth - newPlayerWidth - margin
+    const maxY = window.innerHeight - newPlayerHeight - margin
+    
+    if (!miniPlayerCollapsed.value && wasCollapsed) {
+      const currentX = position.value.x
+      const currentY = position.value.y
+      
+      if (currentX + newPlayerWidth + margin > window.innerWidth) {
+        position.value.x = maxX
+      }
+      
+      if (currentY + newPlayerHeight + margin > window.innerHeight) {
+        position.value.y = maxY
+      }
+    } else {
+      position.value = {
+        x: Math.min(Math.max(margin, position.value.x), maxX),
+        y: Math.min(Math.max(margin + 32, position.value.y), maxY)
+      }
+    }
+  })
 }
 
 provide('updateMiniPlayer', updateMiniPlayer)
@@ -396,6 +427,14 @@ watch(currentTab, (newTab) => {
     })
   } else {
     miniPlayerVisible.value = currentSong.value !== null
+  }
+})
+
+watch(miniPlayerCollapsed, (newCollapsed, oldCollapsed) => {
+  if (newCollapsed !== oldCollapsed) {
+    nextTick(() => {
+      handleResize()
+    })
   }
 })
 
@@ -758,6 +797,8 @@ onUnmounted(() => {
 .mini-player.collapsed {
   width: 60px;
   height: 60px;
+  min-width: 60px;
+  min-height: 60px;
 }
 
 .mini-player-content {
