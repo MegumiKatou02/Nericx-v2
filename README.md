@@ -1,7 +1,7 @@
 # Nericx
 
 <div align="center">
-  <img src="iconhe.jpg" alt="Nericx Logo" width="128" height="128">
+  <img src="https://i.pinimg.com/736x/e5/c6/1d/e5c61dd2ade7a1630b2f58220b81ee26.jpg" alt="Nericx Logo" width="128" height="128">
   
   **Link and listen to music with osu!**
   
@@ -22,6 +22,11 @@
 - 🖼️ **Image Viewer**: View beatmap backgrounds and artwork
 - 🎮 **Discord Integration**: Rich presence support
 - 🪟 **Custom Title Bar**: Frameless window with custom controls
+
+## Images
+
+![image](https://github.com/user-attachments/assets/66911028-e436-4148-8a7c-c7727b413fba)
+![image](https://github.com/user-attachments/assets/0dc84482-f129-44e2-b99a-672d2954494d)
 
 ## 🚀 Getting Started
 
