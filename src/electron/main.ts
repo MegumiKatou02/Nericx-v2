@@ -31,6 +31,7 @@ function createWindow() {
     webPreferences: {
       preload: getPreloadPath(),
       webSecurity: false,
+      devTools: true,
     }
   })
 
@@ -41,6 +42,28 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(app.getAppPath(), '/dist-vue/index.html'));
   }
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12') {
+      if (mainWindow?.webContents.isDevToolsOpened()) {
+        mainWindow.webContents.closeDevTools()
+      } else {
+        mainWindow?.webContents.openDevTools()
+      }
+    }
+    
+    if (input.control && input.shift && input.key === 'I') {
+      if (mainWindow?.webContents.isDevToolsOpened()) {
+        mainWindow.webContents.closeDevTools()
+      } else {
+        mainWindow?.webContents.openDevTools()
+      }
+    }
+    
+    if (input.control && input.shift && input.key === 'J') {
+      mainWindow?.webContents.openDevTools({ mode: 'detach' })
+    }
+  })
 }
 
 ipcMain.handle('select-directory', async () => {

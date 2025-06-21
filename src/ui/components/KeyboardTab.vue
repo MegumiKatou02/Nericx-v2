@@ -190,7 +190,7 @@
               </div>
               
               <div class="shortcut-item">
-                <span class="key">F12</span>
+                <span class="key">Ctrl + Shift + I</span>
                 <div class="shortcut-info">
                   <span class="action">DevTools</span>
                   <span class="desc">Mở công cụ phát triển</span>

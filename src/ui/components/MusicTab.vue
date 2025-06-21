@@ -18,6 +18,7 @@
               ref="searchInputRef"
               v-model="searchQuery" 
               @input="filterSongs"
+              @keydown="handleSearchKeyDown"
               type="text" 
               placeholder="Tìm kiếm bài hát..."
               class="search-input"
@@ -870,6 +871,37 @@ const handleKeyDown = async (event: KeyboardEvent) => {
         filterSongs()
       }
       searchInputRef.value?.blur()
+      break
+  }
+}
+
+const handleSearchKeyDown = (event: KeyboardEvent) => {
+  switch (event.key) {
+    case 'Escape':
+      event.preventDefault()
+      event.stopPropagation()
+
+      if (searchQuery.value) {
+        searchQuery.value = ''
+        filterSongs()
+      }
+      searchInputRef.value?.blur()
+      nextTick(() => {
+        if (musicTabRef.value) {
+          musicTabRef.value.focus()
+        }
+      })
+      break
+    
+    case 'Enter':
+      event.preventDefault()
+      event.stopPropagation()
+      searchInputRef.value?.blur()
+      nextTick(() => {
+        if (musicTabRef.value) {
+          musicTabRef.value.focus()
+        }
+      })
       break
   }
 }
