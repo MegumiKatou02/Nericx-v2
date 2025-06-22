@@ -77,7 +77,7 @@
               { 
                 'selected': selectedSong?.path === song.path,
                 'playing': currentSong?.path === song.path && isPlaying,
-                'has-video': videoEnabled && song.video
+                'has-video': song.video
               }
             ]"
             @click="selectSong(song)"
@@ -87,7 +87,11 @@
             <div class="song-info">
               <div class="song-title-row">
                 <span class="title">{{ getSongDetails(song.name).title }}</span>
-                <div v-if="videoEnabled && song.video" class="video-indicator">
+                <!-- <div v-if="videoEnabled && song.video" class="video-indicator">
+                  <i class="fas fa-play-circle"></i>
+                  <span>video</span>
+                </div> -->
+                <div v-if="song.video" class="video-indicator">
                   <i class="fas fa-play-circle"></i>
                   <span>video</span>
                 </div>
@@ -102,7 +106,6 @@
       </div>
 
       <div class="player-container">
-        <!-- Video player nếu có video và được bật -->
         <div v-if="currentVideoUrl" class="video-container" @click="showFullVideo">
           <video 
             :src="currentVideoUrl" 

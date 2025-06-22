@@ -283,6 +283,7 @@ onMounted(async () => {
   flex-direction: column;
   padding: 20px;
   user-select: none;
+  overflow-y: auto;
 }
 
 .setting-tab.dark {
