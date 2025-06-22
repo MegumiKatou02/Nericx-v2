@@ -15,6 +15,7 @@ declare global {
     saveFile(sourcePath: string, fileName: string): Promise<{ success: boolean; message: string }>
     copyFile(filePath: string): Promise<{ success: boolean; message: string }>
     showItemInFolder(filePath: string): Promise<{ success: boolean; message: string }>
+    openExternal(url: string): Promise<{ success: boolean; message: string }>
     
     setWindowTransparency(enabled: boolean, opacity: number): Promise<boolean>
     getWindowOpacity(): Promise<number>

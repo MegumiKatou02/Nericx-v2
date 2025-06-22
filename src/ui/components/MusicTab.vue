@@ -231,6 +231,23 @@
         <i class="fas fa-folder-open"></i>
         <span>Xem vị trí file</span>
       </div>
+      <div class="context-menu-item" @click="copyFilePath">
+        <i class="fas fa-copy"></i>
+        <span>Copy đường dẫn</span>
+      </div>
+      <div class="context-menu-item" @click="showSongInfo">
+        <i class="fas fa-info-circle"></i>
+        <span>Xem thông tin chi tiết</span>
+      </div>
+    </div>
+
+
+    <div 
+      v-if="copyNotification.visible" 
+      class="copy-notification"
+    >
+      <i class="fas fa-check"></i>
+      <span>{{ copyNotification.message }}</span>
     </div>
 
     <ImageViewer 
@@ -239,6 +256,12 @@
       :image-name="currentImageName"
       @close="closeImageViewer"
     />
+
+    <SongInfoModal 
+      :is-visible="songInfoModal.visible"
+      :song="songInfoModal.song"
+      @close="closeSongInfo"
+    />
   </div>
 </template>
 
@@ -246,6 +269,7 @@
 import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef } from 'vue'
 import type { Song } from '../../electron/type.js'
 import ImageViewer from './ImageViewer.vue'
+import SongInfoModal from './SongInfoModal.vue'
 
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null
@@ -522,6 +546,16 @@ const contextMenu = ref({
   visible: false,
   x: 0,
   y: 0,
+  song: null as Song | null
+})
+
+const copyNotification = ref({
+  visible: false,
+  message: ''
+})
+
+const songInfoModal = ref({
+  visible: false,
   song: null as Song | null
 })
 
@@ -1298,6 +1332,46 @@ const openFileLocation = async () => {
   }
 }
 
+const showCopyNotification = () => {
+  copyNotification.value = {
+    visible: true,
+    message: 'Đã copy đường dẫn!'
+  }
+  
+  setTimeout(() => {
+    copyNotification.value.visible = false
+  }, 2000)
+}
+
+const copyFilePath = async () => {
+  if (!contextMenu.value.song) return
+  
+  try {
+    await navigator.clipboard.writeText(contextMenu.value.song.path)
+    console.log('Đã copy đường dẫn:', contextMenu.value.song.path)
+    
+    showCopyNotification()
+  } catch (error) {
+    console.error('Lỗi khi copy đường dẫn:', error)
+    
+    // Fallback: method cũ
+    try {
+      const textArea = document.createElement('textarea')
+      textArea.value = contextMenu.value.song.path
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      console.log('Đã copy đường dẫn (fallback):', contextMenu.value.song.path)
+      showCopyNotification()
+    } catch (fallbackError) {
+      console.error('Lỗi khi copy đường dẫn (fallback):', fallbackError)
+    }
+  } finally {
+    hideContextMenu()
+  }
+}
+
 defineExpose({
   focusTab
 })
@@ -1386,6 +1460,21 @@ onUnmounted(() => {
   document.removeEventListener('click', handleGlobalClick)
   
 })
+
+const showSongInfo = () => {
+  if (!contextMenu.value.song) return
+  
+  songInfoModal.value = {
+    visible: true,
+    song: contextMenu.value.song
+  }
+  hideContextMenu()
+}
+
+const closeSongInfo = () => {
+  songInfoModal.value.visible = false
+  songInfoModal.value.song = null
+}
 </script>
 
 <style scoped>
@@ -1882,11 +1971,6 @@ button:not(.control-btn):not(.nav-button):not(.scroll-to-song-btn) {
 button:not(.control-btn):not(.nav-button):not(.scroll-to-song-btn):hover {
   background: var(--accent-hover);
 }
-
-.mode-button {
-  min-width: 40px;
-}
-
 .advanced-controls {
   display: flex;
   flex-direction: column;
@@ -1937,24 +2021,6 @@ button:not(.control-btn):not(.nav-button):not(.scroll-to-song-btn):hover {
 .time-control.compact {
   width: 100%;
   margin-top: 4px;
-}
-
-.time-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.time-display.compact {
-  font-family: 'Courier New', monospace;
-  font-size: 0.85em;
-  font-weight: 500;
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-  padding: 2px 6px;
-  border-radius: 3px;
-  border: 1px solid var(--accent-color-transparent);
 }
 
 .range-slider.compact {
@@ -2292,18 +2358,6 @@ label {
   margin: 0;
 }
 
-.time-display {
-  color: var(--text-primary);
-  font-family: 'Courier New', monospace;
-  font-size: 0.9em;
-  font-weight: 500;
-  padding: 4px 8px;
-  background: var(--bg-secondary);
-  border-radius: 4px;
-  text-align: center;
-  border: 1px solid var(--accent-color-transparent);
-}
-
 .range-slider {
   width: 100%;
   height: 6px;
@@ -2500,7 +2554,6 @@ label {
   }
 }
 
-/* Context Menu Styles */
 .context-menu {
   position: fixed;
   background: var(--bg-secondary);
@@ -2563,6 +2616,49 @@ label {
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+  }
+}
+
+.copy-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 12px 20px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--accent-color-transparent);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: notificationSlideIn 0.4s ease-out;
+  user-select: none;
+}
+
+.copy-notification i {
+  font-size: 1.1em;
+  color: var(--accent-color);
+  min-width: 16px;
+}
+
+.copy-notification span {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+@keyframes notificationSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
   }
 }
 </style>

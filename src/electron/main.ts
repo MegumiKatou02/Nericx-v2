@@ -169,6 +169,22 @@ ipcMain.handle('show-item-in-folder', async (_, filePath: string) => {
   }
 })
 
+ipcMain.handle('open-external', async (_, url: string) => {
+  try {
+    const urlObj = new URL(url)
+    const allowedProtocols = ['http:', 'https:']
+    
+    if (!allowedProtocols.includes(urlObj.protocol)) {
+      return { success: false, message: 'Protocol không được hỗ trợ' }
+    }
+    
+    await shell.openExternal(url)
+    return { success: true, message: `Đã mở URL: ${url}` }
+  } catch (error) {
+    return { success: false, message: `Lỗi khi mở URL: ${error}` }
+  }
+})
+
 app.whenReady().then(async () => {
   await initDatabase()
   
