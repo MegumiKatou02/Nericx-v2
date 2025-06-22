@@ -70,7 +70,6 @@ const saveConfig = async () => {
   await window.electronAPI.setConfig('osuPath', osuPath.value)
   showSuccessNotification.value = true
   
-  // Tự động ẩn thông báo sau 10 giây
   setTimeout(() => {
     showSuccessNotification.value = false
   }, 10000)
@@ -105,6 +104,7 @@ onMounted(async () => {
   padding: 20px;
   color: var(--text-primary);
   background: var(--bg-primary);
+  user-select: none;
 }
 
 .form-group {

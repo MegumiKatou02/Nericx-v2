@@ -7,7 +7,21 @@
     <div v-else class="main-container">
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
-        <span>Đang tải danh sách bài hát...</span>
+        <div class="loading-content">
+          <span class="loading-text">{{ loadingText }}</span>
+          <div v-if="scanProgress.total > 0" class="scan-progress">
+            <div class="progress-bar">
+              <div 
+                class="progress-fill" 
+                :style="{ width: scanProgress.percentage + '%' }"
+              ></div>
+            </div>
+            <div class="progress-text">
+              {{ scanProgress.processed }} / {{ scanProgress.total }} 
+              ({{ scanProgress.percentage }}%)
+            </div>
+          </div>
+        </div>
       </div>
       
       <div class="songs-container">
@@ -17,7 +31,7 @@
             <input 
               ref="searchInputRef"
               v-model="searchQuery" 
-              @input="filterSongs"
+              @input="debouncedFilterSongs"
               @keydown="handleSearchKeyDown"
               type="text" 
               placeholder="Tìm kiếm bài hát..."
@@ -28,7 +42,7 @@
           <div class="sort-box" :class="{ 'open': isDropdownOpen }" @click.stop="toggleDropdown">
             <i class="fas fa-sort-amount-down sort-icon"></i>
             <div class="sort-display">
-              {{ sortOptions.find(opt => opt.value === currentSort)?.label }}
+              {{ currentSortOption.label }}
             </div>
             <div v-if="isDropdownOpen" class="dropdown-menu">
               <div 
@@ -69,9 +83,9 @@
             @dblclick="playSong(song)"
           >
             <div class="song-info">
-              <span class="title">{{ getArtistAndTitle(song.name).title }}</span>
+              <span class="title">{{ getSongDetails(song.name).title }}</span>
               <div class="song-details">
-                <span class="artist">{{ getArtistAndTitle(song.name).artist }}</span>
+                <span class="artist">{{ getSongDetails(song.name).artist }}</span>
                 <span class="duration">{{ formatTime(song.duration || 0) }}</span>
               </div>
             </div>
@@ -80,43 +94,35 @@
       </div>
 
       <div class="player-container">
-        <div class="cover-image" @click="showFullImage" v-if="selectedSong?.image || currentSong?.image">
-          <img :src="'file://' + (selectedSong?.image || currentSong?.image)" :alt="selectedSong?.name || currentSong?.name">
+        <div class="cover-image" @click="showFullImage" v-if="currentCoverImage">
+          <img :src="currentCoverImage" :alt="currentSongName">
         </div>
 
         <div class="controls">
           <div class="basic-controls">
             <button @click="togglePlay" class="control-btn play-btn">
               <i :class="isPlaying ? 'fas fa-pause' : 'fas fa-play'"></i>
-              <span>{{ isPlaying ? 'Tạm dừng' : 'Phát nhạc' }}</span>
+              <span>{{ playButtonText }}</span>
             </button>
             <button @click="stopMusic" class="control-btn stop-btn">
               <i class="fas fa-stop"></i>
               <span>Dừng</span>
             </button>
-            <button @click="togglePlayMode" class="control-btn mode-btn" :title="getPlayModeTitle()">
+            <button @click="togglePlayMode" class="control-btn mode-btn" :title="playModeTitle">
               <span v-html="playModeIcon"></span>
             </button>
             <button 
               @click="toggleDiscord" 
               class="control-btn discord-btn" 
-              :class="{ 
-                'active': discordEnabled, 
-                'loading': isDiscordLoading,
-                'cooldown': discordCooldownActive 
-              }"
+              :class="discordButtonClass"
               :disabled="isDiscordLoading || discordCooldownActive"
             >
-              <i :class="isDiscordLoading ? 'fas fa-spinner fa-spin' : 'fab fa-discord'"></i>
-              <span>
-                {{ isDiscordLoading ? 'Đang xử lý...' : 
-                   discordCooldownActive ? 'Chờ...' :
-                   discordEnabled ? 'Tắt Discord' : 'Bật Discord' }}
-              </span>
+              <i :class="discordIconClass"></i>
+              <span>{{ discordButtonText }}</span>
             </button>
             <button @click="toggleAdvancedControls" class="control-btn advanced-btn" :class="{ 'active': showAdvancedControls }">
               <i :class="showAdvancedControls ? 'fas fa-chevron-up' : 'fas fa-cog'"></i>
-              <span>{{ showAdvancedControls ? 'Ẩn tùy chỉnh' : 'Tuỳ chỉnh nhạc' }}</span>
+              <span>{{ advancedControlsText }}</span>
             </button>
           </div>
 
@@ -138,25 +144,25 @@
                 type="range" 
                 min="0" 
                 max="100" 
-                :value="volume * 100"
+                :value="volumePercentage"
                 @input="onVolumeChange"
                     class="range-slider compact"
                     title="Âm lượng"
               >
-                  <span class="volume-value">{{ Math.round(volume * 100) }}%</span>
+                  <span class="volume-value">{{ volumePercentage }}%</span>
                 </div>
               </div>
             </div>
 
             <div class="time-control compact">
               <div class="progress-container">
-                <span class="current-time">{{ formatTime(currentTime) }}</span>
+                <span class="current-time">{{ formattedCurrentTime }}</span>
                 <div class="progress-bar-container">
               <input 
                 type="range" 
                 min="0" 
                 max="100" 
-                :value="(currentTime / duration) * 100" 
+                :value="progressPercentage" 
                 @input="onSeek"
                     class="progress-bar"
                     title="Tiến độ bài hát"
@@ -164,11 +170,11 @@
                   <div class="progress-track">
                     <div 
                       class="progress-fill" 
-                      :style="{ width: (currentTime / duration) * 100 + '%' }"
+                      :style="{ width: progressPercentage + '%' }"
                     ></div>
                   </div>
                 </div>
-                <span class="total-time">{{ formatTime(duration) }}</span>
+                <span class="total-time">{{ formattedDuration }}</span>
               </div>
             </div>
           </div>
@@ -221,9 +227,44 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick, inject } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef } from 'vue'
 import type { Song } from '../../electron/type.js'
 import ImageViewer from './ImageViewer.vue'
+
+function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout)
+    timeout = setTimeout(() => func(...args), wait)
+  }
+}
+
+function rafThrottle<T extends (...args: any[]) => any>(func: T): (...args: Parameters<T>) => void {
+  let rafId: number | null = null
+  return (...args: Parameters<T>) => {
+    if (rafId) return
+    rafId = requestAnimationFrame(() => {
+      func(...args)
+      rafId = null
+    })
+  }
+}
+
+const loadFonts = () => {
+  if ('fonts' in document) {
+    const fontAwesome = new FontFace('Font Awesome 5 Free', 'url(/path/to/fa-solid-900.woff2)', {
+      weight: '900',
+      style: 'normal',
+      display: 'swap'
+    })
+    
+    fontAwesome.load().then(() => {
+      document.fonts.add(fontAwesome)
+    }).catch(err => {
+      console.warn('Font loading failed:', err)
+    })
+  }
+}
 
 class AudioPlayer {
   private audio: HTMLAudioElement | null = null
@@ -234,7 +275,6 @@ class AudioPlayer {
   private compressorNode: DynamicsCompressorNode | null = null
   private analyserNode: AnalyserNode | null = null
   private normalizationEnabled: boolean = true
-  // private targetLUFS: number = -16
 
   constructor() {
     this.initAudio()
@@ -450,16 +490,23 @@ const isDiscordLoading = ref(false)
 const discordCooldownActive = ref(false)
 const shuffleMode = ref(false)
 const repeatOne = ref(false)
-const filteredSongs = ref<Song[]>([])
+const filteredSongs = shallowRef<Song[]>([]) 
 const songsListRef = ref<HTMLElement | null>(null)
 const isLoading = ref<boolean>(false)
-const songsCache = ref<Song[]>([])
+const songsCache = shallowRef<Song[]>([])
 const isDropdownOpen = ref(false)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const musicTabRef = ref<HTMLElement | null>(null)
 const normalizationEnabled = ref(false)
 const audioLevel = ref(0)
 const progressUpdateId = ref<number | null>(null)
+
+const loadingText = ref('Đang tải danh sách bài hát...')
+const scanProgress = ref({
+  total: 0,
+  processed: 0,
+  percentage: 0
+})
 
 const updateMiniPlayer = inject('updateMiniPlayer') as ((song: any, playing: boolean, time: number, dur: number) => void) | undefined
 
@@ -474,22 +521,25 @@ const sortOptions = ref<SortOption[]>([
   { label: 'Tên tác giả', value: 'artist' },
   { label: 'Tên bài hát', value: 'title' }
 ])
+
+const songDetailsCache = new Map<string, { artist: string; title: string }>()
+
 const formatSongName = (name: string) => {
   return name.replace(/\s*-\s*Copy(\s*\(\d+\))?$/i, '')
 }
 
-const getArtistAndTitle = (songName: string) => {
+const getSongDetails = (songName: string) => {
+  if (songDetailsCache.has(songName)) {
+    return songDetailsCache.get(songName)!
+  }
+  
   const parts = formatSongName(songName).split(' - ')
-  if (parts.length >= 2) {
-    return {
-      artist: parts[0],
-      title: parts.slice(1).join(' - ')
-    }
-  }
-  return {
-    artist: 'Unknown',
-    title: songName
-  }
+  const result = parts.length >= 2 
+    ? { artist: parts[0], title: parts.slice(1).join(' - ') }
+    : { artist: 'Unknown', title: songName }
+  
+  songDetailsCache.set(songName, result)
+  return result
 }
 
 const playModeIcon = computed(() => {
@@ -498,10 +548,61 @@ const playModeIcon = computed(() => {
   return '<i class="fas fa-redo"></i>'
 })
 
+const playModeTitle = computed(() => {
+  if (shuffleMode.value) return 'Shuffle mode'
+  if (repeatOne.value) return 'Repeat one'
+  return 'Repeat'
+})
+
+const currentSortOption = computed(() => {
+  return sortOptions.value.find(opt => opt.value === currentSort.value) || sortOptions.value[0]
+})
+
+const playButtonText = computed(() => isPlaying.value ? 'Tạm dừng' : 'Phát nhạc')
+
+const advancedControlsText = computed(() => 
+  showAdvancedControls.value ? 'Ẩn tùy chỉnh' : 'Tuỳ chỉnh nhạc'
+)
+
+const discordButtonClass = computed(() => ({
+  'active': discordEnabled.value,
+  'loading': isDiscordLoading.value,
+  'cooldown': discordCooldownActive.value
+}))
+
+const discordIconClass = computed(() => 
+  isDiscordLoading.value ? 'fas fa-spinner fa-spin' : 'fab fa-discord'
+)
+
+const discordButtonText = computed(() => {
+  if (isDiscordLoading.value) return 'Đang xử lý...'
+  if (discordCooldownActive.value) return 'Chờ...'
+  return discordEnabled.value ? 'Tắt Discord' : 'Bật Discord'
+})
+
+const volumePercentage = computed(() => Math.round(volume.value * 100))
+
+const progressPercentage = computed(() => 
+  duration.value > 0 ? (currentTime.value / duration.value) * 100 : 0
+)
+
+const formattedCurrentTime = computed(() => formatTime(currentTime.value))
+const formattedDuration = computed(() => formatTime(duration.value))
+
+const currentCoverImage = computed(() => {
+  const song = selectedSong.value || currentSong.value
+  return song?.image ? 'file://' + song.image : null
+})
+
+const currentSongName = computed(() => {
+  const song = selectedSong.value || currentSong.value
+  return song?.name || ''
+})
+
 const sortedSongs = computed(() => {
   return [...filteredSongs.value].sort((a, b) => {
-    const songA = getArtistAndTitle(a.name)
-    const songB = getArtistAndTitle(b.name)
+    const songA = getSongDetails(a.name)
+    const songB = getSongDetails(b.name)
     
     if (currentSort.value === 'artist') {
       return songA.artist.localeCompare(songB.artist) || 
@@ -512,55 +613,13 @@ const sortedSongs = computed(() => {
   })
 })
 
-const loadSongs = async () => {
-  try {
-    isLoading.value = true
-    const result = await window.electronAPI.getConfig('osuPath')
-    if (result) {
-      osuPath.value = result
-      if (songsCache.value.length > 0) {
-        filteredSongs.value = songsCache.value
-        return
-      }
+const currentSongFormatted = computed(() => {
+  if (!currentSong.value) return 'Không có'
+  const { artist, title } = getSongDetails(currentSong.value.name)
+  return `${artist} - ${title}`
+})
 
-      const loadResult = await window.electronAPI.musicGetSongs(osuPath.value)
-      if (loadResult.success) {
-        songsCache.value = loadResult.songs || []
-        filteredSongs.value = songsCache.value
-
-        window.electronAPI.onMusicMetadataUpdated(async () => {
-          const updatedSongs = await window.electronAPI.musicGetFilteredSongs()
-          songsCache.value = updatedSongs
-          if (!searchQuery.value.trim()) {
-            filteredSongs.value = [...updatedSongs]
-          } else {
-            const query = searchQuery.value.trim()
-            const searchTerms = query.toLowerCase().split(' ')
-            const localFiltered = updatedSongs.filter(song => {
-              const songName = song.name.toLowerCase()
-              const artist = getArtistAndTitle(song.name).artist.toLowerCase()
-              const title = getArtistAndTitle(song.name).title.toLowerCase()
-              
-              return searchTerms.every(term => 
-                songName.includes(term) || 
-                artist.includes(term) || 
-                title.includes(term)
-              )
-            })
-            filteredSongs.value = localFiltered
-          }
-        })
-      }
-      await initDiscord()
-    }
-  } catch (error) {
-    console.error('Error loading songs:', error)
-  } finally {
-    isLoading.value = false
-  }
-}
-
-const filterSongs = async () => {
+const debouncedFilterSongs = debounce(async () => {
   const query = searchQuery.value.trim()
   if (!query) {
     filteredSongs.value = [...songsCache.value]
@@ -570,17 +629,84 @@ const filterSongs = async () => {
   const searchTerms = query.toLowerCase().split(' ')
   const localFiltered = songsCache.value.filter(song => {
     const songName = song.name.toLowerCase()
-    const artist = getArtistAndTitle(song.name).artist.toLowerCase()
-    const title = getArtistAndTitle(song.name).title.toLowerCase()
+    const { artist, title } = getSongDetails(song.name)
+    const artistLower = artist.toLowerCase()
+    const titleLower = title.toLowerCase()
     
     return searchTerms.every(term => 
       songName.includes(term) || 
-      artist.includes(term) || 
-      title.includes(term)
+      artistLower.includes(term) || 
+      titleLower.includes(term)
     )
   })
   
   filteredSongs.value = localFiltered
+}, 0) // 300ms db
+
+const loadSongs = async () => {
+  try {
+    isLoading.value = true
+    loadingText.value = 'Đang tải danh sách bài hát...'
+    scanProgress.value = { total: 0, processed: 0, percentage: 0 }
+    
+    const result = await window.electronAPI.getConfig('osuPath')
+    if (result) {
+      osuPath.value = result
+      if (songsCache.value.length > 0) {
+        filteredSongs.value = songsCache.value
+        return
+      }
+
+      window.electronAPI.onMusicScanProgress((progress: any) => {
+        loadingText.value = 'Đang quét metadata...'
+        scanProgress.value = {
+          total: progress.total,
+          processed: progress.processed,
+          percentage: progress.percentage
+        }
+        console.log(`Đang quét nhạc: ${progress.processed}/${progress.total} (${progress.percentage}%)`)
+      })
+
+      loadingText.value = 'Đang quét thư mục nhạc...'
+      const loadResult = await window.electronAPI.musicGetSongs(osuPath.value)
+      
+      if (loadResult.success) {
+        songsCache.value = loadResult.songs || []
+        filteredSongs.value = songsCache.value
+
+        try {
+          const cacheStats = await window.electronAPI.musicGetCacheStats()
+          console.log('Cache Stats:', cacheStats)
+          console.log(`- Cache size: ${cacheStats.size}/${cacheStats.maxSize}`)
+          console.log(`- Memory usage: ${cacheStats.memoryUsage}`)
+          if (cacheStats.hitRate > 0) {
+            console.log(`- Cache hit rate: ${cacheStats.hitRate.toFixed(1)}%`)
+          }
+        } catch (error) {
+          console.warn('Không thể lấy cache stats:', error)
+        }
+
+        window.electronAPI.onMusicMetadataUpdated(async () => {
+          const updatedSongs = await window.electronAPI.musicGetFilteredSongs()
+          songsCache.value = updatedSongs
+          if (!searchQuery.value.trim()) {
+            filteredSongs.value = [...updatedSongs]
+          } else {
+            debouncedFilterSongs()
+          }
+        })
+      }
+      await initDiscord()
+    }
+  } catch (error) {
+    console.error('Error loading songs:', error)
+    loadingText.value = 'Lỗi khi tải danh sách bài hát'
+  } finally {
+    isLoading.value = false
+    setTimeout(() => {
+      scanProgress.value = { total: 0, processed: 0, percentage: 0 }
+    }, 1000)
+  }
 }
 
 const selectSong = (song: Song) => {
@@ -737,7 +863,7 @@ const updateDiscordStatus = async () => {
   if (!discordEnabled.value || !currentSong.value) return
 
   try {
-    const { artist, title } = getArtistAndTitle(currentSong.value.name)
+    const { artist, title } = getSongDetails(currentSong.value.name)
     const formattedName = `${artist} - ${title}`
     
     await window.electronAPI.discordUpdateStatus({
@@ -819,7 +945,7 @@ const formatTime = (seconds: number) => {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
-const updateProgress = () => {
+const updateProgress = rafThrottle(() => {
   if (isPlaying.value) {
     currentTime.value = audioPlayer.getCurrentTime()
     duration.value = audioPlayer.getDuration()
@@ -834,7 +960,7 @@ const updateProgress = () => {
         
     requestAnimationFrame(updateProgress)
   }
-}
+})
 
 const startProgressUpdate = () => {
   if (isPlaying.value) {
@@ -980,7 +1106,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     case 'Escape':
       if (searchQuery.value) {
         searchQuery.value = ''
-        filterSongs()
+        debouncedFilterSongs()
       }
       searchInputRef.value?.blur()
       break
@@ -995,7 +1121,7 @@ const handleSearchKeyDown = (event: KeyboardEvent) => {
 
       if (searchQuery.value) {
         searchQuery.value = ''
-        filterSongs()
+        debouncedFilterSongs()
       }
       searchInputRef.value?.blur()
       nextTick(() => {
@@ -1065,19 +1191,7 @@ const scrollToCurrentSong = () => {
   }
 }
 
-const getPlayModeTitle = () => {
-  if (shuffleMode.value) return 'Shuffle mode'
-  if (repeatOne.value) return 'Repeat one'
-  return 'Repeat'
-}
-
-const currentSongFormatted = computed(() => {
-  if (!currentSong.value) return 'Không có'
-  const { artist, title } = getArtistAndTitle(currentSong.value.name)
-  return `${artist} - ${title}`
-})
-
-let normalizationCheckInterval: NodeJS.Timeout | null = null
+let normalizationCheckInterval: ReturnType<typeof setTimeout> | null = null
 
 const startNormalizationWatcher = () => {
   normalizationCheckInterval = setInterval(async () => {
@@ -1095,7 +1209,7 @@ const startNormalizationWatcher = () => {
     } catch (error) {
       console.error('Error checking normalization setting:', error)
     }
-  }, 5000) // Reduced frequency from 1s to 5s
+  }, 5000) 
 }
 
 const focusTab = () => {
@@ -1103,7 +1217,6 @@ const focusTab = () => {
     setTimeout(() => {
       if (musicTabRef.value) {
         musicTabRef.value.focus()
-        // console.log('Music tab focused via expose method')
       }
     }, 50)
   })
@@ -1114,6 +1227,8 @@ defineExpose({
 })
 
 onMounted(async () => {
+  loadFonts()
+  
   await loadSongs()
   
   try {
@@ -1131,7 +1246,6 @@ onMounted(async () => {
   nextTick(() => {
     if (musicTabRef.value) {
       musicTabRef.value.focus()
-      // console.log('Music tab focused')
     }
   })
 
@@ -1170,7 +1284,20 @@ onUnmounted(() => {
   
   window.electronAPI.removeMusicMetadataListener()
   
-  // console.log('MusicTab cleanup completed')
+  try {
+    window.electronAPI.removeMusicScanProgressListener()
+  } catch (error) {
+    console.warn('Lỗi khi remove scan progress listener:', error)
+  }
+  
+  try {
+    window.electronAPI.musicCleanup()
+  } catch (error) {
+    console.warn('Lỗi khi cleanup music player:', error)
+  }
+  
+  songDetailsCache.clear()
+  
 })
 </script>
 
@@ -1922,6 +2049,82 @@ label {
   justify-content: center;
   gap: 20px;
   z-index: 100;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  max-width: 400px;
+  width: 100%;
+  padding: 0 20px;
+}
+
+.loading-text {
+  font-size: 1.1em;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.scan-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scan-progress .progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--accent-color-transparent);
+}
+
+.scan-progress .progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-color), var(--accent-hover));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.scan-progress .progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite ease-in-out;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.progress-text {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: var(--text-muted);
+  text-align: center;
+  font-weight: 500;
 }
 
 .loading-spinner {

@@ -36,11 +36,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   musicSkipBackward: (seconds: number) => ipcRenderer.invoke('music:skip-backward', seconds),
   musicDestroy: () => ipcRenderer.invoke('music:destroy'),
 
+  musicGetCacheStats: () => ipcRenderer.invoke('music:get-cache-stats'),
+  musicClearCache: () => ipcRenderer.invoke('music:clear-cache'),
+  musicForceSaveCache: () => ipcRenderer.invoke('music:force-save-cache'),
+  musicCleanup: () => ipcRenderer.invoke('music:cleanup'),
+
   onMusicMetadataUpdated: (callback: () => void) => {
     ipcRenderer.on('music:metadataUpdated', () => callback())
   },
   removeMusicMetadataListener: () => {
     ipcRenderer.removeAllListeners('music:metadataUpdated')
+  },
+
+  onMusicScanProgress: (callback: (progress: any) => void) => {
+    ipcRenderer.on('music:scanProgress', (_, progress) => callback(progress))
+  },
+  removeMusicScanProgressListener: () => {
+    ipcRenderer.removeAllListeners('music:scanProgress')
   },
 })
 

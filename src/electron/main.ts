@@ -160,7 +160,6 @@ ipcMain.handle('copy-file', async (_, filePath: string) => {
 app.whenReady().then(async () => {
   await initDatabase()
   
-  // Thiết lập icon cho ứng dụng
   const iconPath = getIconPath()
   if (existsSync(iconPath)) {
     const appIcon = nativeImage.createFromPath(iconPath)
@@ -209,12 +208,21 @@ ipcMain.handle('music:get-songs', (_, osuPath) => player.loadSongs(osuPath))
 ipcMain.handle('music:format-time', (_, seconds) => player.formatTime(seconds))
 ipcMain.handle('music:get-song-list', () => player.getSongList())
 
+ipcMain.handle('music:get-cache-stats', () => player.getCacheStats())
+ipcMain.handle('music:clear-cache', () => player.clearCache())
+ipcMain.handle('music:force-save-cache', () => player.forceSaveCache())
+ipcMain.handle('music:cleanup', () => player.destroy())
+
 player.on('metadataUpdated', () => {
   mainWindow?.webContents.send('music:metadataUpdated')
 })
 
 player.on('allMetadataUpdated', () => {
   mainWindow?.webContents.send('music:metadataUpdated')
+})
+
+player.on('scanProgress', (progress) => {
+  mainWindow?.webContents.send('music:scanProgress', progress)
 })
 
 setupDiscordHandlers();

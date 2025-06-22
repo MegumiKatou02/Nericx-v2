@@ -42,6 +42,18 @@ declare global {
     musicDestroy(): Promise<void>
     removeMusicMetadataListener(): void
     onMusicMetadataUpdated(callback: () => void): void
+
+    musicGetCacheStats(): Promise<{
+      size: number
+      maxSize: number
+      hitRate: number
+      memoryUsage: string
+    }>
+    musicClearCache(): Promise<void>
+    musicForceSaveCache(): Promise<void>
+    musicCleanup(): Promise<void>
+    onMusicScanProgress(callback: (progress: any) => void): void
+    removeMusicScanProgressListener(): void
   }
 
   interface Window {
