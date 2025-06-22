@@ -771,6 +771,11 @@ const debouncedFilterSongs = debounce(async () => {
     return
   }
 
+  if (query.toLowerCase() === ':video') {
+    filteredSongs.value = songsCache.value.filter(song => song.video)
+    return
+  }
+
   const searchTerms = query.toLowerCase().split(' ')
   const localFiltered = songsCache.value.filter(song => {
     const songName = song.name.toLowerCase()
@@ -786,7 +791,7 @@ const debouncedFilterSongs = debounce(async () => {
   })
   
   filteredSongs.value = localFiltered
-}, 0) // 300ms db
+}, 0)
 
 const loadSongs = async () => {
   try {
