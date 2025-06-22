@@ -215,18 +215,17 @@ const handleResize = () => {
   }
 }
 
+const formatSongName = (name: string) => {
+  return name.replace(/\s*-\s*Copy(\s*\(\d+\))?$/i, '')
+}
+
 const getArtistAndTitle = (songName: string) => {
-  const parts = songName.split(' - ')
-  if (parts.length >= 2) {
-    return {
-      artist: parts[0],
-      title: parts.slice(1).join(' - ')
-    }
-  }
-  return {
-    artist: 'Unknown',
-    title: songName
-  }
+  const parts = formatSongName(songName).split(' - ')
+  const result = parts.length >= 2 
+    ? { artist: parts[0], title: parts.slice(1).join(' - ') }
+    : { artist: 'Unknown', title: songName }
+  
+  return result
 }
 
 const getTitle = () => {
@@ -476,7 +475,6 @@ onUnmounted(() => {
   height: 40px;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .mini-player {
     max-width: 280px;
@@ -494,7 +492,6 @@ onUnmounted(() => {
   }
 }
 
-/* Dark/Light theme adjustments */
 .mini-player {
   background: rgba(var(--bg-secondary-rgb, 54, 57, 63), 0.95);
 }
@@ -504,7 +501,6 @@ onUnmounted(() => {
   border-color: rgba(0, 0, 0, 0.1);
 }
 
-/* Hover effects */
 .mini-player:hover:not(.dragging) {
   transform: translateY(-2px) !important;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
@@ -514,12 +510,10 @@ onUnmounted(() => {
   opacity: 1;
 }
 
-/* Smooth animations for non-dragging states */
 .mini-player:not(.dragging) {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* Prevent text selection during drag */
 .mini-player.dragging * {
   user-select: none !important;
   -webkit-user-select: none !important;
@@ -527,13 +521,11 @@ onUnmounted(() => {
   -ms-user-select: none !important;
 }
 
-/* Visual feedback during drag */
 .mini-player.dragging {
   opacity: 0.9;
   transform-origin: center;
 }
 
-/* Touch device optimizations */
 @media (hover: none) and (pointer: coarse) {
   .mini-player {
     cursor: default;
