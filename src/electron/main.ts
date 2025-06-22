@@ -24,6 +24,7 @@ const getIconPath = () => {
     return path.join(__dirname, '../../iconhe.ico')
   } else {
     const possiblePaths = [
+      path.join(app.getAppPath(), '/dist-vue/iconhe.ico'),
       path.join(process.resourcesPath, 'iconhe.ico'),
       path.join(__dirname, '../../iconhe.ico'),
       path.join(app.getAppPath(), 'iconhe.ico'),
