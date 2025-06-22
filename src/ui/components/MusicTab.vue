@@ -949,6 +949,10 @@ const stopMusic = () => {
     duration.value = 0
     currentSong.value = null
     
+    if (discordEnabled.value) {
+      clearDiscordStatus()
+    }
+    
     if (updateMiniPlayer) {
       updateMiniPlayer(null, false, 0, 0)
     }
