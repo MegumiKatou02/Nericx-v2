@@ -1,7 +1,7 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell, clipboard, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { isDev, getOsuPath, createBackup, initDatabase } from './util.js'
+import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig } from './util.js'
 import { getPreloadPath } from './pathResolver.js'
 import { MusicPlayer } from './music.js'
 import { open } from 'sqlite'
@@ -19,13 +19,35 @@ const getConfigPath = () => {
   return path.join(app.getPath('userData'), 'config.db')
 }
 
+const getIconPath = () => {
+  if (isDev()) {
+    return path.join(__dirname, '../../iconhe.ico')
+  } else {
+    const possiblePaths = [
+      path.join(process.resourcesPath, 'iconhe.ico'),
+      path.join(__dirname, '../../iconhe.ico'),
+      path.join(app.getAppPath(), 'iconhe.ico'),
+    ]
+    
+    for (const iconPath of possiblePaths) {
+      if (existsSync(iconPath)) {
+        return iconPath
+      }
+    }
+    
+    return path.join(__dirname, '../../iconhe.ico')
+  }
+}
+
 function createWindow() {
+  const iconPath = getIconPath()
+  
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 660,
     minWidth: 1000,
     minHeight: 660,
-    // resizable: false,
+    icon: iconPath,
     frame: false,
     transparent: true,
     webPreferences: {
@@ -34,6 +56,10 @@ function createWindow() {
       devTools: true,
     }
   })
+
+  if (process.platform === 'win32' && existsSync(iconPath)) {
+    mainWindow.setIcon(nativeImage.createFromPath(iconPath))
+  }
 
   // Menu.setApplicationMenu(null)
 
@@ -90,45 +116,11 @@ ipcMain.handle('create-backup', async (_, args: {
 })
 
 ipcMain.handle('get-config', async (_, key: string) => {
-  try {
-    const configPath = getConfigPath()
-    console.log('Getting config from:', configPath, 'key:', key)
-    
-    const db = await open({
-      filename: configPath,
-      driver: sqlite3.Database
-    })
-
-    const result = await db.get('SELECT value FROM config WHERE key = ?', key)
-    await db.close()
-    
-    console.log('Config result for', key, ':', result?.value)
-    return result ? result.value : null
-  } catch (error) {
-    console.error('Error getting config:', error)
-    return null
-  }
+  return await getConfig(key)
 })
 
 ipcMain.handle('set-config', async (_, key: string, value: string) => {
-  try {
-    const configPath = getConfigPath()
-    console.log('Setting config to:', configPath, 'key:', key, 'value:', value)
-    
-    const db = await open({
-      filename: configPath,
-      driver: sqlite3.Database
-    })
-
-    await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', key, value)
-    await db.close()
-    
-    console.log('Config saved successfully')
-    return true
-  } catch (error) {
-    console.error('Error setting config:', error)
-    return false
-  }
+  return await setConfig(key, value)
 })
 
 ipcMain.handle('save-file', async (_, sourcePath: string, fileName: string) => {
@@ -167,6 +159,14 @@ ipcMain.handle('copy-file', async (_, filePath: string) => {
 
 app.whenReady().then(async () => {
   await initDatabase()
+  
+  // Thiết lập icon cho ứng dụng
+  const iconPath = getIconPath()
+  if (existsSync(iconPath)) {
+    const appIcon = nativeImage.createFromPath(iconPath)
+    app.dock?.setIcon(appIcon) // macOS
+  }
+  
   createWindow()
 
   app.on('activate', () => {

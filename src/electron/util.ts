@@ -32,12 +32,20 @@ export const getOsuPath = async (): Promise<string | null> => {
       driver: sqlite3.Database
     })
 
+    await db.exec(`
+      PRAGMA journal_mode = WAL;
+      PRAGMA synchronous = NORMAL;
+      PRAGMA cache_size = 1000;
+      PRAGMA temp_store = MEMORY;
+      PRAGMA mmap_size = 268435456;
+    `)
+
     const result = await db.get('SELECT value FROM config WHERE key = ?', 'osuPath')
     await db.close()
     
     return result ? result.value : null
   } catch (error) {
-    console.error('Error loading config:', error)
+    console.error('Error getting osu path:', error)
     return null
   }
 }
@@ -111,5 +119,63 @@ export const initDatabase = async (): Promise<void> => {
     await db.close()
   } catch (error) {
     console.error('Error initializing database:', error)
+  }
+}
+
+export const getConfig = async (key: string): Promise<string | null> => {
+  try {
+    const configPath = getConfigPath()
+    console.log('Getting config from:', configPath, 'key:', key)
+    
+    const db = await open({
+      filename: configPath,
+      driver: sqlite3.Database
+    })
+
+    await db.exec(`
+      PRAGMA journal_mode = WAL;
+      PRAGMA synchronous = NORMAL;
+      PRAGMA cache_size = 1000;
+      PRAGMA temp_store = MEMORY;
+      PRAGMA mmap_size = 268435456;
+    `)
+
+    const result = await db.get('SELECT value FROM config WHERE key = ?', key)
+    await db.close()
+    
+    console.log('Config result for', key, ':', result?.value)
+    return result ? result.value : null
+  } catch (error) {
+    console.error('Error getting config:', error)
+    return null
+  }
+}
+
+export const setConfig = async (key: string, value: string): Promise<boolean> => {
+  try {
+    const configPath = getConfigPath()
+    console.log('Setting config to:', configPath, 'key:', key, 'value:', value)
+    
+    const db = await open({
+      filename: configPath,
+      driver: sqlite3.Database
+    })
+
+    await db.exec(`
+      PRAGMA journal_mode = WAL;
+      PRAGMA synchronous = NORMAL;
+      PRAGMA cache_size = 1000;
+      PRAGMA temp_store = MEMORY;
+      PRAGMA mmap_size = 268435456;
+    `)
+
+    await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', key, value)
+    await db.close()
+    
+    console.log('Config saved successfully')
+    return true
+  } catch (error) {
+    console.error('Error setting config:', error)
+    return false
   }
 }
