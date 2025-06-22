@@ -79,6 +79,14 @@
                   <span class="desc">Phát bài hát đang được highlight</span>
                 </div>
               </div>
+
+              <div class="shortcut-item">
+                <span class="key">M</span>
+                <div class="shortcut-info">
+                  <span class="action">Đi đến bài hiện tại</span>
+                  <span class="desc">Cuộn đến bài hát đang phát</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -247,7 +255,7 @@
 <style scoped>
 .keyboard-tab {
   height: 100%;
-  padding: 30px;
+  padding: 20px;
   color: var(--text-primary);
   background: var(--bg-primary);
   overflow-y: auto;
@@ -271,25 +279,25 @@
 
 .header {
   text-align: center;
-  margin-bottom: 40px;
-  padding-bottom: 20px;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
   border-bottom: 2px solid var(--accent-color-transparent);
 }
 
 .header h1 {
   margin: 0;
-  font-size: 2.5em;
+  font-size: 2em;
   font-weight: 700;
   color: var(--accent-color);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 15px;
+  gap: 12px;
 }
 
 .header .description {
-  margin: 10px 0 0 0;
-  font-size: 1.1em;
+  margin: 8px 0 0 0;
+  font-size: 1em;
   color: var(--text-muted);
   font-weight: 400;
 }
@@ -297,15 +305,15 @@
 .sections-container {
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  gap: 25px;
   max-width: 1200px;
   margin: 0 auto;
 }
 
 .shortcut-section {
   background: var(--bg-secondary);
-  border-radius: 16px;
-  padding: 30px;
+  border-radius: 12px;
+  padding: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   border: 1px solid var(--accent-color-transparent);
 }
@@ -313,40 +321,40 @@
 .section-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 25px;
-  padding-bottom: 15px;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--accent-color-transparent);
 }
 
 .section-header i {
-  font-size: 1.5em;
+  font-size: 1.3em;
   color: var(--accent-color);
 }
 
 .section-header h2 {
   margin: 0;
-  font-size: 1.8em;
+  font-size: 1.5em;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .shortcuts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 25px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
 }
 
 .shortcut-category {
   background: var(--bg-tertiary);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 10px;
+  padding: 15px;
   border: 1px solid var(--accent-color-transparent);
 }
 
 .shortcut-category h3 {
-  margin: 0 0 15px 0;
-  font-size: 1.2em;
+  margin: 0 0 12px 0;
+  font-size: 1.1em;
   font-weight: 600;
   color: var(--accent-color);
   text-align: center;
@@ -355,16 +363,16 @@
 .shortcut-items {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .shortcut-item {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 12px;
+  gap: 12px;
+  padding: 10px;
   background: var(--bg-primary);
-  border-radius: 8px;
+  border-radius: 6px;
   transition: all 0.3s ease;
   border: 1px solid transparent;
 }
@@ -372,98 +380,98 @@
 .shortcut-item:hover {
   background: var(--accent-hover-transparent);
   border-color: var(--accent-color-transparent);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.2);
 }
 
 .key {
   font-weight: bold;
-  font-size: 0.9em;
+  font-size: 0.8em;
   color: var(--accent-color);
   background: var(--bg-secondary);
-  padding: 8px 12px;
-  border-radius: 6px;
-  min-width: 60px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  min-width: 50px;
   text-align: center;
   font-family: 'Courier New', monospace;
   border: 2px solid var(--accent-color);
-  box-shadow: 0 2px 4px rgba(var(--accent-rgb), 0.3);
+  box-shadow: 0 1px 3px rgba(var(--accent-rgb), 0.3);
   white-space: nowrap;
 }
 
 .key.combo {
-  min-width: 80px;
-  font-size: 0.85em;
+  min-width: 70px;
+  font-size: 0.75em;
 }
 
 .shortcut-info {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .action {
   font-weight: 600;
   color: var(--text-primary);
-  font-size: 1em;
+  font-size: 0.9em;
 }
 
 .desc {
-  font-size: 0.85em;
+  font-size: 0.8em;
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.3;
 }
 
 .tips-section {
   background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
-  border-radius: 16px;
-  padding: 30px;
+  border-radius: 12px;
+  padding: 20px;
   border: 1px solid var(--accent-color-transparent);
   box-shadow: 0 4px 20px rgba(var(--accent-rgb), 0.1);
 }
 
 .tips-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
 }
 
 .tip-item {
   display: flex;
   align-items: flex-start;
-  gap: 15px;
-  padding: 20px;
+  gap: 12px;
+  padding: 15px;
   background: var(--bg-primary);
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--accent-color-transparent);
   transition: all 0.3s ease;
 }
 
 .tip-item:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(var(--accent-rgb), 0.2);
   border-color: var(--accent-color);
 }
 
 .tip-item i {
-  font-size: 1.4em;
+  font-size: 1.2em;
   color: var(--accent-color);
   margin-top: 2px;
 }
 
 .tip-content h4 {
-  margin: 0 0 8px 0;
-  font-size: 1.1em;
+  margin: 0 0 6px 0;
+  font-size: 1em;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .tip-content p {
   margin: 0;
-  font-size: 0.9em;
+  font-size: 0.85em;
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .tip-content strong {
@@ -473,7 +481,7 @@
 
 @media (max-width: 768px) {
   .keyboard-tab {
-    padding: 20px;
+    padding: 15px;
   }
   
   .shortcuts-grid {
@@ -485,9 +493,9 @@
   }
   
   .header h1 {
-    font-size: 2em;
+    font-size: 1.7em;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
 }
 </style> 
