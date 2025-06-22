@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   saveFile: (sourcePath: string, fileName: string) => ipcRenderer.invoke('save-file', sourcePath, fileName),
   copyFile: (filePath: string) => ipcRenderer.invoke('copy-file', filePath),
+  showItemInFolder: (filePath: string) => ipcRenderer.invoke('show-item-in-folder', filePath),
   
   setWindowTransparency: (enabled: boolean, opacity: number) => ipcRenderer.invoke('set-window-transparency', enabled, opacity),
   getWindowOpacity: () => ipcRenderer.invoke('get-window-opacity'),

@@ -357,26 +357,26 @@ onMounted(async () => {
       const originalError = console.error
       
       console.log = function(...args) {
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           originalLog.apply(console, args)
         }
       }
       
       console.warn = function(...args) {
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.NODE_ENV === 'development') {
           originalWarn.apply(console, args)
         }
       }
       
       console.error = function(...args) {
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.NODE_ENV === 'development') {
           originalError.apply(console, args)
         }
       }
     }
   }
 
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.NODE_ENV === 'development') {
     devToolsDetection()
   }
 

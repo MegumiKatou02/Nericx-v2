@@ -58,7 +58,7 @@
           </div>
         </div>
 
-        <div class="songs-list" ref="songsListRef">
+        <div class="songs-list" ref="songsListRef" @click="hideContextMenu">
           <div v-if="sortedSongs.length === 0" class="empty-state">
             <div class="empty-icon">
               <i class="fas fa-music"></i>
@@ -81,6 +81,7 @@
             ]"
             @click="selectSong(song)"
             @dblclick="playSong(song)"
+            @contextmenu="showContextMenu($event, song)"
           >
             <div class="song-info">
               <span class="title">{{ getSongDetails(song.name).title }}</span>
@@ -214,6 +215,21 @@
             <span class="status-text disconnected">Chưa kết nối</span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div 
+      v-if="contextMenu.visible" 
+      class="context-menu"
+      :style="{ 
+        top: contextMenu.y + 'px', 
+        left: contextMenu.x + 'px' 
+      }"
+      @click.stop
+    >
+      <div class="context-menu-item" @click="openFileLocation">
+        <i class="fas fa-folder-open"></i>
+        <span>Xem vị trí file</span>
       </div>
     </div>
 
@@ -500,6 +516,14 @@ const musicTabRef = ref<HTMLElement | null>(null)
 const normalizationEnabled = ref(false)
 const audioLevel = ref(0)
 const progressUpdateId = ref<number | null>(null)
+
+// Context menu state
+const contextMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  song: null as Song | null
+})
 
 const loadingText = ref('Đang tải danh sách bài hát...')
 const scanProgress = ref({
@@ -1109,6 +1133,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
         debouncedFilterSongs()
       }
       searchInputRef.value?.blur()
+      hideContextMenu()
       break
   }
 }
@@ -1222,9 +1247,74 @@ const focusTab = () => {
   })
 }
 
+const showContextMenu = (event: MouseEvent, song: Song) => {
+  event.preventDefault()
+  event.stopPropagation()
+  
+  const rect = songsListRef.value?.getBoundingClientRect()
+  if (!rect) return
+  
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    song: song
+  }
+
+  nextTick(() => {
+    const contextMenuEl = document.querySelector('.context-menu') as HTMLElement
+    if (contextMenuEl) {
+      const menuRect = contextMenuEl.getBoundingClientRect()
+      const windowWidth = window.innerWidth
+      const windowHeight = window.innerHeight
+      
+      if (menuRect.right > windowWidth) {
+        contextMenu.value.x = windowWidth - menuRect.width - 10
+      }
+      if (menuRect.bottom > windowHeight) {
+        contextMenu.value.y = windowHeight - menuRect.height - 10
+      }
+    }
+  })
+}
+
+const hideContextMenu = () => {
+  contextMenu.value.visible = false
+  contextMenu.value.song = null
+}
+
+const openFileLocation = async () => {
+  if (!contextMenu.value.song) return
+  
+  try {
+    const result = await window.electronAPI.showItemInFolder(contextMenu.value.song.path)
+    if (!result.success) {
+      console.error('Không thể mở vị trí file:', result.message)
+    }
+  } catch (error) {
+    console.error('Lỗi khi mở vị trí file:', error)
+  } finally {
+    hideContextMenu()
+  }
+}
+
 defineExpose({
   focusTab
 })
+
+const handleClickOutside = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (!target.closest('.sort-box')) {
+    isDropdownOpen.value = false
+  }
+}
+
+const handleGlobalClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (!target.closest('.context-menu')) {
+    hideContextMenu()
+  }
+}
 
 onMounted(async () => {
   loadFonts()
@@ -1249,14 +1339,8 @@ onMounted(async () => {
     }
   })
 
-  const handleClickOutside = (e: MouseEvent) => {
-    const target = e.target as HTMLElement
-    if (!target.closest('.sort-box')) {
-      isDropdownOpen.value = false
-    }
-  }
-  
   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('click', handleGlobalClick)
   window.addEventListener('resize', () => {
     if (isDropdownOpen.value) {
       updateDropdownPosition()
@@ -1297,6 +1381,9 @@ onUnmounted(() => {
   }
   
   songDetailsCache.clear()
+  
+  document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('click', handleGlobalClick)
   
 })
 </script>
@@ -2410,6 +2497,72 @@ label {
   }
   50% {
     transform: translateY(-10px);
+  }
+}
+
+/* Context Menu Styles */
+.context-menu {
+  position: fixed;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--accent-color-transparent);
+  z-index: 9999;
+  overflow: hidden;
+  min-width: 160px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: contextMenuFadeIn 0.15s ease-out;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-primary);
+  font-size: 0.9em;
+  font-weight: 500;
+  border-bottom: 1px solid var(--bg-tertiary);
+  user-select: none;
+}
+
+.context-menu-item:last-child {
+  border-bottom: none;
+}
+
+.context-menu-item:hover {
+  background: var(--accent-color);
+  color: white;
+}
+
+.context-menu-item i {
+  font-size: 1em;
+  color: var(--accent-color);
+  transition: color 0.2s ease;
+  min-width: 16px;
+  text-align: center;
+}
+
+.context-menu-item:hover i {
+  color: white;
+}
+
+.context-menu-item span {
+  flex: 1;
+  white-space: nowrap;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 </style>

@@ -252,6 +252,7 @@
   background: var(--bg-primary);
   overflow-y: auto;
   scroll-behavior: smooth;
+  user-select: none;
 }
 
 .keyboard-tab::-webkit-scrollbar {

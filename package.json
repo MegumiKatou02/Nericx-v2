@@ -18,13 +18,13 @@
     "dist:win": "npm run transpile:electron && npm run build && electron-builder -- win --x64"
   },
   "dependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/archiver": "^6.0.3",
     "@types/discord-rpc": "^4.0.9",
     "@types/sqlite3": "^3.1.11",
     "archiver": "^7.0.1",
     "better-sqlite3": "^11.10.0",
     "discord-rpc": "^4.0.1",
-    "howler": "^2.2.4",
     "music-metadata": "^11.3.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@types/howler": "^2.2.12",
+    "@types/node": "^24.0.3",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/tsconfig": "^0.7.0",
     "cross-env": "^7.0.3",

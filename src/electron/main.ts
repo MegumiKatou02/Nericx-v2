@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage, shell } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig } from './util.js'
@@ -154,6 +154,18 @@ ipcMain.handle('copy-file', async (_, filePath: string) => {
     return { success: false, message: 'File không tồn tại' }
   } catch (error) {
     return { success: false, message: `Lỗi khi copy file: ${error}` }
+  }
+})
+
+ipcMain.handle('show-item-in-folder', async (_, filePath: string) => {
+  try {
+    if (existsSync(filePath)) {
+      shell.showItemInFolder(filePath)
+      return { success: true, message: 'Đã mở vị trí file' }
+    }
+    return { success: false, message: 'File không tồn tại' }
+  } catch (error) {
+    return { success: false, message: `Lỗi khi mở vị trí file: ${error}` }
   }
 })
 
