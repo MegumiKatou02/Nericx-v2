@@ -413,6 +413,9 @@ class AudioPlayer {
   async play(song: Song): Promise<{ success: boolean; message: string }> {
     try {
       this.initAudio()
+      
+      await new Promise(resolve => setTimeout(resolve, 50))
+      
       this.audio = new Audio()
       
       if (this.audioContext && this.audioContext.state === 'suspended') {
@@ -436,16 +439,45 @@ class AudioPlayer {
       this.setupAudioNodes()
       
       return new Promise((resolve) => {
+        let resolved = false
+        
+        const cleanup = () => {
+          if (this.audio) {
+            this.audio.onloadedmetadata = null
+            this.audio.onerror = null
+          }
+        }
+        
         this.audio!.onloadedmetadata = () => {
+          if (resolved) return
+          resolved = true
+          cleanup()
           resolve({ success: true, message: song.name })
         }
 
         this.audio!.onerror = () => {
+          if (resolved) return
+          resolved = true
+          cleanup()
           const errorMessage = this.audio?.error?.message || 'Không thể phát file này'
           resolve({ success: false, message: `Lỗi khi tải bài hát: ${errorMessage}` })
         }
 
-        this.audio!.play()
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true
+            cleanup()
+            resolve({ success: false, message: 'Timeout khi tải bài hát' })
+          }
+        }, 10000)
+
+        this.audio!.play().catch(error => {
+          if (!resolved && error.name !== 'AbortError') {
+            resolved = true
+            cleanup()
+            resolve({ success: false, message: `Lỗi khi phát nhạc: ${error.message}` })
+          }
+        })
       })
     } catch (error) {
       return { 
@@ -464,9 +496,22 @@ class AudioPlayer {
   }
 
   stop() {
-    if (this.audio) {
-      this.audio.pause()
-      this.audio.src = ''
+    try {
+      if (this.audio) {
+        this.audio.pause()
+        this.audio.currentTime = 0
+        
+        setTimeout(() => {
+          if (this.audio) {
+            this.audio.src = ''
+            this.audio.load()
+          }
+        }, 50)
+        
+        this.audio = null
+      }
+    } catch (error) {
+      console.warn('Error stopping audio:', error)
       this.audio = null
     }
   }
@@ -789,28 +834,39 @@ const handleSongEnd = async () => {
 }
 
 const playSong = async (song: Song) => {
-  const result = await audioPlayer.play(song)
-  if (result.success) {
-    currentSong.value = song
-    selectedSong.value = song
-    isPlaying.value = true
-    startProgressUpdate()
-    updateDiscordStatus()
+  try {
+    if (audioPlayer.getAudio()) {
+      audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
+      audioPlayer.stop()
+    }
     
-    nextTick(() => {
-      const songElement = document.querySelector('.song-item.playing')
-      if (songElement && songsListRef.value) {
-        songElement.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'nearest',
-          inline: 'nearest'
-        })
-      }
-    })
+    await new Promise(resolve => setTimeout(resolve, 100))
     
-    audioPlayer.getAudio()?.addEventListener('ended', handleSongEnd)
-  } else {
-    console.error(result.message)
+    const result = await audioPlayer.play(song)
+    if (result.success) {
+      currentSong.value = song
+      selectedSong.value = song
+      isPlaying.value = true
+      startProgressUpdate()
+      updateDiscordStatus()
+      
+      nextTick(() => {
+        const songElement = document.querySelector('.song-item.playing')
+        if (songElement && songsListRef.value) {
+          songElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'nearest',
+            inline: 'nearest'
+          })
+        }
+      })
+      
+      audioPlayer.getAudio()?.addEventListener('ended', handleSongEnd)
+    } else {
+      console.error(result.message)
+    }
+  } catch (error) {
+    console.error('Error in playSong:', error)
   }
 }
 
@@ -854,35 +910,50 @@ const previousSong = async () => {
 
 const togglePlay = async () => {
   if (!currentSong.value) {
+    if (selectedSong.value) {
+      try {
+        await playSong(selectedSong.value)
+      } catch (error) {
+        console.error('Error playing selected song:', error)
+      }
+    }
     return
   }
 
-  if (isPlaying.value) {
-    audioPlayer.pause()
-    isPlaying.value = false
-  } else {
-    audioPlayer.resume()
-    isPlaying.value = true
-    startProgressUpdate()
-  }
-  
-  if (updateMiniPlayer) {
-    updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
+  try {
+    if (isPlaying.value) {
+      audioPlayer.pause()
+      isPlaying.value = false
+    } else {
+      audioPlayer.resume()
+      isPlaying.value = true
+      startProgressUpdate()
+    }
+    
+    if (updateMiniPlayer) {
+      updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
+    }
+  } catch (error) {
+    console.error('Error in togglePlay:', error)
   }
 }
 
 const stopMusic = () => {
-  if (audioPlayer.getAudio()) {
-    audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
-  }
-  audioPlayer.stop()
-  isPlaying.value = false
-  currentTime.value = 0
-  duration.value = 0
-  currentSong.value = null
-  
-  if (updateMiniPlayer) {
-    updateMiniPlayer(null, false, 0, 0)
+  try {
+    if (audioPlayer.getAudio()) {
+      audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
+    }
+    audioPlayer.stop()
+    isPlaying.value = false
+    currentTime.value = 0
+    duration.value = 0
+    currentSong.value = null
+    
+    if (updateMiniPlayer) {
+      updateMiniPlayer(null, false, 0, 0)
+    }
+  } catch (error) {
+    console.error('Error in stopMusic:', error)
   }
 }
 
@@ -1164,8 +1235,14 @@ const handleKeyDown = async (event: KeyboardEvent) => {
       break
 
     case 'Enter':
+      event.preventDefault()
+      event.stopPropagation()
       if (selectedSong.value) {
-        await playSong(selectedSong.value)
+        try {
+          await playSong(selectedSong.value)
+        } catch (error) {
+          console.error('Error playing song via Enter key:', error)
+        }
       }
       break
 
