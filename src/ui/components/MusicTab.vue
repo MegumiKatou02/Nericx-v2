@@ -76,7 +76,8 @@
               'song-item', 
               { 
                 'selected': selectedSong?.path === song.path,
-                'playing': currentSong?.path === song.path && isPlaying
+                'playing': currentSong?.path === song.path && isPlaying,
+                'has-video': videoEnabled && song.video
               }
             ]"
             @click="selectSong(song)"
@@ -84,7 +85,13 @@
             @contextmenu="showContextMenu($event, song)"
           >
             <div class="song-info">
-              <span class="title">{{ getSongDetails(song.name).title }}</span>
+              <div class="song-title-row">
+                <span class="title">{{ getSongDetails(song.name).title }}</span>
+                <div v-if="videoEnabled && song.video" class="video-indicator">
+                  <i class="fas fa-play-circle"></i>
+                  <span>video</span>
+                </div>
+              </div>
               <div class="song-details">
                 <span class="artist">{{ getSongDetails(song.name).artist }}</span>
                 <span class="duration">{{ formatTime(song.duration || 0) }}</span>
@@ -95,7 +102,23 @@
       </div>
 
       <div class="player-container">
-        <div class="cover-image" @click="showFullImage" v-if="currentCoverImage">
+        <!-- Video player nếu có video và được bật -->
+        <div v-if="currentVideoUrl" class="video-container" @click="showFullVideo">
+          <video 
+            :src="currentVideoUrl" 
+            :alt="currentSongName"
+            autoplay 
+            muted 
+            loop
+            @error="handleVideoError"
+            class="video-player"
+          >
+            Your browser does not support the video tag.
+          </video>
+        </div>
+
+        <!-- Cover image nếu không có video hoặc video tắt -->
+        <div v-else-if="currentCoverImage" class="cover-image" @click="showFullImage">
           <img :src="currentCoverImage" :alt="currentSongName">
         </div>
 
@@ -585,6 +608,7 @@ const musicTabRef = ref<HTMLElement | null>(null)
 const normalizationEnabled = ref(false)
 const audioLevel = ref(0)
 const progressUpdateId = ref<number | null>(null)
+const videoEnabled = ref(false)
 
 // Context menu state
 const contextMenu = ref({
@@ -694,12 +718,30 @@ const formattedDuration = computed(() => formatTime(duration.value))
 
 const currentCoverImage = computed(() => {
   const song = selectedSong.value || currentSong.value
-  return song?.image ? 'file://' + song.image : null
+  const isShowingCurrentVideo = videoEnabled.value && currentSong.value?.video && isPlaying.value && selectedSong.value?.path === currentSong.value?.path
+  if (!isShowingCurrentVideo) {
+    return song?.image ? 'file://' + song.image : null
+  }
+  return null
 })
 
 const currentSongName = computed(() => {
   const song = selectedSong.value || currentSong.value
   return song?.name || ''
+})
+
+const currentVideoUrl = computed(() => {
+  if (!videoEnabled.value) return null
+  
+  if (selectedSong.value?.video) {
+    return 'file://' + selectedSong.value.video
+  }
+  
+  if (currentSong.value?.video && isPlaying.value && !selectedSong.value) {
+    return 'file://' + currentSong.value.video
+  }
+  
+  return null
 })
 
 const sortedSongs = computed(() => {
@@ -1360,6 +1402,24 @@ const startNormalizationWatcher = () => {
   }, 5000) 
 }
 
+let videoCheckInterval: ReturnType<typeof setTimeout> | null = null
+
+const startVideoWatcher = () => {
+  videoCheckInterval = setInterval(async () => {
+    try {
+      const savedVideo = await window.electronAPI.getConfig('videoEnabled')
+      if (savedVideo !== undefined) {
+        const newValue = savedVideo === 'true'
+        if (newValue !== videoEnabled.value) {
+          videoEnabled.value = newValue
+        }
+      }
+    } catch (error) {
+      console.error('Error checking video setting:', error)
+    }
+  }, 2000) 
+}
+
 const focusTab = () => {
   nextTick(() => {
     setTimeout(() => {
@@ -1490,11 +1550,17 @@ onMounted(async () => {
       normalizationEnabled.value = savedNormalization === 'true'
       audioPlayer.toggleNormalization(normalizationEnabled.value)
     }
+
+    const savedVideo = await window.electronAPI.getConfig('videoEnabled')
+    if (savedVideo !== undefined) {
+      videoEnabled.value = savedVideo === 'true'
+    }
   } catch (error) {
-    console.error('Error loading normalization setting:', error)
+    console.error('Error loading settings:', error)
   }
   
   startNormalizationWatcher()
+  startVideoWatcher()
   
   nextTick(() => {
     if (musicTabRef.value) {
@@ -1548,6 +1614,9 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('click', handleGlobalClick)
   
+  if (videoCheckInterval) {
+    clearInterval(videoCheckInterval)
+  }
 })
 
 const showSongInfo = () => {
@@ -1564,6 +1633,25 @@ const closeSongInfo = () => {
   songInfoModal.value.visible = false
   songInfoModal.value.song = null
 }
+
+const handleVideoError = (event: Event) => {
+  console.error('Video load error:', event)
+  // Nếu video lỗi, fallback về ảnh
+  const video = event.target as HTMLVideoElement
+  if (video) {
+    video.style.display = 'none'
+  }
+}
+
+const showFullVideo = () => {
+  const song = selectedSong.value || currentSong.value
+  if (song?.video && videoEnabled.value) {
+    currentImageUrl.value = 'file://' + song.video
+    currentImageName.value = song.name + ' - Video'
+    showImageViewer.value = true
+  }
+}
+
 </script>
 
 <style scoped>
@@ -2256,6 +2344,13 @@ label {
   gap: 2px;
 }
 
+.song-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
 .song-details {
   display: flex;
   justify-content: space-between;
@@ -2276,6 +2371,39 @@ label {
 .title {
   font-weight: 500;
   color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: var(--bg-tertiary);
+  color: var(--accent-color);
+  font-size: 0.7em;
+  font-weight: 500;
+  border-radius: 4px;
+  border: 1px solid var(--accent-color-transparent);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.video-indicator i {
+  font-size: 0.9em;
+}
+
+.song-item.has-video {
+  border-left: 2px solid var(--accent-color-transparent);
+}
+
+.song-item.has-video:hover .video-indicator {
+  background: var(--accent-color-transparent);
+  color: var(--accent-color);
 }
 
 .loading-overlay {
@@ -2749,6 +2877,118 @@ label {
     opacity: 1;
     transform: translateX(0) scale(1);
   }
+}
+
+.video-container {
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  user-select: none;
+}
+
+.video-container:hover {
+  transform: scale(1.02);
+  border-color: var(--accent-color);
+  box-shadow: 0 8px 25px rgba(var(--accent-rgb), 0.3);
+}
+
+.video-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  opacity: 0;
+}
+
+.video-container:hover::after {
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 1;
+}
+
+.video-container:hover::before {
+  content: '\f002';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2em;
+  color: white;
+  z-index: 10;
+  opacity: 0.7;
+  transition: all 0.3s ease;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+.video-player {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: all 0.3s ease;
+}
+
+.video-container:hover .video-player {
+  transform: scale(1.02);
+  border-color: var(--accent-color);
+  box-shadow: 0 8px 25px rgba(var(--accent-rgb), 0.3);
+}
+
+.video-container:hover .video-player::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 1;
+}
+
+.video-container:hover .video-player::before {
+  content: '\f002';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2em;
+  color: white;
+  z-index: 10;
+  opacity: 0.7;
+  transition: all 0.3s ease;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+.handle-video-error {
+  color: var(--warning-color);
+  text-align: center;
+  padding: 10px;
+}
+
+.video-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.video-indicator i {
+  color: var(--accent-color);
 }
 </style>
 

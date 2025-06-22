@@ -6,20 +6,20 @@
           <span class="image-title">{{ imageName }}</span>
         </div>
         <div class="image-controls">
-          <button @click="copyImage" class="control-btn" title="Copy ảnh">
+          <button v-if="!isVideo" @click="copyImage" class="control-btn" title="Copy ảnh">
             <i class="fas fa-copy"></i>
           </button>
-          <button @click="saveImage" class="control-btn" title="Lưu ảnh">
+          <button v-if="!isVideo" @click="saveImage" class="control-btn" title="Lưu ảnh">
             <i class="fas fa-download"></i>
           </button>
-          <button @click="zoomOut" class="control-btn" title="Thu nhỏ">
+          <button v-if="!isVideo" @click="zoomOut" class="control-btn" title="Thu nhỏ">
             <i class="fas fa-search-minus"></i>
           </button>
-          <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button @click="zoomIn" class="control-btn" title="Phóng to">
+          <span v-if="!isVideo" class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
+          <button v-if="!isVideo" @click="zoomIn" class="control-btn" title="Phóng to">
             <i class="fas fa-search-plus"></i>
           </button>
-          <button @click="resetZoom" class="control-btn" title="Kích thước gốc">
+          <button v-if="!isVideo" @click="resetZoom" class="control-btn" title="Kích thước gốc">
             <i class="fas fa-expand-arrows-alt"></i>
           </button>
           <button @click="closeViewer" class="control-btn close-btn" title="Đóng">
@@ -29,7 +29,19 @@
       </div>
 
       <div class="image-container" ref="imageContainerRef">
+        <video 
+          v-if="isVideo"
+          :src="imageUrl" 
+          controls
+          autoplay
+          class="viewer-video"
+          @error="handleVideoError"
+        >
+          Your browser does not support the video tag.
+        </video>
+        
         <img 
+          v-else
           :src="imageUrl" 
           :alt="imageName"
           :style="{ 
@@ -47,15 +59,17 @@
       </div>
 
       <div class="image-viewer-footer">
-        <span class="image-size">{{ imageSize }}</span>
-        <span class="navigation-hint">Scroll để zoom, kéo để di chuyển</span>
+        <span v-if="!isVideo" class="image-size">{{ imageSize }}</span>
+        <span v-if="isVideo" class="video-info">Video Player</span>
+        <span v-if="!isVideo" class="navigation-hint">Scroll để zoom, kéo để di chuyển</span>
+        <span v-if="isVideo" class="navigation-hint">Click controls để điều khiển video</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 
 interface Props {
   isVisible: boolean
@@ -67,6 +81,11 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   close: []
 }>()
+
+const isVideo = computed(() => {
+  return props.imageUrl.toLowerCase().includes('.mp4') || 
+         props.imageName.toLowerCase().includes('video')
+})
 
 const zoomLevel = ref(1)
 const translateX = ref(0)
@@ -177,6 +196,10 @@ const handleEscape = (event: KeyboardEvent) => {
   if (event.key === 'Escape') {
     closeViewer()
   }
+}
+
+const handleVideoError = (event: Event) => {
+  console.error('Error loading video:', event)
 }
 
 onMounted(() => {
@@ -307,6 +330,12 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
+.video-info {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 .navigation-hint {
   font-size: 0.85em;
   color: var(--text-muted);
@@ -335,5 +364,18 @@ onUnmounted(() => {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+}
+
+.image-container {
+  max-width: 100%;
+  max-height: 80vh;
+  border-radius: 8px;
+}
+
+.viewer-video {
+  max-width: 100%;
+  max-height: 80vh;
+  border-radius: 8px;
+  background: #000;
 }
 </style> 

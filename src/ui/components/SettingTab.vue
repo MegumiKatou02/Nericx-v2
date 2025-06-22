@@ -106,6 +106,23 @@
           </div>
         </div>
       </div>
+
+      <div class="setting-option">
+        <label>Hiển thị video:</label>
+        <div class="video-section">
+          <div class="video-toggle">
+            <button 
+              :class="{ active: videoEnabled }" 
+              @click="toggleVideo"
+            >
+              {{ videoEnabled ? 'Bật' : 'Tắt' }}
+            </button>
+          </div>
+          <div class="video-description">
+            <span>Hiển thị video .mp4 thay vì ảnh cover khi có sẵn</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -118,6 +135,7 @@ const accentColor = ref('#7289da')
 const transparencyEnabled = ref(false)
 const opacity = ref(1.0)
 const normalizationEnabled = ref(false)
+const videoEnabled = ref(false)
 
 // Inject functions từ App.vue
 const updateCSSVariables = inject('updateCSSVariables') as (color: string) => void
@@ -205,6 +223,11 @@ const toggleNormalization = async () => {
   await window.electronAPI.setConfig('normalizationEnabled', normalizationEnabled.value.toString())
 }
 
+const toggleVideo = async () => {
+  videoEnabled.value = !videoEnabled.value
+  await window.electronAPI.setConfig('videoEnabled', videoEnabled.value.toString())
+}
+
 const toggleTransparency = async () => {
   transparencyEnabled.value = !transparencyEnabled.value
   await window.electronAPI.setConfig('transparencyEnabled', transparencyEnabled.value.toString())
@@ -237,6 +260,11 @@ onMounted(async () => {
     const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
     if (savedNormalization !== undefined) {
       normalizationEnabled.value = savedNormalization === 'true'
+    }
+
+    const savedVideo = await window.electronAPI.getConfig('videoEnabled')
+    if (savedVideo !== undefined) {
+      videoEnabled.value = savedVideo === 'true'
     }
 
     if (transparencyEnabled.value) {
@@ -635,6 +663,56 @@ h3 {
 }
 
 .normalization-description {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.video-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.video-toggle button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 60px;
+}
+
+.dark .video-toggle button {
+  background: #40444b;
+  color: #dcddde;
+}
+
+.light .video-toggle button {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.dark .video-toggle button.active {
+  background: var(--accent-color, #7289da);
+  color: white;
+  box-shadow: 0 0 10px rgba(114, 137, 218, 0.3);
+}
+
+.light .video-toggle button.active {
+  background: var(--accent-color, #007bff);
+  color: white;
+  box-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+}
+
+.dark .video-toggle button:hover:not(.active) {
+  background: #4f545c;
+}
+
+.light .video-toggle button:hover:not(.active) {
+  background: #dee2e6;
+}
+
+.video-description {
   font-size: 12px;
   color: #6c757d;
 }

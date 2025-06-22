@@ -3,6 +3,7 @@ export interface Song {
     path: string
     beatmapsetId?: string
     image?: string
+    video?: string
     artist: string
     title: string
     duration: number

@@ -282,6 +282,13 @@ export class MusicPlayer extends EventEmitter {
               ? join(folderPath, imageFiles[0]) 
               : undefined
 
+          const videoFiles = readdirSync(folderPath)
+            .filter(f => f.toLowerCase().endsWith('.mp4'))
+          
+          const videoPath = videoFiles.length > 0 
+            ? join(folderPath, videoFiles[0])
+            : undefined
+
           const audioFilesInFolder = readdirSync(folderPath)
             .filter(f => f.toLowerCase().endsWith('.mp3') || f.toLowerCase() === 'audio.ogg')
 
@@ -311,7 +318,8 @@ export class MusicPlayer extends EventEmitter {
                 folderInfo: {
                   songFolder,
                   beatmapsetId,
-                  imagePath
+                  imagePath,
+                  videoPath
                 }
               })
             }
@@ -324,7 +332,7 @@ export class MusicPlayer extends EventEmitter {
 
       await this.processBatch(audioFiles, async (fileInfo) => {
         const { songPath, folderInfo } = fileInfo
-        const { songFolder, beatmapsetId, imagePath } = folderInfo
+        const { songFolder, beatmapsetId, imagePath, videoPath } = folderInfo
         
         const namePart = songFolder.split(' ').slice(1).join(' ')
         let artist = '', title = ''
@@ -349,7 +357,8 @@ export class MusicPlayer extends EventEmitter {
           image: imagePath,
           artist: artist.trim(),
           title: title.trim(),
-          duration: metadata?.duration || 0
+          duration: metadata?.duration || 0,
+          video: videoPath
         }
 
         this.songsData.push(song)
