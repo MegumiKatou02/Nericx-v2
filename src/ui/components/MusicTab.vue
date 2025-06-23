@@ -91,8 +91,8 @@
               }"
             >
               <div 
-                v-for="(song, _) in visibleSongs" 
-                :key="song.path"
+                v-for="(song, index) in visibleSongs" 
+                :key="song.beatmapsetId ? `${song.beatmapsetId}-${song.name}` : `${song.name}-${index}`"
                 :class="[
                   'song-item', 
                   { 
@@ -135,10 +135,15 @@
             muted 
             loop 
             @error="handleVideoError"
+            @loadedmetadata="handleVideoLoaded"
             class="video-player"
           >
-            Your browser does not support the video tag.
+            Trình duyệt không hỗ trợ định dạng video này.
           </video>
+          <div v-if="videoError" class="video-error">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>{{ videoError }}</span>
+          </div>
         </div>
 
         <div v-else-if="currentCoverImage" class="cover-image" @click="showFullImage">
@@ -728,6 +733,11 @@ const normalizationEnabled = ref(false)
 const audioLevel = ref(0)
 const progressUpdateId = ref<number | null>(null)
 const videoEnabled = ref(false)
+
+// Add interval IDs refs
+const statsIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
+const cleanupIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
+const videoError = ref<string>('')
 
 const itemHeight = ref(60)
 const visibleCount = ref(20)
@@ -1395,7 +1405,6 @@ const onVolumeChange = (event: Event) => {
   volume.value = value / 100
   audioPlayer.setVolume(volume.value)
   
-  // Nếu user thay đổi volume manually thì bỏ mute
   if (isMuted.value && volume.value > 0) {
     isMuted.value = false
   }
@@ -1403,12 +1412,10 @@ const onVolumeChange = (event: Event) => {
 
 const toggleMute = () => {
   if (isMuted.value) {
-    // Unmute: khôi phục volume trước đó
     isMuted.value = false
     volume.value = previousVolume.value
     audioPlayer.setVolume(volume.value)
   } else {
-    // Mute: lưu volume hiện tại và set về 0
     previousVolume.value = volume.value
     isMuted.value = true
     volume.value = 0
@@ -1559,6 +1566,14 @@ const handleKeyDown = async (event: KeyboardEvent) => {
         const prevSong = sortedSongs.value[currentIndex - 1]
         selectSong(prevSong)
         scrollToSelectedSong(currentIndex - 1)
+      } else if (currentIndex === 0 && sortedSongs.value.length > 1) {
+        const lastSong = sortedSongs.value[sortedSongs.value.length - 1]
+        selectSong(lastSong)
+        nextTick(() => {
+          if (songsListRef.value) {
+            songsListRef.value.scrollTop = songsListRef.value.scrollHeight
+          }
+        })
       }
       break
 
@@ -1568,6 +1583,14 @@ const handleKeyDown = async (event: KeyboardEvent) => {
         const nextSong = sortedSongs.value[currentIndex + 1]
         selectSong(nextSong)
         scrollToSelectedSong(currentIndex + 1)
+      } else if (currentIndex === sortedSongs.value.length - 1 && sortedSongs.value.length > 1) {
+        const firstSong = sortedSongs.value[0]
+        selectSong(firstSong)
+        nextTick(() => {
+          if (songsListRef.value) {
+            songsListRef.value.scrollTop = 0
+          }
+        })
       }
       break
 
@@ -1869,10 +1892,8 @@ onMounted(async () => {
   
   const cleanupInterval = setInterval(performMemoryCleanup, 2 * 60 * 1000)
   
-  onUnmounted(() => {
-    clearInterval(statsInterval)
-    clearInterval(cleanupInterval)
-  })
+  statsIntervalId.value = statsInterval
+  cleanupIntervalId.value = cleanupInterval
   
   try {
     const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
@@ -1908,6 +1929,16 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (statsIntervalId.value) {
+    clearInterval(statsIntervalId.value)
+    statsIntervalId.value = null
+  }
+  
+  if (cleanupIntervalId.value) {
+    clearInterval(cleanupIntervalId.value)
+    cleanupIntervalId.value = null
+  }
+
   if (normalizationCheckInterval) {
     clearInterval(normalizationCheckInterval)
   }
@@ -1972,11 +2003,46 @@ const closeSongInfo = () => {
 
 const handleVideoError = (event: Event) => {
   console.error('Video load error:', event)
-  // Nếu video lỗi, fallback về ảnh
   const video = event.target as HTMLVideoElement
-  if (video) {
+  if (video && video.error) {
+    let errorMessage = 'Lỗi không xác định'
+    
+    switch (video.error.code) {
+      case MediaError.MEDIA_ERR_ABORTED:
+        errorMessage = 'Tải video bị hủy bởi người dùng'
+        break
+      case MediaError.MEDIA_ERR_NETWORK:
+        errorMessage = 'Lỗi mạng khi tải video'
+        break
+      case MediaError.MEDIA_ERR_DECODE:
+        errorMessage = 'Video bị lỗi không thể decode'
+        break
+      case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+        errorMessage = 'Định dạng video không được hỗ trợ (có thể cần convert sang .mp4)'
+        break
+      default:
+        errorMessage = `Lỗi video (code: ${video.error.code})`
+    }
+    
+    videoError.value = errorMessage
     video.style.display = 'none'
+    
+    console.error('Video error details:', {
+      code: video.error.code,
+      message: video.error.message,
+      src: video.src
+    })
+  } else {
+    videoError.value = 'Không thể tải video'
+    if (video) {
+      video.style.display = 'none'
+    }
   }
+}
+
+const handleVideoLoaded = () => {
+  videoError.value = ''
+  console.log('Video loaded successfully')
 }
 
 const showFullVideo = () => {
@@ -3340,6 +3406,18 @@ label {
 
 .video-indicator i {
   color: var(--accent-color);
+}
+
+.video-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.video-error i {
+  margin-right: 8px;
+  font-size: 1.1em;
 }
 </style>
 

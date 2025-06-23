@@ -8,4 +8,6 @@ export interface Song {
     title: string
     duration: number
     bitrate: number
+    fileSize?: number
+    totalAudioFiles?: number
 }

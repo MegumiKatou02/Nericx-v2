@@ -20,6 +20,7 @@ const musicTabRef = ref<{ focusTab: () => void } | null>(null)
 
 const miniPlayerVisible = ref(false)
 const miniPlayerCollapsed = ref(false)
+const miniPlayerEnabled = ref(true)
 const currentSong = ref<any>(null)
 const isPlaying = ref(false)
 const currentTime = ref(0)
@@ -212,7 +213,7 @@ const updateMiniPlayer = (song: any, playing: boolean, time: number, dur: number
   isPlaying.value = playing
   currentTime.value = time
   duration.value = dur
-  miniPlayerVisible.value = song !== null && currentTab.value !== 'music'
+  miniPlayerVisible.value = song !== null && currentTab.value !== 'music' && miniPlayerEnabled.value
 }
 
 const switchToMusicTab = () => {
@@ -223,7 +224,6 @@ const toggleMiniPlayerCollapse = () => {
   const wasCollapsed = miniPlayerCollapsed.value
   miniPlayerCollapsed.value = !miniPlayerCollapsed.value
   
-  // Adjust position when expanding/collapsing to prevent going out of bounds
   nextTick(() => {
     const margin = 20
     const newPlayerWidth = miniPlayerCollapsed.value ? 60 : 320
@@ -252,9 +252,21 @@ const toggleMiniPlayerCollapse = () => {
   })
 }
 
+const toggleMiniPlayerEnabled = async (enabled: boolean) => {
+  miniPlayerEnabled.value = enabled
+  await window.electronAPI.setConfig('miniPlayerEnabled', enabled.toString())
+  
+  if (!enabled) {
+    miniPlayerVisible.value = false
+  } else {
+    miniPlayerVisible.value = currentSong.value !== null && currentTab.value !== 'music'
+  }
+}
+
 provide('updateMiniPlayer', updateMiniPlayer)
 provide('switchToMusicTab', switchToMusicTab)
 provide('toggleMiniPlayerCollapse', toggleMiniPlayerCollapse)
+provide('toggleMiniPlayerEnabled', toggleMiniPlayerEnabled)
 
 const getArtistAndTitle = (songName: string) => {
   const parts = songName.split(' - ')
@@ -314,6 +326,11 @@ onMounted(async () => {
     const savedAccentColor = await window.electronAPI.getConfig('accentColor')
     if (savedAccentColor) {
       updateCSSVariables(savedAccentColor)
+    }
+
+    const savedMiniPlayerEnabled = await window.electronAPI.getConfig('miniPlayerEnabled')
+    if (savedMiniPlayerEnabled !== undefined) {
+      miniPlayerEnabled.value = savedMiniPlayerEnabled === 'true'
     }
   } catch (error) {
     console.error('Error loading initial theme:', error)
@@ -415,18 +432,14 @@ onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown)
 })
 
-watch(currentTab, (newTab) => {
+watch(currentTab, (newTab, oldTab) => {
   if (newTab === 'music') {
     miniPlayerVisible.value = false
-    nextTick(() => {
-      setTimeout(() => {
-        if (musicTabRef.value && musicTabRef.value.focusTab) {
-          musicTabRef.value.focusTab()
-        }
-      }, 100)
-    })
-  } else {
-    miniPlayerVisible.value = currentSong.value !== null
+    if (musicTabRef.value?.focusTab) {
+      musicTabRef.value.focusTab()
+    }
+  } else if (oldTab === 'music') {
+    miniPlayerVisible.value = currentSong.value !== null && miniPlayerEnabled.value
   }
 })
 
@@ -538,7 +551,7 @@ onUnmounted(() => {
     </div>
 
     <div 
-      v-if="miniPlayerVisible" 
+      v-if="miniPlayerVisible && miniPlayerEnabled" 
       class="mini-player" 
       :class="{ collapsed: miniPlayerCollapsed, dragging: isDragging }"
       :style="{ transform: `translate(${position.x}px, ${position.y}px)` }"

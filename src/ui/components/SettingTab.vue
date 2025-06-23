@@ -147,6 +147,23 @@
           </div>
         </div>
       </div>
+
+      <div class="setting-option">
+        <label>Mini Player:</label>
+        <div class="video-section">
+          <div class="video-toggle">
+            <button 
+              :class="{ active: miniPlayerEnabled }" 
+              @click="toggleMiniPlayer"
+            >
+              {{ miniPlayerEnabled ? 'Bật' : 'Tắt' }}
+            </button>
+          </div>
+          <div class="video-description">
+            <span>Hiển thị trình phát nhỏ khi chuyển tab khác. Tắt để tiết kiệm CPU và bộ nhớ</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="setting-section">
@@ -187,6 +204,7 @@ const transparencyEnabled = ref(false)
 const opacity = ref(1.0)
 const normalizationEnabled = ref(false)
 const videoEnabled = ref(false)
+const miniPlayerEnabled = ref(true)
 
 const cacheStats = ref({
   size: 0,
@@ -198,6 +216,7 @@ const cacheStats = ref({
 
 const updateCSSVariables = inject('updateCSSVariables') as (color: string) => void
 const updateTheme = inject('updateTheme') as (theme: string) => void
+const toggleMiniPlayerEnabled = inject('toggleMiniPlayerEnabled') as (enabled: boolean) => void
 
 const presetColors = [
   { name: 'Discord Blue', value: '#7289da' },
@@ -286,6 +305,12 @@ const toggleVideo = async () => {
   await window.electronAPI.setConfig('videoEnabled', videoEnabled.value.toString())
 }
 
+const toggleMiniPlayer = async () => {
+  miniPlayerEnabled.value = !miniPlayerEnabled.value
+  await window.electronAPI.setConfig('miniPlayerEnabled', miniPlayerEnabled.value.toString())
+  toggleMiniPlayerEnabled(miniPlayerEnabled.value)
+}
+
 const toggleTransparency = async () => {
   transparencyEnabled.value = !transparencyEnabled.value
   await window.electronAPI.setConfig('transparencyEnabled', transparencyEnabled.value.toString())
@@ -365,6 +390,11 @@ onMounted(async () => {
     const savedVideo = await window.electronAPI.getConfig('videoEnabled')
     if (savedVideo !== undefined) {
       videoEnabled.value = savedVideo === 'true'
+    }
+
+    const savedMiniPlayer = await window.electronAPI.getConfig('miniPlayerEnabled')
+    if (savedMiniPlayer !== undefined) {
+      miniPlayerEnabled.value = savedMiniPlayer === 'true'
     }
 
     if (transparencyEnabled.value) {
@@ -1339,6 +1369,106 @@ h3 {
 }
 
 .cache-description {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.video-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.video-toggle button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 60px;
+}
+
+.dark .video-toggle button {
+  background: #40444b;
+  color: #dcddde;
+}
+
+.light .video-toggle button {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.dark .video-toggle button.active {
+  background: var(--accent-color, #7289da);
+  color: white;
+  box-shadow: 0 0 10px rgba(114, 137, 218, 0.3);
+}
+
+.light .video-toggle button.active {
+  background: var(--accent-color, #007bff);
+  color: white;
+  box-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+}
+
+.dark .video-toggle button:hover:not(.active) {
+  background: #4f545c;
+}
+
+.light .video-toggle button:hover:not(.active) {
+  background: #dee2e6;
+}
+
+.video-description {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.miniplayer-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.miniplayer-toggle button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 60px;
+}
+
+.dark .miniplayer-toggle button {
+  background: #40444b;
+  color: #dcddde;
+}
+
+.light .miniplayer-toggle button {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.dark .miniplayer-toggle button.active {
+  background: var(--accent-color, #7289da);
+  color: white;
+  box-shadow: 0 0 10px rgba(114, 137, 218, 0.3);
+}
+
+.light .miniplayer-toggle button.active {
+  background: var(--accent-color, #007bff);
+  color: white;
+  box-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+}
+
+.dark .miniplayer-toggle button:hover:not(.active) {
+  background: #4f545c;
+}
+
+.light .miniplayer-toggle button:hover:not(.active) {
+  background: #dee2e6;
+}
+
+.miniplayer-description {
   font-size: 12px;
   color: #6c757d;
 }

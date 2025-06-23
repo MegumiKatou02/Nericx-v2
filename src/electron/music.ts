@@ -92,6 +92,8 @@ export class MusicPlayer extends EventEmitter {
   
   private readonly fileStatCache = new Map<string, { stats: any, timestamp: number }>()
   private readonly fileStatCacheTTL: number = 30000 // 30 seconds
+  
+  private lastHitRate: number = 0
 
   constructor() {
     super()
@@ -138,6 +140,9 @@ export class MusicPlayer extends EventEmitter {
         obj.title = ''
         obj.duration = 0
         obj.video = undefined
+        obj.bitrate = 0
+        obj.fileSize = undefined
+        obj.totalAudioFiles = undefined
       }
     )
     
@@ -489,6 +494,106 @@ export class MusicPlayer extends EventEmitter {
     }
   }
 
+  /**
+   * Tìm file audio tốt nhất dựa trên dung lượng và thời lượng
+   */
+  private async findBestAudioFile(folderPath: string, audioFiles: string[]): Promise<{ 
+    bestFile: string; 
+    fileSize: number; 
+    duration: number 
+  } | null> {
+    if (audioFiles.length === 0) return null
+    if (audioFiles.length === 1) {
+      const filePath = join(folderPath, audioFiles[0])
+      try {
+        const stats = this.getFileStatCached(filePath)
+        const metadata = await this.getMetadataWithCache(filePath)
+        return {
+          bestFile: audioFiles[0],
+          fileSize: stats.size,
+          duration: metadata?.duration || 0
+        }
+      } catch {
+        return { bestFile: audioFiles[0], fileSize: 0, duration: 0 }
+      }
+    }
+
+    const fileInfoPromises = audioFiles.map(async (fileName) => {
+      const filePath = join(folderPath, fileName)
+      try {
+        const stats = this.getFileStatCached(filePath)
+        
+        const isPreview = fileName.toLowerCase().includes('preview') || 
+                         fileName.toLowerCase().includes('short')
+        
+        let metadata: CachedMetadata | null = null
+        if (!isPreview || audioFiles.length <= 2) {
+          metadata = await this.getMetadataWithCache(filePath)
+        }
+        
+        return {
+          fileName,
+          filePath,
+          fileSize: stats.size,
+          duration: metadata?.duration || 0,
+          isPreview,
+          isOgg: fileName.toLowerCase().endsWith('.ogg'),
+          isMp3: fileName.toLowerCase().endsWith('.mp3')
+        }
+      } catch (error) {
+        return {
+          fileName,
+          filePath,
+          fileSize: 0,
+          duration: 0,
+          isPreview: true,
+          isOgg: false,
+          isMp3: false
+        }
+      }
+    })
+
+    const fileInfos = await Promise.all(fileInfoPromises)
+    
+    let bestFile = fileInfos[0]
+    let bestScore = -1
+
+    for (const info of fileInfos) {
+      if (info.fileSize === 0) continue
+      
+      let score = 0
+      
+      const sizeScore = info.fileSize / (1024 * 1024) // MB
+      score += sizeScore * 0.4
+      
+      const durationScore = info.duration || 0
+      score += durationScore * 0.4
+      
+      if (!info.isPreview) {
+        score += 15
+      }
+      
+      if (info.isMp3) {
+        score += 5
+      }
+      
+      if (info.isPreview) {
+        score *= 0.3
+      }
+
+      if (score > bestScore) {
+        bestScore = score
+        bestFile = info
+      }
+    }
+
+    return {
+      bestFile: bestFile.fileName,
+      fileSize: bestFile.fileSize,
+      duration: bestFile.duration
+    }
+  }
+
   async loadSongs(osuPath: string): Promise<{ success: boolean; message: string; songs?: Song[] }> {
     const songsPath = join(osuPath, 'Songs')
     
@@ -500,7 +605,7 @@ export class MusicPlayer extends EventEmitter {
     }
 
     try {
-      console.log('Bắt đầu quét thư mục nhạc với tối ưu CPU...')
+      console.log('Bắt đầu quét thư mục nhạc với tối ưu CPU (phân tích file tốt nhất)...')
       const songFolders = readdirSync(songsPath)
       
       this.processingStats = {
@@ -511,7 +616,7 @@ export class MusicPlayer extends EventEmitter {
         startTime: Date.now()
       }
 
-      const audioFiles: { songPath: string; folderInfo: any }[] = []
+      const audioFiles: { songPath: string; folderInfo: any; fileStats: any }[] = []
       
       const directoryBatchSize = Math.max(50, Math.min(200, cpus().length * 25))
       
@@ -519,52 +624,54 @@ export class MusicPlayer extends EventEmitter {
         const batch = songFolders.slice(i, i + directoryBatchSize)
         
         await Promise.all(batch.map(async (songFolder) => {
-        const folderPath = join(songsPath, songFolder)
+          const folderPath = join(songsPath, songFolder)
 
           try {
             const stats = this.getFileStatCached(folderPath)
             if (!stats.isDirectory()) return
 
-          const beatmapsetId = songFolder.includes(' ') ? songFolder.split(' ')[0] : undefined
+            const beatmapsetId = songFolder.includes(' ') ? songFolder.split(' ')[0] : undefined
 
             const [imageFiles, videoFiles, audioFilesInFolder] = await Promise.all([
               Promise.resolve(readdirSync(folderPath).filter(f => /\.(png|jpg|jpeg)$/i.test(f))),
               Promise.resolve(readdirSync(folderPath).filter(f => f.toLowerCase().endsWith('.mp4'))),
-              Promise.resolve(readdirSync(folderPath).filter(f => f.toLowerCase().endsWith('.mp3') || f.toLowerCase() === 'audio.ogg'))
+              Promise.resolve(readdirSync(folderPath).filter(f => 
+                f.toLowerCase().endsWith('.mp3') || 
+                f.toLowerCase().endsWith('.ogg')
+              ))
             ])
             
+            if (audioFilesInFolder.length === 0) return
+
+            const bestAudioInfo = await this.findBestAudioFile(folderPath, audioFilesInFolder)
+            if (!bestAudioInfo) return
+
             const backgroundImages = imageFiles.filter(f => /bg|background/i.test(f))
-          const imagePath = backgroundImages.length > 0 
-            ? join(folderPath, backgroundImages[0])
-            : imageFiles.length > 0 
-              ? join(folderPath, imageFiles[0]) 
+            const imagePath = backgroundImages.length > 0 
+              ? join(folderPath, backgroundImages[0])
+              : imageFiles.length > 0 
+                ? join(folderPath, imageFiles[0]) 
+                : undefined
+            
+            const videoPath = videoFiles.length > 0 
+              ? join(folderPath, videoFiles[0])
               : undefined
-          
-          const videoPath = videoFiles.length > 0 
-            ? join(folderPath, videoFiles[0])
-            : undefined
 
-          if (audioFilesInFolder.length > 0) {
-              let bestAudioFile = audioFilesInFolder[0]
-              
-              const nonPreview = audioFilesInFolder.find(f => 
-                !f.toLowerCase().includes('preview') && 
-                !f.toLowerCase().includes('short')
-              )
-              
-              if (nonPreview) bestAudioFile = nonPreview
-
-              const songPath = join(folderPath, bestAudioFile)
-              audioFiles.push({
-                songPath,
-                folderInfo: {
-                  songFolder,
-                  beatmapsetId,
-                  imagePath,
-                  videoPath
-                }
-              })
-            }
+            const songPath = join(folderPath, bestAudioInfo.bestFile)
+            audioFiles.push({
+              songPath,
+              folderInfo: {
+                songFolder,
+                beatmapsetId,
+                imagePath,
+                videoPath
+              },
+              fileStats: {
+                fileSize: bestAudioInfo.fileSize,
+                duration: bestAudioInfo.duration,
+                totalAudioFiles: audioFilesInFolder.length
+              }
+            })
           } catch (error) {
             console.warn(`Lỗi khi xử lý folder ${songFolder}:`, error)
           }
@@ -576,10 +683,10 @@ export class MusicPlayer extends EventEmitter {
       }
 
       this.processingStats.total = audioFiles.length
-      console.log(`Tìm thấy ${audioFiles.length} file audio để xử lý`)
+      console.log(`Tìm thấy ${audioFiles.length} file audio tốt nhất để xử lý`)
 
       await this.processBatchStreaming(audioFiles, async (fileInfo) => {
-        const { songPath, folderInfo } = fileInfo
+        const { songPath, folderInfo, fileStats } = fileInfo
         const { songFolder, beatmapsetId, imagePath, videoPath } = folderInfo
         
         const namePart = songFolder.split(' ').slice(1).join(' ')
@@ -606,8 +713,10 @@ export class MusicPlayer extends EventEmitter {
           image: imagePath,
           artist: artist.trim(),
           title: title.trim(),
-          duration: metadata?.duration || 0,
-          video: videoPath
+          duration: metadata?.duration || fileStats.duration || 0,
+          video: videoPath,
+          fileSize: fileStats.fileSize,
+          totalAudioFiles: fileStats.totalAudioFiles
         })
 
         this.songsData.push(song)
@@ -618,23 +727,53 @@ export class MusicPlayer extends EventEmitter {
         return compareResult
       })
       
+      const uniqueSongs = new Map<string, Song>()
+      this.songsData.forEach(song => {
+        if (!uniqueSongs.has(song.path)) {
+          uniqueSongs.set(song.path, song)
+        } else {
+          const existing = uniqueSongs.get(song.path)!
+          if ((song.fileSize || 0) > (existing.fileSize || 0)) {
+            this.songPool.release(existing)
+            uniqueSongs.set(song.path, song)
+          } else {
+            this.songPool.release(song)
+          }
+        }
+      })
+      
+      this.songsData = Array.from(uniqueSongs.values())
       this.filteredSongs = [...this.songsData]
       
       setImmediate(() => this.saveCache())
       
       const processingTime = Date.now() - this.processingStats.startTime
-      console.log(`Hoàn thành quét nhạc trong ${processingTime}ms:`)
+      const avgFileSize = this.songsData.reduce((sum, song) => sum + (song.fileSize || 0), 0) / this.songsData.length / (1024 * 1024)
+      const avgDuration = this.songsData.reduce((sum, song) => sum + (song.duration || 0), 0) / this.songsData.length
+      
+      console.log(`Hoàn thành quét nhạc (chọn file tốt nhất) trong ${processingTime}ms:`)
       console.log(`- Tổng: ${this.processingStats.total}`)
       console.log(`- Đã xử lý: ${this.processingStats.processed}`)
       console.log(`- Từ cache: ${this.processingStats.cached}`)
       console.log(`- Lỗi: ${this.processingStats.errors}`)
       console.log(`- Tốc độ: ${Math.round(this.processingStats.total / (processingTime / 1000))} file/s`)
+      console.log(`- Dung lượng TB: ${avgFileSize.toFixed(1)}MB`)
+      console.log(`- Thời lượng TB: ${Math.round(avgDuration)}s`)
+
+      // Tính toán và lưu hit rate cuối cùng trước khi reset processingStats
+      if (this.processingStats && this.processingStats.total > 0) {
+        const rawHitRate = (this.processingStats.cached / this.processingStats.total) * 100
+        this.lastHitRate = Math.min(Math.round(rawHitRate), 100) // Giới hạn tối đa 100%
+        console.log(`- Hit rate: ${this.lastHitRate}%`)
+      } else {
+        this.lastHitRate = 0
+      }
 
       this.processingStats = null
 
       return { 
         success: true, 
-        message: `Đã tải ${this.songsData.length} bài hát`, 
+        message: `Đã tải ${this.songsData.length} bài hát (chọn file tốt nhất)`, 
         songs: this.filteredSongs 
       }
 
@@ -756,11 +895,16 @@ export class MusicPlayer extends EventEmitter {
     const size = this.metadataCache.size
     const memoryUsage = process.memoryUsage()
     
+    let hitRate = this.lastHitRate
+    if (this.processingStats && this.processingStats.total > 0) {
+      const rawHitRate = (this.processingStats.cached / this.processingStats.total) * 100
+      hitRate = Math.min(Math.round(rawHitRate), 100) 
+    }
+    
     return {
       size,
       maxSize: this.maxCacheSize,
-      hitRate: this.processingStats ? 
-        (this.processingStats.cached / Math.max(this.processingStats.processed, 1)) * 100 : 0,
+      hitRate,
       memoryUsage: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`
     }
   }
