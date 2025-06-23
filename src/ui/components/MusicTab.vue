@@ -734,7 +734,6 @@ const audioLevel = ref(0)
 const progressUpdateId = ref<number | null>(null)
 const videoEnabled = ref(false)
 
-// Add interval IDs refs
 const statsIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
 const cleanupIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
 const videoError = ref<string>('')
@@ -1168,7 +1167,6 @@ const handleSongEnd = async () => {
     await playSong(sortedSongs.value[nextIndex])
   }
   
-  // Scroll đến bài mới sau khi chuyển bài
   nextTick(() => {
     scrollToCurrentSong()
   })
@@ -1864,8 +1862,11 @@ const copyFilePath = async () => {
   }
 }
 
+const songsCount = computed(() => songsCache.value.length)
+
 defineExpose({
-  focusTab
+  focusTab,
+  songsCount
 })
 
 const handleClickOutside = (e: MouseEvent) => {

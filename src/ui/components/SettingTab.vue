@@ -175,6 +175,7 @@
             <span class="cache-size">{{ cacheStats.size }} / {{ cacheStats.maxSize }} files</span>
             <span class="cache-memory">{{ cacheStats.memoryUsage }}</span>
             <span class="cache-hit-rate">Hit rate: {{ Math.round(cacheStats.hitRate) }}%</span>
+            <span class="cache-songs">{{ totalSongs.toLocaleString() }} bài hát</span>
           </div>
           <div class="cache-controls">
             <button @click="clearCache" class="cache-btn clear-btn" title="Xoá toàn bộ cache">
@@ -196,7 +197,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue'
+import { ref, onMounted, inject, defineExpose } from 'vue'
 
 const theme = ref('dark')
 const accentColor = ref('#7289da')
@@ -213,6 +214,7 @@ const cacheStats = ref({
   memoryUsage: '0MB'
 })
 
+const totalSongs = ref(0)
 
 const updateCSSVariables = inject('updateCSSVariables') as (color: string) => void
 const updateTheme = inject('updateTheme') as (theme: string) => void
@@ -405,6 +407,15 @@ onMounted(async () => {
   } catch (error) {
     console.error('Error loading config:', error)
   }
+})
+
+const updateSongsCount = (count: number) => {
+  totalSongs.value = count
+}
+
+defineExpose({
+  updateSongsCount,
+  updateCacheStats
 })
 </script>
 
@@ -1611,13 +1622,13 @@ h3 {
 
 .cache-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: 10px;
   font-size: 13px;
   font-weight: 500;
 }
 
-.cache-size, .cache-memory, .cache-hit-rate {
+.cache-songs, .cache-size, .cache-memory, .cache-hit-rate {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -1627,6 +1638,7 @@ h3 {
   text-align: center;
 }
 
+.dark .cache-songs,
 .dark .cache-size, 
 .dark .cache-memory, 
 .dark .cache-hit-rate {
@@ -1634,6 +1646,7 @@ h3 {
   color: #ffffff;
 }
 
+.light .cache-songs,
 .light .cache-size, 
 .light .cache-memory, 
 .light .cache-hit-rate {
@@ -1641,6 +1654,7 @@ h3 {
   color: #2c3e50;
 }
 
+.ash .cache-songs,
 .ash .cache-size,
 .ash .cache-memory,
 .ash .cache-hit-rate {
@@ -1648,6 +1662,7 @@ h3 {
   color: #f0f0f0;
 }
 
+.pitch-black .cache-songs,
 .pitch-black .cache-size,
 .pitch-black .cache-memory,
 .pitch-black .cache-hit-rate {
@@ -1655,6 +1670,7 @@ h3 {
   color: #ffffff;
 }
 
+.midnight .cache-songs,
 .midnight .cache-size,
 .midnight .cache-memory,
 .midnight .cache-hit-rate {
@@ -1662,6 +1678,7 @@ h3 {
   color: #cce7ff;
 }
 
+.warm .cache-songs,
 .warm .cache-size,
 .warm .cache-memory,
 .warm .cache-hit-rate {

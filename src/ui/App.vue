@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, provide, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, provide, watch, nextTick, watchEffect } from 'vue'
 import GeneralTab from './components/GeneralTab.vue'
 import BackupTab from './components/BackupTab.vue'
 import MusicTab from './components/MusicTab.vue'
@@ -16,7 +16,8 @@ const currentTab = ref('general')
 const isMenuOpen = ref(true)
 const currentTheme = ref('dark')
 const keyHandler = ref<((event: KeyboardEvent) => void) | null>(null)
-const musicTabRef = ref<{ focusTab: () => void } | null>(null)
+const musicTabRef = ref<any>(null)
+const settingTabRef = ref<any>(null)
 
 const miniPlayerVisible = ref(false)
 const miniPlayerCollapsed = ref(false)
@@ -451,6 +452,12 @@ watch(miniPlayerCollapsed, (newCollapsed, oldCollapsed) => {
   }
 })
 
+watchEffect(() => {
+  if (musicTabRef.value?.songsCount !== undefined && settingTabRef.value?.updateSongsCount) {
+    settingTabRef.value.updateSongsCount(musicTabRef.value.songsCount)
+  }
+})
+
 onUnmounted(() => {
   if (keyHandler.value) {
     document.removeEventListener('keydown', keyHandler.value)
@@ -546,7 +553,7 @@ onUnmounted(() => {
         <BackupTab v-show="currentTab === 'backup'" />
         <MusicTab v-show="currentTab === 'music'" ref="musicTabRef" />
         <KeyboardTab v-show="currentTab === 'keyboard'" />
-        <SettingTab v-show="currentTab === 'setting'" />
+        <SettingTab v-show="currentTab === 'setting'" ref="settingTabRef" />
       </div>
     </div>
 
