@@ -1,5 +1,6 @@
 {
     "appId": "com.nericx.nericx",
+    "productName": "Nericx",
     "files": ["dist-electron", "dist-vue"],
     "asarUnpack": ["dist-electron/preload.cjs"],
     "icon": "./iconhe.ico",

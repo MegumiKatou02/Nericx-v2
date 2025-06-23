@@ -3,7 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig } from './util.js'
 import { getPreloadPath } from './pathResolver.js'
-import { copyFileSync, existsSync } from 'fs'
+import { copyFileSync, existsSync, readdirSync } from 'fs'
 
 let MusicPlayer: any = null
 let setupDiscordHandlers: any = null
@@ -93,23 +93,16 @@ const getIconPath = () => {
   if (isDev()) {
     cachedIconPath = path.join(__dirname, '../../iconhe.ico')
   } else {
-    const possiblePaths = [
-      path.join(app.getAppPath(), '/dist-vue/iconhe.ico'),
-      path.join(process.resourcesPath, 'iconhe.ico'),
-      path.join(__dirname, '../../iconhe.ico'),
-      path.join(app.getAppPath(), 'iconhe.ico'),
-    ]
-    
-    for (const iconPath of possiblePaths) {
-      if (existsSync(iconPath)) {
-        cachedIconPath = iconPath
-        break
+    const assetsDir = path.join(app.getAppPath(), 'dist-vue/assets')
+    if (existsSync(assetsDir)) {
+      const files = readdirSync(assetsDir)
+      const iconFile = files.find(f => /^iconhe.*\.ico$/.test(f))
+      if (iconFile) {
+        cachedIconPath = path.join(assetsDir, iconFile)
+        return cachedIconPath
       }
     }
-    
-    if (!cachedIconPath) {
-      cachedIconPath = path.join(__dirname, '../../iconhe.ico')
-    }
+    return path.join(app.getAppPath(), 'iconhe.ico')
   }
   
   return cachedIconPath

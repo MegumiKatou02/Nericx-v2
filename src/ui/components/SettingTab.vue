@@ -197,7 +197,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject, defineExpose } from 'vue'
+import { ref, onMounted, inject } from 'vue'
 
 const theme = ref('dark')
 const accentColor = ref('#7289da')
@@ -1636,6 +1636,7 @@ h3 {
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.03);
   text-align: center;
+  justify-content: center;
 }
 
 .dark .cache-songs,

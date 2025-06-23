@@ -1,7 +1,7 @@
 {
   "name": "nericx",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.5.0",
   "description": "Link and listen to music with osu!",
   "author": "Yukiookii",
   "type": "module",

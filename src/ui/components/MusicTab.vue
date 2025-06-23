@@ -791,11 +791,12 @@ interface SortOption {
   label: string;
 }
 
-const currentSort = ref<string>('artist')
+const currentSort = ref<string>('title')
 
 const sortOptions = ref<SortOption[]>([
+  { label: 'Tên bài hát', value: 'title' },
   { label: 'Tên tác giả', value: 'artist' },
-  { label: 'Tên bài hát', value: 'title' }
+  { label: 'Thời lượng', value: 'duration' }
 ])
 
 const formatSongName = (name: string) => {
@@ -914,6 +915,12 @@ const currentVideoUrl = computed(() => {
 
 const sortedSongs = computed(() => {
   return [...filteredSongs.value].sort((a, b) => {
+    if (currentSort.value === 'duration') {
+      const durationA = a.duration || 0
+      const durationB = b.duration || 0
+      return durationA - durationB
+    }
+    
     const songA = getCachedSongDetails(a.name)
     const songB = getCachedSongDetails(b.name)
     
