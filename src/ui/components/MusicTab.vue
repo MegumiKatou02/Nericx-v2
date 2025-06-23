@@ -34,12 +34,12 @@
               @input="optimizedFilterSongs"
               @keydown="handleSearchKeyDown"
               type="text" 
-              placeholder="Tìm kiếm bài hát... (Tip: gõ ':video' để tìm bài có video)"
+              placeholder="Tìm kiếm bài hát..."
               class="search-input"
             >
-            <div class="search-stats" v-if="searchQuery">
+            <!-- <div class="search-stats" v-if="searchQuery">
               {{ filteredSongs.length }} / {{ songsCache.length }} bài hát
-            </div>
+            </div> -->
           </div>
 
           <div class="sort-box" :class="{ 'open': isDropdownOpen }" @click.stop="toggleDropdown">
@@ -3145,6 +3145,7 @@ label {
   text-align: center;
   padding: 40px 20px;
   opacity: 0.7;
+  transform: translateY(-40px);
 }
 
 .empty-icon {

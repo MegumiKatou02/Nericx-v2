@@ -109,11 +109,11 @@ export const initDatabase = async (): Promise<void> => {
 
     await db.run(
       `INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)`,
-      'theme', 'dark'
+      'theme', 'warm'
     )
     await db.run(
       `INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)`,
-      'accentColor', '#7289da'
+      'accentColor', '#f599b8'
     )
 
     await db.close()
