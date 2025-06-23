@@ -102,7 +102,7 @@
             </button>
           </div>
           <div class="normalization-description">
-            <span>Tự động điều chỉnh âm lượng giữa các bài hát để đảm bảo âm lượng đồng đều</span>
+            <span>Tự động điều chỉnh âm lượng giữa các bài hát. <strong>Lưu ý:</strong> Có thể làm giảm chất lượng âm thanh do compression</span>
           </div>
         </div>
       </div>
@@ -124,6 +124,33 @@
         </div>
       </div>
     </div>
+
+    <div class="setting-section">
+      <h3>Quản lý Cache</h3>
+      <div class="setting-option">
+        <label>Cache nhạc:</label>
+        <div class="cache-info">
+          <div class="cache-stats">
+            <span class="cache-size">{{ cacheStats.size }} / {{ cacheStats.maxSize }} files</span>
+            <span class="cache-memory">{{ cacheStats.memoryUsage }}</span>
+            <span class="cache-hit-rate">Hit rate: {{ Math.round(cacheStats.hitRate) }}%</span>
+          </div>
+          <div class="cache-controls">
+            <button @click="clearCache" class="cache-btn clear-btn" title="Xóa toàn bộ cache">
+              <i class="fas fa-trash"></i>
+              <span>Xóa Cache</span>
+            </button>
+            <button @click="forceSaveCache" class="cache-btn save-btn" title="Lưu cache ngay">
+              <i class="fas fa-save"></i>
+              <span>Lưu Cache</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="cache-description">
+        <span>Cache lưu trữ metadata của bài hát để tăng tốc độ tải. Xóa cache khi có vấn đề hoặc file nhạc thay đổi.</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -137,7 +164,14 @@ const opacity = ref(1.0)
 const normalizationEnabled = ref(false)
 const videoEnabled = ref(false)
 
-// Inject functions từ App.vue
+const cacheStats = ref({
+  size: 0,
+  maxSize: 0,
+  hitRate: 0,
+  memoryUsage: '0MB'
+})
+
+
 const updateCSSVariables = inject('updateCSSVariables') as (color: string) => void
 const updateTheme = inject('updateTheme') as (theme: string) => void
 
@@ -235,6 +269,42 @@ const toggleTransparency = async () => {
   await updateAppTransparency()
 }
 
+const updateCacheStats = async () => {
+  try {
+    const stats = await window.electronAPI.musicGetCacheStats()
+    cacheStats.value = {
+      size: stats.size || 0,
+      maxSize: stats.maxSize || 0,
+      hitRate: stats.hitRate || 0,
+      memoryUsage: stats.memoryUsage || '0MB'
+    }
+  } catch (error) {
+    console.warn('Không thể cập nhật cache stats:', error)
+  }
+}
+
+const clearCache = async () => {
+  try {
+    await window.electronAPI.musicClearCache()
+    console.log('Cache đã được xóa')
+    
+    await updateCacheStats()
+  } catch (error) {
+    console.error('Lỗi khi xóa cache:', error)
+  }
+}
+
+const forceSaveCache = async () => {
+  try {
+    await window.electronAPI.musicForceSaveCache()
+    console.log('Cache đã được lưu')
+    
+    await updateCacheStats()
+  } catch (error) {
+    console.error('Lỗi khi lưu cache:', error)
+  }
+}
+
 onMounted(async () => {
   try {
     const savedTheme = await window.electronAPI.getConfig('theme')
@@ -270,6 +340,8 @@ onMounted(async () => {
     if (transparencyEnabled.value) {
       await updateAppTransparency()
     }
+
+    await updateCacheStats()
   } catch (error) {
     console.error('Error loading config:', error)
   }
@@ -714,6 +786,86 @@ h3 {
 }
 
 .video-description {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.cache-info {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.cache-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.cache-size, .cache-memory, .cache-hit-rate {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.dark .cache-stats span {
+  color: #b9bbbe;
+}
+
+.light .cache-stats span {
+  color: #6c757d;
+}
+
+.cache-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.cache-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dark .cache-btn {
+  background: #40444b;
+  color: #dcddde;
+}
+
+.light .cache-btn {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.dark .cache-btn:hover {
+  background: #4f545c;
+  transform: translateY(-1px);
+}
+
+.light .cache-btn:hover {
+  background: #dee2e6;
+  transform: translateY(-1px);
+}
+
+.clear-btn:hover {
+  background: #ff4757 !important;
+  color: white !important;
+}
+
+.save-btn:hover {
+  background: var(--accent-color, #7289da) !important;
+  color: white !important;
+}
+
+.cache-description {
   font-size: 12px;
   color: #6c757d;
 }

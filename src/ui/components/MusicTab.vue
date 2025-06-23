@@ -31,12 +31,15 @@
             <input 
               ref="searchInputRef"
               v-model="searchQuery" 
-              @input="debouncedFilterSongs"
+              @input="optimizedFilterSongs"
               @keydown="handleSearchKeyDown"
               type="text" 
-              placeholder="Tìm kiếm bài hát..."
+              placeholder="Tìm kiếm bài hát... (Tip: gõ ':video' để tìm bài có video)"
               class="search-input"
             >
+            <div class="search-stats" v-if="searchQuery">
+              {{ filteredSongs.length }} / {{ songsCache.length }} bài hát
+            </div>
           </div>
 
           <div class="sort-box" :class="{ 'open': isDropdownOpen }" @click.stop="toggleDropdown">
@@ -58,7 +61,12 @@
           </div>
         </div>
 
-        <div class="songs-list" ref="songsListRef" @click="hideContextMenu">
+        <div 
+          class="songs-list" 
+          ref="songsListRef" 
+          @click="hideContextMenu"
+          @scroll="handleVirtualScroll"
+        >
           <div v-if="sortedSongs.length === 0" class="empty-state">
             <div class="empty-icon">
               <i class="fas fa-music"></i>
@@ -70,35 +78,47 @@
           </div>
           
           <div 
-            v-for="song in sortedSongs" 
-            :key="song.path"
-            :class="[
-              'song-item', 
-              { 
-                'selected': selectedSong?.path === song.path,
-                'playing': currentSong?.path === song.path && isPlaying,
-                'has-video': song.video
-              }
-            ]"
-            @click="selectSong(song)"
-            @dblclick="playSong(song)"
-            @contextmenu="showContextMenu($event, song)"
+            v-else 
+            class="virtual-scroll-container"
+            :style="{ height: virtualScrollHeight + 'px' }"
           >
-            <div class="song-info">
-              <div class="song-title-row">
-                <span class="title">{{ getSongDetails(song.name).title }}</span>
-                <!-- <div v-if="videoEnabled && song.video" class="video-indicator">
-                  <i class="fas fa-play-circle"></i>
-                  <span>video</span>
-                </div> -->
-                <div v-if="song.video" class="video-indicator">
-                  <i class="fas fa-play-circle"></i>
-                  <span>video</span>
+            <div 
+              class="virtual-scroll-content"
+              :style="{ 
+                transform: `translateY(${virtualScrollOffset}px)`,
+                height: visibleSongs.length * itemHeight + 'px'
+              }"
+            >
+              <div 
+                v-for="(song, _) in visibleSongs" 
+                :key="song.path"
+                :class="[
+                  'song-item', 
+                  { 
+                    'selected': selectedSong?.path === song.path,
+                    'playing': currentSong?.path === song.path && isPlaying,
+                    'has-video': song.video
+                  }
+                ]"
+                
+                @click="selectSong(song)"
+                @dblclick="playSong(song)"
+                @contextmenu="showContextMenu($event, song)"
+              >
+                <div class="song-info">
+                  <div class="song-title-row">
+                    <span class="title">{{ getCachedSongDetails(song.name).title }}</span>
+                    <div v-if="song.video" class="video-indicator">
+                      <i class="fas fa-play-circle"></i>
+                      <span>video</span>
+                    </div>
+                  </div>
+                  <div class="song-details">
+                    <span class="artist">{{ getCachedSongDetails(song.name).artist }}</span>
+                    <span class="duration">{{ formatTime(song.duration || 0) }}</span>
+                    <span v-if="song.bitrate" class="bitrate">{{ Math.round(song.bitrate) }}kbps</span>
+                  </div>
                 </div>
-              </div>
-              <div class="song-details">
-                <span class="artist">{{ getSongDetails(song.name).artist }}</span>
-                <span class="duration">{{ formatTime(song.duration || 0) }}</span>
               </div>
             </div>
           </div>
@@ -112,7 +132,7 @@
             :alt="currentSongName"
             autoplay 
             muted 
-            loop
+            loop 
             @error="handleVideoError"
             class="video-player"
           >
@@ -120,7 +140,6 @@
           </video>
         </div>
 
-        <!-- Cover image nếu không có video hoặc video tắt -->
         <div v-else-if="currentCoverImage" class="cover-image" @click="showFullImage">
           <img :src="currentCoverImage" :alt="currentSongName">
         </div>
@@ -166,7 +185,7 @@
 
               <div class="volume-control compact">
                 <div class="control-header compact">
-                  <i class="fas fa-volume-up"></i>
+                  <i :class="volumeIcon" @click="toggleMute" class="volume-icon-btn"></i>
               <input 
                 type="range" 
                 min="0" 
@@ -289,19 +308,29 @@
       @close="closeSongInfo"
     />
   </div>
+
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null
+  let rafId: number | null = null
+  
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout)
-    timeout = setTimeout(() => func(...args), wait)
+    if (rafId) cancelAnimationFrame(rafId)
+    
+    timeout = setTimeout(() => {
+      rafId = requestAnimationFrame(() => {
+        func(...args)
+        rafId = null
+      })
+    }, wait)
   }
 }
 
@@ -313,6 +342,90 @@ function rafThrottle<T extends (...args: any[]) => any>(func: T): (...args: Para
       func(...args)
       rafId = null
     })
+  }
+}
+
+class ObjectPool<T> {
+  private pool: T[] = []
+  private createFn: () => T
+  private resetFn: (obj: T) => void
+
+  constructor(createFn: () => T, resetFn: (obj: T) => void, initialSize: number = 10) {
+    this.createFn = createFn
+    this.resetFn = resetFn
+    for (let i = 0; i < initialSize; i++) {
+      this.pool.push(createFn())
+    }
+  }
+
+  acquire(): T {
+    return this.pool.pop() || this.createFn()
+  }
+
+  release(obj: T): void {
+    this.resetFn(obj)
+    if (this.pool.length < 20) {
+      this.pool.push(obj)
+    }
+  }
+}
+
+class EnhancedCache<K, V> {
+  private cache = new Map<K, V>()
+  private accessOrder = new Map<K, number>()
+  private accessCounter = 0
+  private maxSize: number
+
+  constructor(maxSize: number = 5000) {
+    this.maxSize = maxSize
+  }
+
+  get(key: K): V | undefined {
+    const value = this.cache.get(key)
+    if (value !== undefined) {
+      this.updateAccess(key)
+    }
+    return value
+  }
+
+  set(key: K, value: V): void {
+    this.cache.set(key, value)
+    this.updateAccess(key)
+    
+    if (this.cache.size > this.maxSize) {
+      this.evictLRU()
+    }
+  }
+
+  has(key: K): boolean {
+    return this.cache.has(key)
+  }
+
+  clear(): void {
+    this.cache.clear()
+    this.accessOrder.clear()
+    this.accessCounter = 0
+  }
+
+  size(): number {
+    return this.cache.size
+  }
+
+  private updateAccess(key: K): void {
+    this.accessOrder.set(key, ++this.accessCounter)
+  }
+
+  private evictLRU(): void {
+    const sortedEntries = Array.from(this.accessOrder.entries())
+      .sort((a, b) => a[1] - b[1])
+    
+    const toRemove = Math.floor(this.cache.size * 0.2)
+    
+    for (let i = 0; i < toRemove && i < sortedEntries.length; i++) {
+      const key = sortedEntries[i][0]
+      this.cache.delete(key)
+      this.accessOrder.delete(key)
+    }
   }
 }
 
@@ -340,7 +453,7 @@ class AudioPlayer {
   private gainNode: GainNode | null = null
   private compressorNode: DynamicsCompressorNode | null = null
   private analyserNode: AnalyserNode | null = null
-  private normalizationEnabled: boolean = true
+  private normalizationEnabled: boolean = false 
 
   constructor() {
     this.initAudio()
@@ -364,11 +477,11 @@ class AudioPlayer {
       this.compressorNode = this.audioContext.createDynamicsCompressor()
       this.analyserNode = this.audioContext.createAnalyser()
 
-      this.compressorNode.threshold.setValueAtTime(-24, this.audioContext.currentTime)
-      this.compressorNode.knee.setValueAtTime(30, this.audioContext.currentTime)
-      this.compressorNode.ratio.setValueAtTime(12, this.audioContext.currentTime)
-      this.compressorNode.attack.setValueAtTime(0.003, this.audioContext.currentTime)
-      this.compressorNode.release.setValueAtTime(0.25, this.audioContext.currentTime)
+      this.compressorNode.threshold.setValueAtTime(-18, this.audioContext.currentTime)
+      this.compressorNode.knee.setValueAtTime(15, this.audioContext.currentTime)
+      this.compressorNode.ratio.setValueAtTime(3, this.audioContext.currentTime)
+      this.compressorNode.attack.setValueAtTime(0.008, this.audioContext.currentTime)
+      this.compressorNode.release.setValueAtTime(0.15, this.audioContext.currentTime)
 
       this.analyserNode.fftSize = 2048
       this.analyserNode.smoothingTimeConstant = 0.8
@@ -384,7 +497,7 @@ class AudioPlayer {
         this.analyserNode.connect(this.audioContext.destination)
       }
 
-      this.gainNode.gain.setValueAtTime(this.volume, this.audioContext.currentTime)
+      this.gainNode.gain.setValueAtTime(this.volume, this.audioContext!.currentTime)
     } catch (error) {
       console.warn('Error setting up audio nodes:', error)
     }
@@ -601,6 +714,8 @@ const isDiscordLoading = ref(false)
 const discordCooldownActive = ref(false)
 const shuffleMode = ref(false)
 const repeatOne = ref(false)
+const isMuted = ref(false)
+const previousVolume = ref(0.5)
 const filteredSongs = shallowRef<Song[]>([]) 
 const songsListRef = ref<HTMLElement | null>(null)
 const isLoading = ref<boolean>(false)
@@ -613,7 +728,28 @@ const audioLevel = ref(0)
 const progressUpdateId = ref<number | null>(null)
 const videoEnabled = ref(false)
 
-// Context menu state
+const itemHeight = ref(60)
+const visibleCount = ref(20)
+const scrollTop = ref(0)
+const virtualScrollHeight = ref(0)
+const virtualScrollOffset = ref(0)
+const visibleSongs = ref<Song[]>([])
+
+const songDetailsCache = new EnhancedCache<string, { artist: string; title: string }>(10000)
+const searchCache = new EnhancedCache<string, Song[]>(100)
+
+const songDetailsPool = new ObjectPool<{ artist: string; title: string }>(
+  () => ({ artist: '', title: '' }),
+  (obj) => { obj.artist = ''; obj.title = '' }
+)
+
+const cacheStats = ref({
+  size: 0,
+  maxSize: 15000,
+  hitRate: 0,
+  memoryUsage: '0MB'
+})
+
 const contextMenu = ref({
   visible: false,
   x: 0,
@@ -652,23 +788,30 @@ const sortOptions = ref<SortOption[]>([
   { label: 'Tên bài hát', value: 'title' }
 ])
 
-const songDetailsCache = new Map<string, { artist: string; title: string }>()
-
 const formatSongName = (name: string) => {
   return name.replace(/\s*-\s*Copy(\s*\(\d+\))?$/i, '')
 }
 
-const getSongDetails = (songName: string) => {
+const getCachedSongDetails = (songName: string) => {
   if (songDetailsCache.has(songName)) {
     return songDetailsCache.get(songName)!
   }
   
+  const pooledObj = songDetailsPool.acquire()
   const parts = formatSongName(songName).split(' - ')
-  const result = parts.length >= 2 
-    ? { artist: parts[0], title: parts.slice(1).join(' - ') }
-    : { artist: 'Unknown', title: songName }
   
+  if (parts.length >= 2) {
+    pooledObj.artist = parts[0]
+    pooledObj.title = parts.slice(1).join(' - ')
+  } else {
+    pooledObj.artist = 'Unknown'
+    pooledObj.title = songName
+  }
+  
+  const result = { artist: pooledObj.artist, title: pooledObj.title }
   songDetailsCache.set(songName, result)
+  songDetailsPool.release(pooledObj)
+  
   return result
 }
 
@@ -712,6 +855,18 @@ const discordButtonText = computed(() => {
 
 const volumePercentage = computed(() => Math.round(volume.value * 100))
 
+const volumeIcon = computed(() => {
+  if (isMuted.value || volume.value === 0) {
+    return 'fas fa-volume-mute'
+  } else if (volume.value < 0.3) {
+    return 'fas fa-volume-down'
+  } else if (volume.value < 0.7) {
+    return 'fas fa-volume-up'
+  } else {
+    return 'fas fa-volume-up'
+  }
+})
+
 const progressPercentage = computed(() => 
   duration.value > 0 ? (currentTime.value / duration.value) * 100 : 0
 )
@@ -722,8 +877,8 @@ const formattedDuration = computed(() => formatTime(duration.value))
 const currentCoverImage = computed(() => {
   const song = selectedSong.value || currentSong.value
   const isShowingCurrentVideo = videoEnabled.value && currentSong.value?.video && isPlaying.value && selectedSong.value?.path === currentSong.value?.path
-  if (!isShowingCurrentVideo) {
-    return song?.image ? 'file://' + song.image : null
+  if (!isShowingCurrentVideo && song?.image) {
+    return 'file://' + song.image
   }
   return null
 })
@@ -749,8 +904,8 @@ const currentVideoUrl = computed(() => {
 
 const sortedSongs = computed(() => {
   return [...filteredSongs.value].sort((a, b) => {
-    const songA = getSongDetails(a.name)
-    const songB = getSongDetails(b.name)
+    const songA = getCachedSongDetails(a.name)
+    const songB = getCachedSongDetails(b.name)
     
     if (currentSort.value === 'artist') {
       return songA.artist.localeCompare(songB.artist) || 
@@ -763,61 +918,182 @@ const sortedSongs = computed(() => {
 
 const currentSongFormatted = computed(() => {
   if (!currentSong.value) return 'Không có'
-  const { artist, title } = getSongDetails(currentSong.value.name)
+  const { artist, title } = getCachedSongDetails(currentSong.value.name)
   return `${artist} - ${title}`
 })
 
-const debouncedFilterSongs = debounce(async () => {
+const virtualScrollData = computed(() => {
+  const containerHeight = songsListRef.value?.clientHeight || 600
+  const totalItems = sortedSongs.value.length
+  const totalHeight = totalItems * itemHeight.value
+  
+  visibleCount.value = Math.ceil(containerHeight / itemHeight.value) + 5
+  
+  const startIndex = Math.floor(scrollTop.value / itemHeight.value)
+  const endIndex = Math.min(startIndex + visibleCount.value, totalItems)
+  
+  virtualScrollHeight.value = totalHeight
+  virtualScrollOffset.value = startIndex * itemHeight.value
+  
+  return {
+    startIndex: Math.max(0, startIndex),
+    endIndex,
+    totalHeight
+  }
+})
+
+const handleVirtualScroll = rafThrottle(() => {
+  if (!songsListRef.value) return
+  scrollTop.value = songsListRef.value.scrollTop
+  updateVisibleSongs()
+})
+
+const updateVisibleSongs = () => {
+  const { startIndex, endIndex } = virtualScrollData.value
+  visibleSongs.value = sortedSongs.value.slice(startIndex, endIndex)
+}
+
+watch(sortedSongs, () => {
+  updateVisibleSongs()
+}, { deep: false })
+
+watch(virtualScrollData, () => {
+  updateVisibleSongs()
+}, { deep: false })
+
+const optimizedFilterSongs = debounce(async (_?: Event) => {
   const query = searchQuery.value.trim()
+  
+  if (searchCache.has(query)) {
+    filteredSongs.value = searchCache.get(query)!
+    return
+  }
+  
   if (!query) {
-    filteredSongs.value = [...songsCache.value]
+    const result = [...songsCache.value]
+    filteredSongs.value = result
+    searchCache.set(query, result)
     return
   }
 
   if (query.toLowerCase() === ':video') {
-    filteredSongs.value = songsCache.value.filter(song => song.video)
+    const result = songsCache.value.filter(song => song.video)
+    filteredSongs.value = result
+    searchCache.set(query, result)
     return
   }
 
   const searchTerms = query.toLowerCase().split(' ')
-  const localFiltered = songsCache.value.filter(song => {
-    const songName = song.name.toLowerCase()
-    const { artist, title } = getSongDetails(song.name)
-    const artistLower = artist.toLowerCase()
-    const titleLower = title.toLowerCase()
+  const localFiltered: Song[] = []
+  
+  const chunkSize = 1000
+  const processChunk = async (startIndex: number) => {
+    const endIndex = Math.min(startIndex + chunkSize, songsCache.value.length)
     
-    return searchTerms.every(term => 
-      songName.includes(term) || 
-      artistLower.includes(term) || 
-      titleLower.includes(term)
-    )
-  })
+    for (let i = startIndex; i < endIndex; i++) {
+      const song = songsCache.value[i]
+      const songName = song.name.toLowerCase()
+      const { artist, title } = getCachedSongDetails(song.name)
+      const artistLower = artist.toLowerCase()
+      const titleLower = title.toLowerCase()
+      
+      const matches = searchTerms.every(term => 
+        songName.includes(term) || 
+        artistLower.includes(term) || 
+        titleLower.includes(term)
+      )
+      
+      if (matches) {
+        localFiltered.push(song)
+      }
+    }
+    
+    if (endIndex < songsCache.value.length) {
+      await new Promise(resolve => setTimeout(resolve, 0))
+      await processChunk(endIndex)
+    }
+  }
+  
+  await processChunk(0)
   
   filteredSongs.value = localFiltered
-}, 0)
+  searchCache.set(query, localFiltered)
+}, 150)
+
+const updateCacheStats = async () => {
+  try {
+    const stats = await window.electronAPI.musicGetCacheStats()
+    cacheStats.value = {
+      size: stats.size,
+      maxSize: stats.maxSize,
+      hitRate: stats.hitRate,
+      memoryUsage: stats.memoryUsage
+    }
+  } catch (error) {
+    console.warn('Không thể cập nhật cache stats:', error)
+  }
+}
+
+const performMemoryCleanup = () => {
+  if (searchCache.size() > 50) {
+    searchCache.clear()
+  }
+  
+  if (songDetailsCache.size() > 5000) {
+    const currentSize = songDetailsCache.size()
+    console.log(`Cleaning song details cache (${currentSize} items)`)
+  }
+  
+  if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+    (globalThis as any).gc()
+  }
+}
 
 const loadSongs = async () => {
   try {
     isLoading.value = true
     loadingText.value = 'Đang tải danh sách bài hát...'
-    scanProgress.value = { total: 0, processed: 0, percentage: 0 }
+    scanProgress.value = { 
+      total: 0, 
+      processed: 0, 
+      percentage: 0
+    }
     
     const result = await window.electronAPI.getConfig('osuPath')
     if (result) {
       osuPath.value = result
+      
       if (songsCache.value.length > 0) {
         filteredSongs.value = songsCache.value
+        updateVisibleSongs()
         return
       }
 
       window.electronAPI.onMusicScanProgress((progress: any) => {
+        if (!progress) {
+          console.warn('Invalid progress data:', progress)
+          return
+        }
+
+        let latestProgress = progress
+        if (Array.isArray(progress) && progress.length > 0) {
+          latestProgress = progress[progress.length - 1]
+        }
+        
+        console.log('Latest progress:', latestProgress);
+        const total = typeof latestProgress.total === 'number' ? latestProgress.total : 0
+        const processed = typeof latestProgress.processed === 'number' ? latestProgress.processed : 0
+        const percentage = typeof latestProgress.percentage === 'number' ? latestProgress.percentage : 
+                          (total > 0 ? Math.round((processed / total) * 100) : 0)
+        
         loadingText.value = 'Đang quét metadata...'
         scanProgress.value = {
-          total: progress.total,
-          processed: progress.processed,
-          percentage: progress.percentage
+          total,
+          processed,
+          percentage
         }
-        console.log(`Đang quét nhạc: ${progress.processed}/${progress.total} (${progress.percentage}%)`)
+        
+        console.log(`Quét nhạc: ${processed}/${total} (${percentage}%)`)
       })
 
       loadingText.value = 'Đang quét thư mục nhạc...'
@@ -826,26 +1102,21 @@ const loadSongs = async () => {
       if (loadResult.success) {
         songsCache.value = loadResult.songs || []
         filteredSongs.value = songsCache.value
+        updateVisibleSongs()
 
-        try {
-          const cacheStats = await window.electronAPI.musicGetCacheStats()
-          console.log('Cache Stats:', cacheStats)
-          console.log(`- Cache size: ${cacheStats.size}/${cacheStats.maxSize}`)
-          console.log(`- Memory usage: ${cacheStats.memoryUsage}`)
-          if (cacheStats.hitRate > 0) {
-            console.log(`- Cache hit rate: ${cacheStats.hitRate.toFixed(1)}%`)
-          }
-        } catch (error) {
-          console.warn('Không thể lấy cache stats:', error)
-        }
+        await updateCacheStats()
 
         window.electronAPI.onMusicMetadataUpdated(async () => {
           const updatedSongs = await window.electronAPI.musicGetFilteredSongs()
           songsCache.value = updatedSongs
+          
+          searchCache.clear()
+          
           if (!searchQuery.value.trim()) {
             filteredSongs.value = [...updatedSongs]
+            updateVisibleSongs()
           } else {
-            debouncedFilterSongs()
+            optimizedFilterSongs()
           }
         })
       }
@@ -857,8 +1128,12 @@ const loadSongs = async () => {
   } finally {
     isLoading.value = false
     setTimeout(() => {
-      scanProgress.value = { total: 0, processed: 0, percentage: 0 }
-    }, 1000)
+      scanProgress.value = { 
+        total: 0, 
+        processed: 0, 
+        percentage: 0
+      }
+    }, 2000)
   }
 }
 
@@ -881,6 +1156,11 @@ const handleSongEnd = async () => {
     const nextIndex = (currentIndex + 1) % sortedSongs.value.length
     await playSong(sortedSongs.value[nextIndex])
   }
+  
+  // Scroll đến bài mới sau khi chuyển bài
+  nextTick(() => {
+    scrollToCurrentSong()
+  })
 }
 
 const playSong = async (song: Song) => {
@@ -1046,7 +1326,7 @@ const updateDiscordStatus = async () => {
   if (!discordEnabled.value || !currentSong.value) return
 
   try {
-    const { artist, title } = getSongDetails(currentSong.value.name)
+    const { artist, title } = getCachedSongDetails(currentSong.value.name)
     const formattedName = `${artist} - ${title}`
     
     await window.electronAPI.discordUpdateStatus({
@@ -1113,6 +1393,26 @@ const onVolumeChange = (event: Event) => {
   const value = +(event.target as HTMLInputElement).value
   volume.value = value / 100
   audioPlayer.setVolume(volume.value)
+  
+  // Nếu user thay đổi volume manually thì bỏ mute
+  if (isMuted.value && volume.value > 0) {
+    isMuted.value = false
+  }
+}
+
+const toggleMute = () => {
+  if (isMuted.value) {
+    // Unmute: khôi phục volume trước đó
+    isMuted.value = false
+    volume.value = previousVolume.value
+    audioPlayer.setVolume(volume.value)
+  } else {
+    // Mute: lưu volume hiện tại và set về 0
+    previousVolume.value = volume.value
+    isMuted.value = true
+    volume.value = 0
+    audioPlayer.setVolume(0)
+  }
 }
 
 const onSeek = (event: Event) => {
@@ -1257,16 +1557,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
       if (currentIndex > 0) {
         const prevSong = sortedSongs.value[currentIndex - 1]
         selectSong(prevSong)
-        nextTick(() => {
-          const songElement = document.querySelector('.song-item.selected')
-          songElement?.scrollIntoView(
-            { 
-              behavior: 'smooth', 
-              block: 'nearest',
-              inline: 'nearest'
-            }
-          )
-        })
+        scrollToSelectedSong(currentIndex - 1)
       }
       break
 
@@ -1275,16 +1566,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
       if (currentIndex < sortedSongs.value.length - 1) {
         const nextSong = sortedSongs.value[currentIndex + 1]
         selectSong(nextSong)
-        nextTick(() => {
-          const songElement = document.querySelector('.song-item.selected')
-          songElement?.scrollIntoView(
-            { 
-              behavior: 'smooth', 
-              block: 'nearest',
-              inline: 'nearest'
-            }
-          )
-        })
+        scrollToSelectedSong(currentIndex + 1)
       }
       break
 
@@ -1303,7 +1585,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     case 'Escape':
       if (searchQuery.value) {
         searchQuery.value = ''
-        debouncedFilterSongs()
+        optimizedFilterSongs()
       }
       searchInputRef.value?.blur()
       hideContextMenu()
@@ -1319,7 +1601,7 @@ const handleSearchKeyDown = (event: KeyboardEvent) => {
 
       if (searchQuery.value) {
         searchQuery.value = ''
-        debouncedFilterSongs()
+        optimizedFilterSongs()
       }
       searchInputRef.value?.blur()
       nextTick(() => {
@@ -1372,20 +1654,45 @@ const selectOption = (option: SortOption) => {
 }
 
 const scrollToCurrentSong = () => {
-  if (!currentSong.value) return
+  if (!currentSong.value || !songsListRef.value) return
   
-    selectedSong.value = currentSong.value
-    
   const currentIndex = sortedSongs.value.findIndex(song => song.path === currentSong.value?.path)
-    if (currentIndex !== -1) {
-      const songElement = document.querySelector('.song-item.playing')
-      if (songElement) {
-        songElement.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'nearest',
-          inline: 'nearest'
-        })
-    }
+  if (currentIndex === -1) return
+  
+  selectedSong.value = currentSong.value
+  
+  const targetScrollTop = currentIndex * itemHeight.value
+  const containerHeight = songsListRef.value.clientHeight
+  const centeredScrollTop = targetScrollTop - (containerHeight / 2) + (itemHeight.value / 2)
+  
+  songsListRef.value.scrollTo({
+    top: Math.max(0, centeredScrollTop),
+    behavior: 'smooth'
+  })
+}
+
+const scrollToSelectedSong = (songIndex: number) => {
+  if (!songsListRef.value) return
+  
+  const container = songsListRef.value
+  const containerHeight = container.clientHeight
+  const currentScrollTop = container.scrollTop
+  
+  const itemTop = songIndex * itemHeight.value
+  const itemBottom = itemTop + itemHeight.value
+  const viewTop = currentScrollTop
+  const viewBottom = currentScrollTop + containerHeight
+  
+  if (itemTop < viewTop) {
+    container.scrollTo({
+      top: itemTop,
+      behavior: 'smooth'
+    })
+  } else if (itemBottom > viewBottom) {
+    container.scrollTo({
+      top: itemBottom - containerHeight,
+      behavior: 'smooth'
+    })
   }
 }
 
@@ -1429,6 +1736,10 @@ const startVideoWatcher = () => {
 }
 
 const focusTab = () => {
+  if (currentSong.value && !selectedSong.value) {
+    selectedSong.value = currentSong.value
+  }
+  
   nextTick(() => {
     setTimeout(() => {
       if (musicTabRef.value) {
@@ -1549,8 +1860,18 @@ const handleGlobalClick = (e: MouseEvent) => {
 
 onMounted(async () => {
   loadFonts()
-  
   await loadSongs()
+  
+  updateVisibleSongs()
+  
+  const statsInterval = setInterval(updateCacheStats, 30000)
+  
+  const cleanupInterval = setInterval(performMemoryCleanup, 2 * 60 * 1000)
+  
+  onUnmounted(() => {
+    clearInterval(statsInterval)
+    clearInterval(cleanupInterval)
+  })
   
   try {
     const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
@@ -1592,6 +1913,7 @@ onUnmounted(() => {
   
   if (progressUpdateId.value) {
     cancelAnimationFrame(progressUpdateId.value)
+    progressUpdateId.value = null
   }
   
   if (audioPlayer.getAudio()) {
@@ -1618,6 +1940,7 @@ onUnmounted(() => {
   }
   
   songDetailsCache.clear()
+  searchCache.clear()
   
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('click', handleGlobalClick)
@@ -1625,6 +1948,10 @@ onUnmounted(() => {
   if (videoCheckInterval) {
     clearInterval(videoCheckInterval)
   }
+  
+  performMemoryCleanup()
+  
+  console.log('MusicTab component cleanup completed')
 })
 
 const showSongInfo = () => {
@@ -2201,6 +2528,20 @@ button:not(.control-btn):not(.nav-button):not(.scroll-to-song-btn):hover {
   min-width: 35px;
   text-align: right;
   font-weight: 500;
+}
+
+.volume-icon-btn {
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.volume-icon-btn:hover {
+  background: var(--accent-color-transparent);
+  color: var(--accent-color);
+  transform: scale(1.1);
 }
 
 .time-control.compact {

@@ -7,4 +7,5 @@ export interface Song {
     artist: string
     title: string
     duration: number
+    bitrate: number
 }
