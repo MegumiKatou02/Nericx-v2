@@ -481,7 +481,7 @@ onUnmounted(() => {
     <div class="container">
       <nav class="sidebar" :class="{ 'sidebar-closed': !isMenuOpen }">
         <div class="menu-toggle" @click="toggleMenu">
-          <i :class="isMenuOpen ? 'fas fa-times' : 'fas fa-bars'"></i>
+          <i class="fas fa-bars"></i>
         </div>
         <div class="menu-items">
           <div 

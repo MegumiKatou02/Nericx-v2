@@ -63,6 +63,7 @@
 
         <div 
           class="songs-list" 
+          :class="{ 'empty-list': sortedSongs.length === 0 }"
           ref="songsListRef" 
           @click="hideContextMenu"
           @scroll="handleVirtualScroll"
@@ -2204,6 +2205,12 @@ const showFullVideo = () => {
   min-height: 0;
   max-height: calc(100vh - 200px);
   outline: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-color) var(--bg-tertiary);
+}
+
+.songs-list.empty-list {
+  overflow: hidden;
 }
 
 .songs-list::-webkit-scrollbar {
@@ -2222,11 +2229,6 @@ const showFullVideo = () => {
 
 .songs-list::-webkit-scrollbar-thumb:hover {
   background: var(--accent-hover);
-}
-
-.songs-list {
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent-color) var(--bg-tertiary);
 }
 
 .song-item {

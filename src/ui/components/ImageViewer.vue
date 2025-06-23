@@ -83,8 +83,17 @@ const emit = defineEmits<{
 }>()
 
 const isVideo = computed(() => {
-  return props.imageUrl.toLowerCase().includes('.mp4') || 
-         props.imageName.toLowerCase().includes('video')
+  const url = props.imageUrl.toLowerCase()
+  const isVideoFile = url.includes('.mp4') || 
+                     url.includes('.webm') ||
+                     url.includes('.mov') ||
+                     url.includes('.avi')
+
+  // console.log('ImageViewer - URL:', props.imageUrl)
+  // console.log('ImageViewer - Name:', props.imageName)
+  // console.log('ImageViewer - IsVideo:', isVideoFile)
+  
+  return isVideoFile
 })
 
 const zoomLevel = ref(1)
