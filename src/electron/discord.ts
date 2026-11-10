@@ -1,12 +1,13 @@
 import { Client } from 'discord-rpc'
 import { ipcMain } from 'electron'
+import { buildActivity, createStartTracker, type DiscordSongInfo } from './discordActivity.js'
 
 let client: Client | null = null
 const clientId = '1353779001147003033'
 
 export function setupDiscordHandlers() {
   ipcMain.handle('discord:init', initDiscord)
-  ipcMain.handle('discord:update-status', (_, songInfo) => updateStatus(songInfo))
+  ipcMain.handle('discord:update-status', (_, songInfo: DiscordSongInfo) => updateStatus(songInfo))
   ipcMain.handle('discord:clear', clearStatus)
   ipcMain.handle('discord:destroy', destroy)
 }
@@ -18,50 +19,35 @@ async function initDiscord(): Promise<{ success: boolean; message?: string }> {
     return { success: true }
   } catch (error) {
     console.error('Discord RPC error:', error)
+    client = null
     return { success: false, message: 'Không thể kết nối với Discord' }
   }
 }
 
-async function updateStatus(songInfo: { name: string; beatmapsetId?: string; imagePath?: string }) {
+const tracker = createStartTracker()
+
+async function updateStatus(songInfo: DiscordSongInfo) {
   if (!client) return
 
-  const activity: any = {
-    details: songInfo.name,
-    state: 'Nghe nhạc trong Nericx',
-    startTimestamp: Date.now()
-  }
+  const start = tracker.next(songInfo.name, Date.now())
 
-  if (songInfo.beatmapsetId) {
-    activity.largeImageKey = `https://assets.ppy.sh/beatmaps/${songInfo.beatmapsetId}/covers/cover.jpg`
-    activity.largeImageText = songInfo.name
-  } else {
-    activity.largeImageKey = 'image1'
-    activity.largeImageText = 'osu!'
-  }
-
-  if (songInfo.beatmapsetId) {
-    activity.buttons = [
-      {
-        label: 'Xem Beatmap',
-        url: `https://osu.ppy.sh/beatmapsets/${songInfo.beatmapsetId}`
-      },
-      {
-        label: 'Github',
-        url: `https://github.com/MegumiKatou02/Nericx-v2`
-      }
-    ]
-  }
-
-  await client.setActivity(activity)
+  // `setActivity()` drops `type`, so the presence would always render as Playing (0).
+  // Sending SET_ACTIVITY ourselves is the only way to get Listening (2).
+  await (client as any).request('SET_ACTIVITY', {
+    pid: process.pid,
+    activity: buildActivity(songInfo, start)
+  })
 }
 
 async function clearStatus() {
+  tracker.reset()
   if (client) {
     await client.clearActivity()
   }
 }
 
 async function destroy() {
+  tracker.reset()
   if (client) {
     await client.destroy()
     client = null

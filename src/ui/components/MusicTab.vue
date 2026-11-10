@@ -320,6 +320,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
+import { isVideoPlaying as isVideoPlayingForPresence } from '../presence.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 
@@ -913,6 +914,14 @@ const currentVideoUrl = computed(() => {
   return null
 })
 
+// Video counts as "playing" only when the rendered video belongs to the song
+// that is actually playing, so browsing other songs never lies in the presence.
+const isVideoPlaying = computed(() => isVideoPlayingForPresence({
+  current: currentSong.value,
+  selected: selectedSong.value,
+  hasVideoUrl: !!currentVideoUrl.value
+}))
+
 const sortedSongs = computed(() => {
   return [...filteredSongs.value].sort((a, b) => {
     if (currentSort.value === 'duration') {
@@ -1347,7 +1356,8 @@ const updateDiscordStatus = async () => {
     
     await window.electronAPI.discordUpdateStatus({
       name: formattedName,
-      beatmapsetId: currentSong.value.beatmapsetId
+      beatmapsetId: currentSong.value.beatmapsetId,
+      videoPlaying: isVideoPlaying.value
     })
   } catch (error) {
     console.error('Failed to update Discord status:', error)
@@ -1363,6 +1373,14 @@ const clearDiscordStatus = async () => {
     }
   }
 }
+
+// Presence must follow the video badge without replaying the song: toggling the
+// video setting, selecting another song, or pausing all change isVideoPlaying.
+watch(isVideoPlaying, () => {
+  if (discordEnabled.value && currentSong.value) {
+    updateDiscordStatus()
+  }
+})
 
 const toggleDiscord = async () => {
   if (discordCooldownActive.value || isDiscordLoading.value) {
