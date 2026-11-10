@@ -1354,14 +1354,14 @@ const updateDiscordStatus = async () => {
   if (!discordEnabled.value || !currentSong.value) return
 
   try {
-    const { artist, title } = getCachedSongDetails(currentSong.value.name)
-    const formattedName = `${artist} - ${title}`
+    // The presence derives artist and title itself; sending a pre-joined
+    // "Unknown - ..." string would lose that information.
     // Metadata duration is known immediately; the audio element reports it a
     // frame later, so Discord gets the bar on the very first update.
     const songDuration = duration.value || currentSong.value.duration || 0
 
     await window.electronAPI.discordUpdateStatus({
-      name: formattedName,
+      name: currentSong.value.name,
       beatmapsetId: currentSong.value.beatmapsetId,
       videoPlaying: isVideoPlaying.value,
       ...playbackWindow(isPlaying.value, currentTime.value, songDuration)
