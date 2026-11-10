@@ -115,6 +115,10 @@ export const initDatabase = async (): Promise<void> => {
       `INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)`,
       'accentColor', '#f599b8'
     )
+    await db.run(
+      `INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)`,
+      'volume', '0.5'
+    )
 
     await db.close()
   } catch (error) {

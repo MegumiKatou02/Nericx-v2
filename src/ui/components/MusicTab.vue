@@ -198,6 +198,7 @@
                 max="100" 
                 :value="volumePercentage"
                 @input="onVolumeChange"
+                @change="persistVolume"
                     class="range-slider compact"
                     title="Âm lượng"
               >
@@ -321,6 +322,7 @@
 import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
 import { isVideoPlaying as isVideoPlayingForPresence, playbackWindow } from '../presence.js'
+import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 
@@ -1438,6 +1440,14 @@ const onVolumeChange = (event: Event) => {
   }
 }
 
+const persistVolume = async () => {
+  try {
+    await window.electronAPI.setConfig(VOLUME_CONFIG_KEY, volume.value.toString())
+  } catch (error) {
+    console.error('Error saving volume:', error)
+  }
+}
+
 const toggleMute = () => {
   if (isMuted.value) {
     isMuted.value = false
@@ -1932,6 +1942,12 @@ onMounted(async () => {
   cleanupIntervalId.value = cleanupInterval
   
   try {
+    const savedVolume = await window.electronAPI.getConfig(VOLUME_CONFIG_KEY)
+    const resolvedVolume = parseStoredVolume(savedVolume)
+    volume.value = resolvedVolume
+    previousVolume.value = resolvedVolume
+    audioPlayer.setVolume(resolvedVolume)
+
     const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
     if (savedNormalization !== undefined) {
       normalizationEnabled.value = savedNormalization === 'true'
