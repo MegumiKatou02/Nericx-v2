@@ -2,6 +2,7 @@ import { join } from 'path'
 import { readdirSync, statSync, existsSync } from 'fs'
 import { readFile, writeFile, mkdir } from 'fs/promises'
 import type { Song } from './type.js'
+import { parseBeatmapsetId } from './beatmapsetId.js'
 import * as mm from 'music-metadata'
 import { EventEmitter } from 'events'
 import { createHash } from 'crypto'
@@ -630,7 +631,7 @@ export class MusicPlayer extends EventEmitter {
             const stats = this.getFileStatCached(folderPath)
             if (!stats.isDirectory()) return
 
-            const beatmapsetId = songFolder.includes(' ') ? songFolder.split(' ')[0] : undefined
+            const beatmapsetId = parseBeatmapsetId(songFolder)
 
             const [imageFiles, videoFiles, audioFilesInFolder] = await Promise.all([
               Promise.resolve(readdirSync(folderPath).filter(f => /\.(png|jpg|jpeg)$/i.test(f))),
