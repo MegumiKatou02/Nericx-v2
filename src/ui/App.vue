@@ -12,6 +12,9 @@ fontAwesome.rel = 'stylesheet'
 fontAwesome.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css'
 document.head.appendChild(fontAwesome)
 
+// iconhe.ico is not tracked in git (see .gitignore), so load it only when present.
+const appIconUrl = '/iconhe.ico'
+
 const currentTab = ref('general')
 const isMenuOpen = ref(true)
 const currentTheme = ref('dark')
@@ -482,7 +485,7 @@ onUnmounted(() => {
   <div class="app-container" :class="currentTheme">
     <div class="title-bar">
       <div class="title-bar-drag">
-        <img src="/iconhe.ico" class="app-icon" alt="App Icon" />
+        <img v-if="appIconUrl" :src="appIconUrl" class="app-icon" alt="App Icon" />
         <span class="app-title">Nericx</span>
       </div>
       <div class="window-controls">

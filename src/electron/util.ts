@@ -1,6 +1,6 @@
 import { createWriteStream, existsSync, unlinkSync } from 'fs'
 import { join, basename } from 'path'
-import archiver from 'archiver'
+import { ZipArchive } from 'archiver'
 import { open } from 'sqlite'
 import sqlite3 from 'sqlite3'
 import { app } from 'electron'
@@ -10,7 +10,7 @@ export const isDev = () => process.env.NODE_ENV === 'development'
 export const createZip = (sourcePath: string, outputPath: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     const output = createWriteStream(outputPath)
-    const archive = archiver('zip', { zlib: { level: 9 } })
+    const archive = new ZipArchive({ zlib: { level: 9 } })
 
     output.on('close', () => resolve())
     archive.on('error', (err: Error) => reject(err))
@@ -70,7 +70,7 @@ export const createBackup = async (
 
     const finalZip = join(outputPath, `osu_backup_${timestamp}.zip`)
     const output = createWriteStream(finalZip)
-    const archive = archiver('zip', { zlib: { level: 9 } })
+    const archive = new ZipArchive({ zlib: { level: 9 } })
 
     await new Promise<void>((resolve, reject) => {
       output.on('close', () => resolve())

@@ -28,7 +28,7 @@
         </div>
       </div>
 
-      <div class="image-container" ref="imageContainerRef">
+      <div class="image-container">
         <video 
           v-if="isVideo"
           :src="imageUrl" 
@@ -104,7 +104,6 @@ const dragStartX = ref(0)
 const dragStartY = ref(0)
 const lastTranslateX = ref(0)
 const lastTranslateY = ref(0)
-const imageContainerRef = ref<HTMLElement | null>(null)
 const imageSize = ref('')
 
 const closeViewer = () => {

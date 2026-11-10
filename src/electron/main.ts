@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage, shell } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig } from './util.js'
@@ -242,7 +242,14 @@ ipcMain.handle('copy-file', createIPCHandler(async (_: any, filePath: string) =>
   try {
     if (existsSync(filePath)) {
       const image = nativeImage.createFromPath(filePath)
-      clipboard.writeImage(image)
+      if (image.isEmpty()) {
+        return { success: false, message: 'Không đọc được ảnh' }
+      }
+      await clipboard.write([
+        new ClipboardItem({
+          'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' })
+        })
+      ])
       return { success: true, message: 'Đã copy ảnh vào clipboard!' }
     }
     return { success: false, message: 'File không tồn tại' }
