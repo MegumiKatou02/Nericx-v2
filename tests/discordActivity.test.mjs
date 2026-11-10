@@ -19,7 +19,7 @@ test('large image falls back to the app asset when there is no beatmapset', () =
 test('large image uses the beatmap cover and adds buttons when a beatmapset exists', () => {
   const activity = buildActivity({ name: 'A - B', beatmapsetId: '123' }, NOW)
   assert.equal(activity.assets.large_image, 'https://assets.ppy.sh/beatmaps/123/covers/list@2x.jpg')
-  assert.equal(activity.assets.large_text, 'A - B')
+  assert.equal(activity.assets.large_text, 'B')
   assert.deepEqual(activity.buttons, [
     { label: 'Xem Beatmap', url: 'https://osu.ppy.sh/beatmapsets/123' },
     { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
@@ -27,20 +27,20 @@ test('large image uses the beatmap cover and adds buttons when a beatmapset exis
 })
 
 test('no video means no badge and the plain listening state', () => {
-  const activity = buildActivity({ name: 'A - B', beatmapsetId: '123' }, NOW)
+  const activity = buildActivity({ name: 'Song Title', beatmapsetId: '123' }, NOW)
   assert.equal(activity.state, 'Nghe nhạc trong Nericx')
   assert.equal(activity.assets.small_image, undefined)
   assert.equal(activity.assets.small_text, undefined)
 })
 
 test('explicit videoPlaying false keeps the badge off', () => {
-  const activity = buildActivity({ name: 'A - B', videoPlaying: false }, NOW)
+  const activity = buildActivity({ name: 'Song Title', videoPlaying: false }, NOW)
   assert.equal(activity.assets.small_image, undefined)
   assert.equal(activity.state, 'Nghe nhạc trong Nericx')
 })
 
 test('video playing adds the camera badge and the video state', () => {
-  const activity = buildActivity({ name: 'A - B', videoPlaying: true }, NOW)
+  const activity = buildActivity({ name: 'Song Title', videoPlaying: true }, NOW)
   assert.equal(activity.assets.small_image, VIDEO_BADGE_IMAGE)
   assert.equal(activity.assets.small_text, 'Đang phát video')
   assert.equal(activity.state, 'Đang phát video beatmap')
@@ -123,4 +123,46 @@ test('a beatmapset without a usable cover still links to the beatmap', () => {
 test('coverAvailable true keeps the square cover', () => {
   const activity = buildActivity({ name: 'A - B', beatmapsetId: '320118', coverAvailable: true }, NOW)
   assert.equal(activity.assets.large_image, 'https://assets.ppy.sh/beatmaps/320118/covers/list@2x.jpg')
+})
+
+test('artist prefix moves to the state line and the title loses its suffix', () => {
+  const activity = buildActivity({
+    name: 'Sangatsu no Phantasia - Pink Lemonade (TV Size) [no video]',
+    beatmapsetId: '320118'
+  }, NOW)
+  assert.equal(activity.details, 'Pink Lemonade (TV Size)')
+  assert.equal(activity.state, 'Sangatsu no Phantasia')
+  assert.equal(activity.assets.large_text, 'Pink Lemonade (TV Size)')
+})
+
+test('duplicate-file suffix is stripped along with the no-video tag', () => {
+  const activity = buildActivity({ name: 'A - B (1) [no video]' }, NOW)
+  assert.equal(activity.details, 'B')
+  assert.equal(activity.state, 'A')
+})
+
+test('a name without a dash is the title and keeps the generic state', () => {
+  const activity = buildActivity({ name: 'Some Song Title' }, NOW)
+  assert.equal(activity.details, 'Some Song Title')
+  assert.equal(activity.state, 'Nghe nhạc trong Nericx')
+  assert.equal(activity.assets.large_text, 'osu!')
+})
+
+test('only the first dash splits artist from title', () => {
+  const activity = buildActivity({ name: 'A - B - C' }, NOW)
+  assert.equal(activity.details, 'B - C')
+  assert.equal(activity.state, 'A')
+})
+
+test('a title that becomes empty after stripping falls back to the raw name', () => {
+  const activity = buildActivity({ name: 'A - [no video]' }, NOW)
+  assert.equal(activity.details, 'A - [no video]')
+  assert.equal(activity.state, 'Nghe nhạc trong Nericx')
+})
+
+test('video plus a known artist keeps the badge and shows the artist', () => {
+  const activity = buildActivity({ name: 'A - B', videoPlaying: true }, NOW)
+  assert.equal(activity.assets.small_image, VIDEO_BADGE_IMAGE)
+  assert.equal(activity.assets.small_text, 'Đang phát video')
+  assert.equal(activity.state, 'A')
 })

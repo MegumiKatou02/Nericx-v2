@@ -32,12 +32,36 @@ export function buildTimestamps(
   return total ? { start, end: start + total * 1000 } : { start }
 }
 
+const NOISE_SUFFIX = /\s*(?:\[no\s*video\]|\(\d+\))\s*$/i
+
+/**
+ * osu! folder names carry the artist prefix and file-noise suffixes.
+ * Discord should show the song, not the folder.
+ */
+export function splitSongName(raw: string): { artist?: string; title: string } {
+  const trimmed = raw.trim()
+  let cleaned = trimmed
+  while (NOISE_SUFFIX.test(cleaned)) {
+    cleaned = cleaned.replace(NOISE_SUFFIX, '').trim()
+  }
+  // Suffixes ate the title (`A - [no video]`): showing the raw name beats a stub.
+  if (!cleaned || cleaned.endsWith('-')) return { title: trimmed }
+
+  const dash = cleaned.indexOf(' - ')
+  if (dash < 0) return { title: cleaned }
+
+  const artist = cleaned.slice(0, dash).trim()
+  const title = cleaned.slice(dash + 3).trim()
+  return title ? { artist: artist || undefined, title } : { title: cleaned }
+}
+
 export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now()) {
+  const { artist, title } = splitSongName(songInfo.name)
   const useCover = Boolean(songInfo.beatmapsetId) && songInfo.coverAvailable !== false
   const assets: Record<string, string> = useCover
     ? {
         large_image: `https://assets.ppy.sh/beatmaps/${songInfo.beatmapsetId}/covers/list@2x.jpg`,
-        large_text: songInfo.name
+        large_text: title
       }
     : { large_image: 'image1', large_text: 'osu!' }
 
@@ -48,8 +72,8 @@ export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now(
 
   const activity: any = {
     type: ACTIVITY_TYPE_LISTENING,
-    details: songInfo.name,
-    state: songInfo.videoPlaying ? 'Đang phát video beatmap' : 'Nghe nhạc trong Nericx',
+    details: title,
+    state: artist ?? (songInfo.videoPlaying ? 'Đang phát video beatmap' : 'Nghe nhạc trong Nericx'),
     timestamps: buildTimestamps(songInfo.position, songInfo.duration, now),
     assets,
     instance: false
