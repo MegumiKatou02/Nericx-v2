@@ -2,6 +2,10 @@ export interface DiscordSongInfo {
   name: string
   beatmapsetId?: string
   videoPlaying?: boolean
+  /** Playback position in seconds. */
+  position?: number
+  /** Track length in seconds. */
+  duration?: number
 }
 
 export const VIDEO_BADGE_IMAGE =
@@ -11,22 +15,19 @@ export const VIDEO_BADGE_IMAGE =
 export const ACTIVITY_TYPE_LISTENING = 2
 
 /**
- * Re-sending the presence (video badge on/off) must not restart the elapsed
- * timer, so the start of the current song is reused until the song changes.
- * `reset()` is for when the presence is cleared.
+ * Discord draws the elapsed/total progress bar only when the activity carries
+ * both `start` and `end`. `start` is backdated by the playback position so the
+ * bar matches the audio, not the moment the presence was sent.
  */
-export function createStartTracker() {
-  let last: { name: string; startedAt: number } | undefined
-  return {
-    next(name: string, now: number): number {
-      const start = last && last.name === name ? last.startedAt : now
-      last = { name, startedAt: start }
-      return start
-    },
-    reset(): void {
-      last = undefined
-    }
-  }
+export function buildTimestamps(
+  position: number | undefined,
+  duration: number | undefined,
+  now: number
+): { start: number; end?: number } {
+  const total = duration && duration > 0 ? duration : undefined
+  const pos = Math.max(0, total ? Math.min(position ?? 0, total) : position ?? 0)
+  const start = now - pos * 1000
+  return total ? { start, end: start + total * 1000 } : { start }
 }
 
 export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now()) {
@@ -46,7 +47,7 @@ export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now(
     type: ACTIVITY_TYPE_LISTENING,
     details: songInfo.name,
     state: songInfo.videoPlaying ? 'Đang phát video beatmap' : 'Nghe nhạc trong Nericx',
-    timestamps: { start: now },
+    timestamps: buildTimestamps(songInfo.position, songInfo.duration, now),
     assets,
     instance: false
   }

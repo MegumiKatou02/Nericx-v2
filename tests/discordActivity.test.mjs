@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildActivity, VIDEO_BADGE_IMAGE, createStartTracker } from '../src/electron/discordActivity.ts'
+import { buildActivity, VIDEO_BADGE_IMAGE } from '../src/electron/discordActivity.ts'
 
 const NOW = 1762800000000
 
@@ -60,21 +60,48 @@ test('badge image is an absolute https url', () => {
   assert.match(VIDEO_BADGE_IMAGE, /^https:\/\//)
 })
 
-test('start time is kept across updates of the same song', () => {
-  const tracker = createStartTracker()
-  assert.equal(tracker.next('A - B', 1000), 1000)
-  assert.equal(tracker.next('A - B', 9000), 1000)
+test('elapsed and total timestamps make Discord draw the progress bar', () => {
+  const activity = buildActivity({ name: 'A - B', position: 164, duration: 246 }, NOW)
+  assert.equal(activity.timestamps.start, NOW - 164_000)
+  assert.equal(activity.timestamps.end, NOW - 164_000 + 246_000)
 })
 
-test('start time resets when the song changes', () => {
-  const tracker = createStartTracker()
-  tracker.next('A - B', 1000)
-  assert.equal(tracker.next('C - D', 9000), 9000)
+test('position past the end is clamped so Discord never shows a negative bar', () => {
+  const activity = buildActivity({ name: 'A - B', position: 300, duration: 246 }, NOW)
+  assert.equal(activity.timestamps.start, NOW - 246_000)
+  assert.equal(activity.timestamps.end, NOW)
 })
 
-test('start time restarts after the presence is cleared', () => {
-  const tracker = createStartTracker()
-  tracker.next('A - B', 1000)
-  tracker.reset()
-  assert.equal(tracker.next('A - B', 9000), 9000)
+test('negative position is clamped to the beginning', () => {
+  const activity = buildActivity({ name: 'A - B', position: -5, duration: 246 }, NOW)
+  assert.equal(activity.timestamps.start, NOW)
+})
+
+test('unknown duration falls back to the elapsed-only timer', () => {
+  const activity = buildActivity({ name: 'A - B', position: 10 }, NOW)
+  assert.equal(activity.timestamps.start, NOW - 10_000)
+  assert.equal(activity.timestamps.end, undefined)
+})
+
+test('zero duration falls back to the elapsed-only timer', () => {
+  const activity = buildActivity({ name: 'A - B', position: 0, duration: 0 }, NOW)
+  assert.equal(activity.timestamps.end, undefined)
+})
+
+test('re-sending the badge mid-song keeps the same bar origin', () => {
+  const NOW = 1762800000000
+  const plain = buildActivity({ name: 'A - B', position: 100, duration: 200 }, NOW)
+  const withVideo = buildActivity(
+    { name: 'A - B', position: 100, duration: 200, videoPlaying: true },
+    NOW
+  )
+  assert.equal(withVideo.timestamps.start, plain.timestamps.start)
+  assert.equal(withVideo.timestamps.end, plain.timestamps.end)
+})
+
+test('timestamps track the position instead of the presence update time', () => {
+  const atStart = buildActivity({ name: 'A - B', position: 0, duration: 200 }, 5000)
+  const later = buildActivity({ name: 'A - B', position: 60, duration: 200 }, 9000)
+  assert.equal(atStart.timestamps.start, 5000)
+  assert.equal(later.timestamps.start, 9000 - 60_000)
 })

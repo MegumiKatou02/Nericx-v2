@@ -1,6 +1,6 @@
 import { Client } from 'discord-rpc'
 import { ipcMain } from 'electron'
-import { buildActivity, createStartTracker, type DiscordSongInfo } from './discordActivity.js'
+import { buildActivity, type DiscordSongInfo } from './discordActivity.js'
 
 let client: Client | null = null
 const clientId = '1353779001147003033'
@@ -24,30 +24,24 @@ async function initDiscord(): Promise<{ success: boolean; message?: string }> {
   }
 }
 
-const tracker = createStartTracker()
-
 async function updateStatus(songInfo: DiscordSongInfo) {
   if (!client) return
-
-  const start = tracker.next(songInfo.name, Date.now())
 
   // `setActivity()` drops `type`, so the presence would always render as Playing (0).
   // Sending SET_ACTIVITY ourselves is the only way to get Listening (2).
   await (client as any).request('SET_ACTIVITY', {
     pid: process.pid,
-    activity: buildActivity(songInfo, start)
+    activity: buildActivity(songInfo)
   })
 }
 
 async function clearStatus() {
-  tracker.reset()
   if (client) {
     await client.clearActivity()
   }
 }
 
 async function destroy() {
-  tracker.reset()
   if (client) {
     await client.destroy()
     client = null

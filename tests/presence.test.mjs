@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isVideoPlaying } from '../src/ui/presence.ts'
+import { isVideoPlaying, playbackWindow } from '../src/ui/presence.ts'
 
 const current = { path: 'a.mp3', video: 'a.mp4' }
 const other = { path: 'b.mp3', video: 'b.mp4' }
@@ -28,4 +28,20 @@ test('badge is on when the selected song is the one playing', () => {
 
 test('badge is off when nothing is playing', () => {
   assert.equal(isVideoPlaying({ current: null, selected: other, hasVideoUrl: true }), false)
+})
+
+test('playing with a known length reports both position and duration', () => {
+  assert.deepEqual(playbackWindow(true, 164, 246), { position: 164, duration: 246 })
+})
+
+test('paused reports no timing so Discord does not keep counting', () => {
+  assert.deepEqual(playbackWindow(false, 164, 246), {})
+})
+
+test('missing duration reports position only', () => {
+  assert.deepEqual(playbackWindow(true, 12, 0), { position: 12 })
+})
+
+test('position beyond the length is clamped', () => {
+  assert.deepEqual(playbackWindow(true, 300, 246), { position: 246, duration: 246 })
 })

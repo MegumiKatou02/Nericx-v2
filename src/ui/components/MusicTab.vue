@@ -320,7 +320,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
-import { isVideoPlaying as isVideoPlayingForPresence } from '../presence.js'
+import { isVideoPlaying as isVideoPlayingForPresence, playbackWindow } from '../presence.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 
@@ -1353,11 +1353,15 @@ const updateDiscordStatus = async () => {
   try {
     const { artist, title } = getCachedSongDetails(currentSong.value.name)
     const formattedName = `${artist} - ${title}`
-    
+    // Metadata duration is known immediately; the audio element reports it a
+    // frame later, so Discord gets the bar on the very first update.
+    const songDuration = duration.value || currentSong.value.duration || 0
+
     await window.electronAPI.discordUpdateStatus({
       name: formattedName,
       beatmapsetId: currentSong.value.beatmapsetId,
-      videoPlaying: isVideoPlaying.value
+      videoPlaying: isVideoPlaying.value,
+      ...playbackWindow(isPlaying.value, currentTime.value, songDuration)
     })
   } catch (error) {
     console.error('Failed to update Discord status:', error)
@@ -1374,9 +1378,10 @@ const clearDiscordStatus = async () => {
   }
 }
 
-// Presence must follow the video badge without replaying the song: toggling the
-// video setting, selecting another song, or pausing all change isVideoPlaying.
-watch(isVideoPlaying, () => {
+// Presence must follow playback without replaying the song: the video badge,
+// pausing/resuming, and selecting another song all change what Discord shows.
+// (Seeking is covered too, since Discord's bar is anchored to the position we send.)
+watch([isVideoPlaying, isPlaying], () => {
   if (discordEnabled.value && currentSong.value) {
     updateDiscordStatus()
   }
@@ -1449,6 +1454,11 @@ const toggleMute = () => {
 const onSeek = (event: Event) => {
   const value = +(event.target as HTMLInputElement).value
   audioPlayer.seek(value / 100)
+  currentTime.value = audioPlayer.getCurrentTime()
+
+  if (isPlaying.value) {
+    updateDiscordStatus()
+  }
 }
 
 const formatTime = (seconds: number) => {
