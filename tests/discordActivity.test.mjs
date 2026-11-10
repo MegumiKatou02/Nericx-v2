@@ -17,9 +17,9 @@ test('large image falls back to the app asset when there is no beatmapset', () =
 })
 
 test('large image uses the beatmap cover and adds buttons when a beatmapset exists', () => {
-  const activity = buildActivity({ name: 'A - B', beatmapsetId: '123' }, NOW)
+  const activity = buildActivity({ name: 'Artist - Song', beatmapsetId: '123' }, NOW)
   assert.equal(activity.assets.large_image, 'https://assets.ppy.sh/beatmaps/123/covers/list@2x.jpg')
-  assert.equal(activity.assets.large_text, 'B')
+  assert.equal(activity.assets.large_text, 'Song')
   assert.deepEqual(activity.buttons, [
     { label: 'Xem Beatmap', url: 'https://osu.ppy.sh/beatmapsets/123' },
     { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
@@ -136,9 +136,9 @@ test('artist prefix moves to the state line and the title loses its suffix', () 
 })
 
 test('duplicate-file suffix is stripped along with the no-video tag', () => {
-  const activity = buildActivity({ name: 'A - B (1) [no video]' }, NOW)
-  assert.equal(activity.details, 'B')
-  assert.equal(activity.state, 'A')
+  const activity = buildActivity({ name: 'Artist - Song (1) [no video]' }, NOW)
+  assert.equal(activity.details, 'Song')
+  assert.equal(activity.state, 'Artist')
 })
 
 test('a name without a dash is the title and keeps the generic state', () => {
@@ -149,20 +149,51 @@ test('a name without a dash is the title and keeps the generic state', () => {
 })
 
 test('only the first dash splits artist from title', () => {
-  const activity = buildActivity({ name: 'A - B - C' }, NOW)
-  assert.equal(activity.details, 'B - C')
-  assert.equal(activity.state, 'A')
+  const activity = buildActivity({ name: 'Artist - Song - Remix' }, NOW)
+  assert.equal(activity.details, 'Song - Remix')
+  assert.equal(activity.state, 'Artist')
 })
 
 test('a title that becomes empty after stripping falls back to the raw name', () => {
-  const activity = buildActivity({ name: 'A - [no video]' }, NOW)
-  assert.equal(activity.details, 'A - [no video]')
+  const activity = buildActivity({ name: 'Artist - [no video]' }, NOW)
+  assert.equal(activity.details, 'Artist - [no video]')
   assert.equal(activity.state, 'Nghe nhạc trong Nericx')
 })
 
 test('video plus a known artist keeps the badge and shows the artist', () => {
-  const activity = buildActivity({ name: 'A - B', videoPlaying: true }, NOW)
+  const activity = buildActivity({ name: 'Artist - Song', videoPlaying: true }, NOW)
   assert.equal(activity.assets.small_image, VIDEO_BADGE_IMAGE)
   assert.equal(activity.assets.small_text, 'Đang phát video')
-  assert.equal(activity.state, 'A')
+  assert.equal(activity.state, 'Artist')
+})
+
+test('a one-character title is padded so Discord does not reject the activity', () => {
+  const activity = buildActivity({ name: 'Kendrick Lamar - i' }, NOW)
+  assert.equal(activity.details, 'i\u200b')
+  assert.equal(activity.assets.large_text, 'osu!')
+})
+
+test('a one-character artist is padded so Discord does not reject the activity', () => {
+  const activity = buildActivity({ name: 'M - Pop Muzik' }, NOW)
+  assert.equal(activity.state, 'M\u200b')
+  assert.equal(activity.details, 'Pop Muzik')
+})
+
+test('an osu! duplicate-copy suffix is stripped from the title', () => {
+  const activity = buildActivity({ name: 'Artist - Song - Copy (1)' }, NOW)
+  assert.equal(activity.details, 'Song')
+  assert.equal(activity.state, 'Artist')
+})
+
+test('a year in parentheses is part of the title, not a duplicate counter', () => {
+  const activity = buildActivity({ name: 'Artist - Song (2019)' }, NOW)
+  assert.equal(activity.details, 'Song (2019)')
+})
+
+test('an over-long title and artist are cut to Discord 128-character limit', () => {
+  const long = 'x'.repeat(200)
+  const activity = buildActivity({ name: `${long} - ${long}` }, NOW)
+  assert.equal(activity.details.length, 128)
+  assert.equal(activity.state.length, 128)
+  assert.equal(activity.details, 'x'.repeat(128))
 })

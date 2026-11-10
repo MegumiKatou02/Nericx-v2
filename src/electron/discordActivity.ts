@@ -32,7 +32,10 @@ export function buildTimestamps(
   return total ? { start, end: start + total * 1000 } : { start }
 }
 
-const NOISE_SUFFIX = /\s*(?:\[no\s*video\]|\(\d+\))\s*$/i
+const MAX_FIELD_CHARS = 128
+
+/** osu! tacks file-level noise onto folder names; none of it belongs in a presence. */
+const NOISE_SUFFIX = /\s*(?:\[no\s*video\]|[-–]\s*copy(?:\s*\(\d+\))?|\(\d{1,2}\))\s*$/i
 
 /**
  * osu! folder names carry the artist prefix and file-noise suffixes.
@@ -44,8 +47,9 @@ export function splitSongName(raw: string): { artist?: string; title: string } {
   while (NOISE_SUFFIX.test(cleaned)) {
     cleaned = cleaned.replace(NOISE_SUFFIX, '').trim()
   }
-  // Suffixes ate the title (`A - [no video]`): showing the raw name beats a stub.
-  if (!cleaned || cleaned.endsWith('-')) return { title: trimmed }
+  // A strip that ate the title (`A - [no video]`) leaves the raw folder name as
+  // the least-bad label.
+  if (!cleaned || cleaned.endsWith('-')) return { title: trimmed || 'Unknown' }
 
   const dash = cleaned.indexOf(' - ')
   if (dash < 0) return { title: cleaned }
@@ -55,13 +59,24 @@ export function splitSongName(raw: string): { artist?: string; title: string } {
   return title ? { artist: artist || undefined, title } : { title: cleaned }
 }
 
+/**
+ * Discord drops the whole activity when a field falls outside 2-128 characters,
+ * so both extremes are fitted before the presence is sent. A one-character name
+ * (`i`, `M`, `光`) is real, so it gets an invisible pad instead of a fallback.
+ */
+function fitField(text: string): string {
+  const chars = Array.from(text)
+  if (chars.length > MAX_FIELD_CHARS) return chars.slice(0, MAX_FIELD_CHARS).join('').trim()
+  return chars.length === 1 ? text + '\u200b' : text
+}
+
 export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now()) {
   const { artist, title } = splitSongName(songInfo.name)
   const useCover = Boolean(songInfo.beatmapsetId) && songInfo.coverAvailable !== false
   const assets: Record<string, string> = useCover
     ? {
         large_image: `https://assets.ppy.sh/beatmaps/${songInfo.beatmapsetId}/covers/list@2x.jpg`,
-        large_text: title
+        large_text: fitField(title)
       }
     : { large_image: 'image1', large_text: 'osu!' }
 
@@ -72,8 +87,10 @@ export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now(
 
   const activity: any = {
     type: ACTIVITY_TYPE_LISTENING,
-    details: title,
-    state: artist ?? (songInfo.videoPlaying ? 'Đang phát video beatmap' : 'Nghe nhạc trong Nericx'),
+    details: fitField(title),
+    state: fitField(
+      artist ?? (songInfo.videoPlaying ? 'Đang phát video beatmap' : 'Nghe nhạc trong Nericx')
+    ),
     timestamps: buildTimestamps(songInfo.position, songInfo.duration, now),
     assets,
     instance: false
