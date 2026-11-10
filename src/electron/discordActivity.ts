@@ -6,6 +6,8 @@ export interface DiscordSongInfo {
   position?: number
   /** Track length in seconds. */
   duration?: number
+  /** Kết quả kiểm tra cover; `false` buộc dùng asset `image1`. */
+  coverAvailable?: boolean
 }
 
 export const VIDEO_BADGE_IMAGE =
@@ -31,7 +33,8 @@ export function buildTimestamps(
 }
 
 export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now()) {
-  const assets: Record<string, string> = songInfo.beatmapsetId
+  const useCover = Boolean(songInfo.beatmapsetId) && songInfo.coverAvailable !== false
+  const assets: Record<string, string> = useCover
     ? {
         large_image: `https://assets.ppy.sh/beatmaps/${songInfo.beatmapsetId}/covers/list@2x.jpg`,
         large_text: songInfo.name

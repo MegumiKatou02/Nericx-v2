@@ -105,3 +105,22 @@ test('timestamps track the position instead of the presence update time', () => 
   assert.equal(atStart.timestamps.start, 5000)
   assert.equal(later.timestamps.start, 9000 - 60_000)
 })
+
+test('a beatmapset without a usable cover falls back to the app asset', () => {
+  const activity = buildActivity({ name: 'A - B', beatmapsetId: '1000', coverAvailable: false }, NOW)
+  assert.equal(activity.assets.large_image, 'image1')
+  assert.equal(activity.assets.large_text, 'osu!')
+})
+
+test('a beatmapset without a usable cover still links to the beatmap', () => {
+  const activity = buildActivity({ name: 'A - B', beatmapsetId: '1000', coverAvailable: false }, NOW)
+  assert.deepEqual(activity.buttons, [
+    { label: 'Xem Beatmap', url: 'https://osu.ppy.sh/beatmapsets/1000' },
+    { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
+  ])
+})
+
+test('coverAvailable true keeps the square cover', () => {
+  const activity = buildActivity({ name: 'A - B', beatmapsetId: '320118', coverAvailable: true }, NOW)
+  assert.equal(activity.assets.large_image, 'https://assets.ppy.sh/beatmaps/320118/covers/list@2x.jpg')
+})
