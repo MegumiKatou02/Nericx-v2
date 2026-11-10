@@ -33,7 +33,7 @@ export function buildTimestamps(
 export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now()) {
   const assets: Record<string, string> = songInfo.beatmapsetId
     ? {
-        large_image: `https://assets.ppy.sh/beatmaps/${songInfo.beatmapsetId}/covers/cover.jpg`,
+        large_image: `https://assets.ppy.sh/beatmaps/${songInfo.beatmapsetId}/covers/list@2x.jpg`,
         large_text: songInfo.name
       }
     : { large_image: 'image1', large_text: 'osu!' }
