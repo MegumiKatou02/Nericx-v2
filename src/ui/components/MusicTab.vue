@@ -323,6 +323,7 @@ import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, wa
 import type { Song } from '../../electron/type.js'
 import { isVideoPlaying as isVideoPlayingForPresence, playbackWindow } from '../presence.js'
 import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
+import { createCoalescingWriter } from '../coalesce.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 
@@ -1440,12 +1441,17 @@ const onVolumeChange = (event: Event) => {
   }
 }
 
-const persistVolume = async () => {
-  try {
-    await window.electronAPI.setConfig(VOLUME_CONFIG_KEY, volume.value.toString())
-  } catch (error) {
-    console.error('Error saving volume:', error)
+const persistVolumeValue = createCoalescingWriter(async (value: number) => {
+  const saved = await window.electronAPI.setConfig(VOLUME_CONFIG_KEY, value.toString())
+  if (!saved) {
+    console.warn('Volume was not saved; it will revert on next launch')
   }
+})
+
+const persistVolume = () => {
+  persistVolumeValue(volume.value).catch(error => {
+    console.error('Error saving volume:', error)
+  })
 }
 
 const toggleMute = () => {

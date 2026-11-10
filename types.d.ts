@@ -9,7 +9,7 @@ declare global {
       outputPath: string
       selectedOptions: string[]
     }): Promise<{ success: boolean; message: string }>
-    setConfig(key: string, value: string): Promise<void>
+    setConfig(key: string, value: string): Promise<boolean>
     getConfig(key: string): Promise<string>
     
     saveFile(sourcePath: string, fileName: string): Promise<{ success: boolean; message: string }>
