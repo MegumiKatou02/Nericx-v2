@@ -58,7 +58,9 @@ restart, and the buttons are hard-coded in the main process.
 - `parseStoredBoolean(raw, fallback)` — `config` rows are TEXT and `getConfig`
   returns `null` for a missing key, so absent/garbage values fall back.
 - `discordSettings` — module-level `reactive` object, the single source of truth.
-- `loadDiscordSettings()` — reads the three keys once.
+- `loadDiscordSettings()` — reads the three keys.
+- `ensureDiscordSettingsLoaded()` — memoises that read; both tabs mount at startup
+  and a second read could overwrite a value the other tab just changed.
 - `setDiscordEnabled/BeatmapButton/GithubButton(value)` — update the store then
   persist.
 
@@ -73,14 +75,19 @@ restart, and the buttons are hard-coded in the main process.
 
 - Replaces the local `discordEnabled` ref with a computed over
   `discordSettings.enabled`.
-- `loadSongs()` no longer starts Discord (it is skipped on a warm cache anyway);
-  `onMounted` loads the settings, syncs the client once, and only then arms the
-  watcher — otherwise writing the stored value during mount would look like a
-  user toggle and connect twice.
+- `loadSongs()` no longer starts Discord (it is skipped on a warm cache anyway).
+  `onMounted` loads the settings, fires the first transition without awaiting it,
+  then loads the music list — Discord's RPC handshake can stall for seconds and
+  must not gate the library.
 - A `watch` on `discordSettings.enabled` starts or stops the client, so toggling in
   Settings and toggling in the music tab run the same code path.
 - `toggleDiscord()` flips the persisted setting and returns; the loading/cooldown
   guard stays local to it, since the client work now happens in the watcher.
+- The client transitions go through `createStateTransition`
+  (`src/ui/discordClient.ts`): one transition runs at a time and requests made
+  meanwhile collapse to the newest state. Without it a toggle in the Settings tab
+  (which has no per-click guard) could interleave `init` and `destroy`, leaving
+  the main process with a destroyed client, or be lost during the startup login.
 - `updateDiscordStatus()` forwards the two button flags.
 - A `watch` on the two button flags re-sends the presence so a toggle shows up
   immediately.
