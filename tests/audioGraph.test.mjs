@@ -48,6 +48,9 @@ test('one graph is built for the whole lifetime', () => {
   graph.setNormalization(true)
   graph.setNormalization(false)
   assert.equal(context.created.length, 3)
+
+  const source = context.created.find(n => n.name === 'source')
+  assert.deepEqual(source.connections, ['gain'])
 })
 
 test('without normalization the source feeds gain directly', () => {
@@ -125,4 +128,19 @@ test('dispose takes the graph apart and later calls are harmless', () => {
   for (const created of context.created) {
     assert.deepEqual(created.connections, [])
   }
+
+  const gain = context.created.find(n => n.name === 'gain')
+  assert.equal(gain.gain.value, 0.25, 'setVolume after dispose must not touch the gain')
+})
+
+test('the compressor keeps the settings the player was tuned with', () => {
+  const context = fakeContext()
+  createAudioGraph(context, {}, 0.5)
+
+  const compressor = context.created.find(n => n.name === 'compressor')
+  assert.equal(compressor.threshold.value, -18)
+  assert.equal(compressor.knee.value, 15)
+  assert.equal(compressor.ratio.value, 3)
+  assert.equal(compressor.attack.value, 0.008)
+  assert.equal(compressor.release.value, 0.15)
 })
