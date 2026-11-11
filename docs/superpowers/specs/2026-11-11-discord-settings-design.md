@@ -71,13 +71,16 @@ restart, and the buttons are hard-coded in the main process.
 
 `src/ui/components/MusicTab.vue`
 
-- Replaces the local `discordEnabled` ref with `discordSettings.enabled`.
+- Replaces the local `discordEnabled` ref with a computed over
+  `discordSettings.enabled`.
 - `loadSongs()` no longer starts Discord (it is skipped on a warm cache anyway);
-  `onMounted` loads the settings, then syncs the client once.
+  `onMounted` loads the settings, syncs the client once, and only then arms the
+  watcher — otherwise writing the stored value during mount would look like a
+  user toggle and connect twice.
 - A `watch` on `discordSettings.enabled` starts or stops the client, so toggling in
   Settings and toggling in the music tab run the same code path.
-- `toggleDiscord()` now only flips the persisted setting (the watcher handles the
-  client); loading/cooldown UI is unchanged.
+- `toggleDiscord()` flips the persisted setting and returns; the loading/cooldown
+  guard stays local to it, since the client work now happens in the watcher.
 - `updateDiscordStatus()` forwards the two button flags.
 - A `watch` on the two button flags re-sends the presence so a toggle shows up
   immediately.
