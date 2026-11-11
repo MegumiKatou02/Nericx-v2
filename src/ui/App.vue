@@ -6,6 +6,7 @@ import MusicTab from './components/MusicTab.vue'
 import SettingTab from './components/SettingTab.vue'
 import KeyboardTab from './components/KeyboardTab.vue'
 import { initLocale, t } from './i18n.js'
+import { fileUrlForPath } from './fileUrl.js'
 import './styles/theme.css'
 
 const fontAwesome = document.createElement('link')
@@ -572,7 +573,7 @@ onUnmounted(() => {
     >
       <div class="mini-player-content" @click="handleMiniPlayerClick">
         <div class="song-cover" v-if="currentSong?.image">
-          <img :src="'file://' + currentSong.image" :alt="currentSong.name" />
+          <img :src="fileUrlForPath(currentSong.image)" :alt="currentSong.name" />
         </div>
         <div class="song-cover placeholder" v-else>
           <i class="fas fa-music"></i>

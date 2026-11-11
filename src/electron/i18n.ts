@@ -262,8 +262,6 @@ const en = {
   'keyboard.tips.searchDesc.strong': 'Ctrl + K',
   'keyboard.tips.searchDesc.after': ' anywhere to search your music immediately',
 
-  'discord.videoBadge': 'Video playing',
-  'discord.videoState': 'Playing a beatmap video',
   'discord.listeningState': 'Listening in Nericx',
   'discord.beatmapButton': 'View Beatmap',
   'discord.connectingFailed': 'Could not connect to Discord',
@@ -522,8 +520,6 @@ const vi: Record<MessageKey, string> = {
   'keyboard.tips.searchDesc.strong': 'Ctrl + K',
   'keyboard.tips.searchDesc.after': ' từ bất kỳ đâu để tìm kiếm nhạc ngay lập tức',
 
-  'discord.videoBadge': 'Đang phát video',
-  'discord.videoState': 'Đang phát video beatmap',
   'discord.listeningState': 'Nghe nhạc trong Nericx',
   'discord.beatmapButton': 'Xem Beatmap',
   'discord.connectingFailed': 'Không thể kết nối với Discord',
@@ -779,8 +775,6 @@ const ja: Record<MessageKey, string> = {
   'keyboard.tips.searchDesc.strong': 'Ctrl + K',
   'keyboard.tips.searchDesc.after': ' をどこでも押すとすぐに音楽を検索できます',
 
-  'discord.videoBadge': '動画を再生中',
-  'discord.videoState': 'ビートマップ動画を再生中',
   'discord.listeningState': 'Nericx で音楽を再生中',
   'discord.beatmapButton': 'ビートマップを見る',
   'discord.connectingFailed': 'Discord に接続できませんでした',

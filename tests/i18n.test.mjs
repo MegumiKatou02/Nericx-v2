@@ -70,10 +70,6 @@ test('Discord presence follows the requested locale', () => {
   assert.equal(vietnamese.state, 'Nghe nhạc trong Nericx')
   assert.equal(japanese.state, 'Nericx で音楽を再生中')
 
-  const withVideo = buildActivity({ name: 'Song', videoPlaying: true, locale: 'ja' }, NOW)
-  assert.equal(withVideo.state, 'ビートマップ動画を再生中')
-  assert.equal(withVideo.assets.small_text, '動画を再生中')
-
   const buttons = buildActivity({ name: 'Song', beatmapsetId: '1', locale: 'vi' }, NOW)
   assert.equal(buttons.buttons[0].label, 'Xem Beatmap')
 })

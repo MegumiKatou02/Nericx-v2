@@ -305,6 +305,7 @@
     <ImageViewer 
       :is-visible="showImageViewer" 
       :image-url="currentImageUrl"
+      :image-path="currentImagePath"
       :image-name="currentImageName"
       @close="closeImageViewer"
     />
@@ -321,7 +322,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
-import { isVideoPlaying as isVideoPlayingForPresence, playbackWindow } from '../presence.js'
+import { playbackWindow } from '../presence.js'
 import { videoUrlFor } from '../videoSource.js'
 import { createAudioGraph, type AudioGraph, type AudioGraphContext } from '../audioGraph.js'
 import { fileUrlForPath } from '../fileUrl.js'
@@ -897,7 +898,7 @@ const formattedDuration = computed(() => formatTime(duration.value))
 const currentCoverImage = computed(() => {
   const song = selectedSong.value || currentSong.value
   if (!currentVideoUrl.value && song?.image) {
-    return 'file://' + song.image
+    return fileUrlForPath(song.image)
   }
   return null
 })
@@ -912,14 +913,6 @@ const currentVideoUrl = computed(() => videoUrlFor({
   current: currentSong.value,
   selected: selectedSong.value,
   isPlaying: isPlaying.value
-}))
-
-// Video counts as "playing" only when the rendered video belongs to the song
-// that is actually playing, so browsing other songs never lies in the presence.
-const isVideoPlaying = computed(() => isVideoPlayingForPresence({
-  current: currentSong.value,
-  selected: selectedSong.value,
-  hasVideoUrl: !!currentVideoUrl.value
 }))
 
 const sortedSongs = computed(() => {
@@ -1195,8 +1188,6 @@ const playSong = async (song: Song) => {
     }
     progressTicker.stop()
     
-    await new Promise(resolve => setTimeout(resolve, 100))
-    
     const requestId = ++playRequestId
     const result = await audioPlayer.play(song)
     if (requestId !== playRequestId) return
@@ -1379,7 +1370,6 @@ const updateDiscordStatus = async () => {
     await window.electronAPI.discordUpdateStatus({
       name: currentSong.value.name,
       beatmapsetId: currentSong.value.beatmapsetId,
-      videoPlaying: isVideoPlaying.value,
       beatmapButton: discordSettings.beatmapButton,
       githubButton: discordSettings.githubButton,
       ...playbackWindow(isPlaying.value, currentTime.value, songDuration)
@@ -1399,10 +1389,10 @@ const clearDiscordStatus = async () => {
   }
 }
 
-// Presence must follow playback without replaying the song: the video badge,
-// pausing/resuming, and selecting another song all change what Discord shows.
+// Discord has no paused state, so pausing must clear the timestamps and
+// resuming must re-anchor them; playing a new song is covered by `playSong`.
 // (Seeking is covered too, since Discord's bar is anchored to the position we send.)
-watch([isVideoPlaying, isPlaying], () => {
+watch(isPlaying, () => {
   if (discordEnabled.value && currentSong.value) {
     updateDiscordStatus()
   }
@@ -1555,12 +1545,15 @@ const formatTime = (seconds: number) => {
 
 const showImageViewer = ref(false)
 const currentImageUrl = ref('')
+const currentImagePath = ref('')
 const currentImageName = ref('')
 
 const showFullImage = () => {
   const song = selectedSong.value || currentSong.value
   if (song?.image) {
-    currentImageUrl.value = 'file://' + song.image
+    currentImageUrl.value = fileUrlForPath(song.image)
+    // `currentImageUrl` is a URL; Copy/Save need the raw path they hand to fs.
+    currentImagePath.value = song.image
     currentImageName.value = song.name + ' - ' + t('music.cover.suffix')
     showImageViewer.value = true
   }
@@ -1569,6 +1562,7 @@ const showFullImage = () => {
 const closeImageViewer = () => {
   showImageViewer.value = false
   currentImageUrl.value = ''
+  currentImagePath.value = ''
   currentImageName.value = ''
 }
 
@@ -2116,7 +2110,8 @@ const handleVideoLoaded = () => {
 const showFullVideo = () => {
   const song = selectedSong.value || currentSong.value
   if (song?.video && videoEnabled.value) {
-    currentImageUrl.value = 'file://' + song.video
+    currentImageUrl.value = fileUrlForPath(song.video)
+    currentImagePath.value = song.video
     currentImageName.value = song.name + ' - ' + t('music.video.suffix')
     showImageViewer.value = true
   }

@@ -75,6 +75,8 @@ import { t } from '../i18n.js'
 interface Props {
   isVisible: boolean
   imageUrl: string
+  /** Raw filesystem path. `imageUrl` is percent-encoded and cannot be handed to fs. */
+  imagePath: string
   imageName: string
 }
 
@@ -159,8 +161,7 @@ const endDrag = () => {
 
 const copyImage = async () => {
   try {
-    const filePath = props.imageUrl.replace('file:///', '').replace('file://', '')
-    const result = await window.electronAPI.copyFile(filePath)
+    const result = await window.electronAPI.copyFile(props.imagePath)
     
     if (result.success) {
       // console.log(result.message)
@@ -174,13 +175,12 @@ const copyImage = async () => {
 
 const saveImage = async () => {
   try {
-    const filePath = props.imageUrl.replace('file:///', '').replace('file://', '')
     // imageName is always "<song name> - <suffix>", so dropping the last
     // segment keeps the base name in every language.
     const baseName = props.imageName.split(' - ').slice(0, -1).join(' - ') || props.imageName
     const fileName = baseName + '.jpg'
     
-    const result = await window.electronAPI.saveFile(filePath, fileName)
+    const result = await window.electronAPI.saveFile(props.imagePath, fileName)
     
     if (result.success) {
       // console.log(result.message)

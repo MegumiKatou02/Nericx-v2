@@ -3,7 +3,6 @@ import { translate, type Locale } from './i18n.ts'
 export interface DiscordSongInfo {
   name: string
   beatmapsetId?: string
-  videoPlaying?: boolean
   /** Playback position in seconds. */
   position?: number
   /** Track length in seconds. */
@@ -17,9 +16,6 @@ export interface DiscordSongInfo {
   /** Ngôn ngữ cho phần chữ do app sinh ra (state, nhãn nút). */
   locale?: Locale
 }
-
-export const VIDEO_BADGE_IMAGE =
-  'https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/1f4f9.png'
 
 /** Discord activity type for "Listening to ..." — RPC accepts 0, 2, 3, 5 only. */
 export const ACTIVITY_TYPE_LISTENING = 2
@@ -88,21 +84,10 @@ export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now(
     ? { large_image: `https://assets.ppy.sh/beatmaps/${songInfo.beatmapsetId}/covers/list@2x.jpg` }
     : { large_image: 'image1', large_text: 'osu!' }
 
-  if (songInfo.videoPlaying) {
-    assets.small_image = VIDEO_BADGE_IMAGE
-    assets.small_text = translate(locale, 'discord.videoBadge')
-  }
-
   const activity: any = {
     type: ACTIVITY_TYPE_LISTENING,
     details: fitField(title),
-    state: fitField(
-      artist ??
-        translate(
-          locale,
-          songInfo.videoPlaying ? 'discord.videoState' : 'discord.listeningState'
-        )
-    ),
+    state: fitField(artist ?? translate(locale, 'discord.listeningState')),
     timestamps: buildTimestamps(songInfo.position, songInfo.duration, now),
     assets,
     instance: false

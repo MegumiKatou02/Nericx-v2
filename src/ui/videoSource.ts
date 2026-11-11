@@ -5,6 +5,8 @@
  * was listening to and kept its decoder busy.
  */
 
+import { fileUrlForPath } from './fileUrl.ts'
+
 export interface VideoSourceSong {
   path: string
   video?: string
@@ -28,5 +30,5 @@ export function videoUrlFor({ videoEnabled, current, selected, isPlaying }: Vide
   if (!current?.video) return null
   // Nothing selected means the player is following the playing track.
   if (selected !== null && selected.path !== current.path) return null
-  return 'file://' + current.video
+  return fileUrlForPath(current.video)
 }
