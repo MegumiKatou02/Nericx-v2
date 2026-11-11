@@ -528,9 +528,11 @@ class AudioPlayer {
 
   async play(song: Song): Promise<{ success: boolean; message: string }> {
     try {
-      if (!this.audio || !this.graph) {
-        // `destroy()` closed the context and dropped the element; AudioPlayer is a
-        // module singleton, so a remount has to rebuild the chain.
+      if (!this.audio) {
+        // Only `destroy()` drops the element, so a missing element means the chain
+        // was torn down (AudioPlayer is a module singleton, so a remount has to
+        // rebuild it). A null `graph` with a live element is the no-Web-Audio
+        // fallback and must not trigger a rebuild per track.
         this.createAudioChain()
       }
       if (this.audioContext && this.audioContext.state === 'suspended') {
