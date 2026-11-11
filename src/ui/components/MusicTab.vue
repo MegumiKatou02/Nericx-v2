@@ -1429,11 +1429,16 @@ const syncDiscordClient = async () => {
   }
 }
 
+// Loading the stored value writes the store, which would otherwise look like a
+// user toggle and start the client a second time.
+let discordReady = false
+
 // Both the music tab button and the settings switch write the same stored
 // setting; this watcher is the single place that starts or stops the client.
 watch(
   () => discordSettings.enabled,
   async (enabled) => {
+    if (!discordReady) return
     isDiscordLoading.value = true
     try {
       if (enabled) {
@@ -1995,6 +2000,7 @@ const handleGlobalClick = (e: MouseEvent) => {
 onMounted(async () => {
   await loadDiscordSettings()
   await syncDiscordClient()
+  discordReady = true
   loadFonts()
   await loadSongs()
   
