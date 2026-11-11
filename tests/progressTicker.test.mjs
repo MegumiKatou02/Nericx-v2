@@ -101,3 +101,69 @@ test('a throwing callback still lets the next tick happen', () => {
   assert.equal(ticks, 2)
   assert.equal(timers.pending.size, 1)
 })
+
+test('stop then start inside the callback leaves one loop', () => {
+  const timers = fakeTimers()
+  let ticks = 0
+  const ticker = createProgressTicker(timers, 250, () => {
+    ticks++
+    if (ticks === 1) {
+      ticker.stop()
+      ticker.start()
+    }
+  })
+
+  ticker.start()
+  timers.fire()
+
+  assert.equal(ticker.running, true)
+  assert.equal(timers.pending.size, 1)
+
+  timers.fire()
+
+  assert.equal(ticks, 2)
+  assert.equal(timers.pending.size, 1)
+})
+
+test('stop before start is a harmless no-op', () => {
+  const timers = fakeTimers()
+  const ticker = createProgressTicker(timers, 250, () => {})
+
+  ticker.stop()
+
+  assert.equal(ticker.running, false)
+  assert.equal(timers.pending.size, 0)
+})
+
+test('start after stop runs again with a single timer', () => {
+  const timers = fakeTimers()
+  let ticks = 0
+  const ticker = createProgressTicker(timers, 250, () => { ticks++ })
+
+  ticker.start()
+  ticker.stop()
+  ticker.start()
+
+  assert.equal(ticker.running, true)
+  assert.equal(timers.pending.size, 1)
+
+  timers.fire()
+
+  assert.equal(ticks, 1)
+  assert.equal(timers.pending.size, 1)
+})
+
+test('stopping inside the callback never clears an undefined handle', () => {
+  const timers = fakeTimers()
+  const ticker = createProgressTicker(timers, 250, () => ticker.stop())
+
+  timers.clear = (handle) => {
+    assert.notEqual(handle, undefined, 'clear() got an undefined handle')
+    timers.pending.delete(handle)
+  }
+  ticker.start()
+  timers.fire()
+
+  assert.equal(ticker.running, false)
+  assert.equal(timers.pending.size, 0)
+})

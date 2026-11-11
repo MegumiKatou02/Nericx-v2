@@ -31,6 +31,7 @@ export function createProgressTicker(
 ): ProgressTicker {
   let handle: unknown
   let running = false
+  let generation = 0
 
   function schedule(): void {
     handle = timers.set(tick, intervalMs)
@@ -39,6 +40,7 @@ export function createProgressTicker(
   function tick(): void {
     // The timer that brought us here has already fired.
     handle = undefined
+    const current = generation
     if (!running) return
 
     try {
@@ -46,22 +48,28 @@ export function createProgressTicker(
     } finally {
       // Rescheduling in `finally` keeps the loop alive when `onTick` throws,
       // while the exception still reaches whoever fired the timer.
-      if (running) schedule()
+      // A stop()/start() pair inside onTick bumps the generation, so this tick
+      // must not schedule a second loop on top of the one start() just created.
+      if (running && current === generation) schedule()
     }
   }
 
   function start(): void {
     if (running) return
     running = true
+    generation++
     schedule()
   }
 
   function stop(): void {
     if (!running) return
     running = false
+    generation++
     const pending = handle
     handle = undefined
-    timers.clear(pending)
+    // During a tick no timer is pending; clearing an undefined handle would
+    // break callers whose `clear` treats undefined as a programming error.
+    if (pending !== undefined) timers.clear(pending)
   }
 
   return {
