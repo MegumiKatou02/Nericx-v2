@@ -1,3 +1,5 @@
+import { translate, type Locale } from './i18n.ts'
+
 export interface DiscordSongInfo {
   name: string
   beatmapsetId?: string
@@ -12,6 +14,8 @@ export interface DiscordSongInfo {
   beatmapButton?: boolean
   /** `false` ẩn nút "Github"; thiếu thì hiện. */
   githubButton?: boolean
+  /** Ngôn ngữ cho phần chữ do app sinh ra (state, nhãn nút). */
+  locale?: Locale
 }
 
 export const VIDEO_BADGE_IMAGE =
@@ -75,6 +79,7 @@ function fitField(text: string): string {
 }
 
 export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now()) {
+  const locale: Locale = songInfo.locale ?? 'en'
   const { artist, title } = splitSongName(songInfo.name)
   const useCover = Boolean(songInfo.beatmapsetId) && songInfo.coverAvailable !== false
   // Discord prints `large_text` as a third line under type 2 (Listening), so a
@@ -85,14 +90,18 @@ export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now(
 
   if (songInfo.videoPlaying) {
     assets.small_image = VIDEO_BADGE_IMAGE
-    assets.small_text = 'Đang phát video'
+    assets.small_text = translate(locale, 'discord.videoBadge')
   }
 
   const activity: any = {
     type: ACTIVITY_TYPE_LISTENING,
     details: fitField(title),
     state: fitField(
-      artist ?? (songInfo.videoPlaying ? 'Đang phát video beatmap' : 'Nghe nhạc trong Nericx')
+      artist ??
+        translate(
+          locale,
+          songInfo.videoPlaying ? 'discord.videoState' : 'discord.listeningState'
+        )
     ),
     timestamps: buildTimestamps(songInfo.position, songInfo.duration, now),
     assets,
@@ -103,7 +112,7 @@ export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now(
     const buttons: Array<{ label: string; url: string }> = []
     if (songInfo.beatmapButton !== false) {
       buttons.push({
-        label: 'Xem Beatmap',
+        label: translate(locale, 'discord.beatmapButton'),
         url: `https://osu.ppy.sh/beatmapsets/${songInfo.beatmapsetId}`
       })
     }

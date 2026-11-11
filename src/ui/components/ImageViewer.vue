@@ -6,23 +6,23 @@
           <span class="image-title">{{ imageName }}</span>
         </div>
         <div class="image-controls">
-          <button v-if="!isVideo" @click="copyImage" class="control-btn" title="Copy ảnh">
+          <button v-if="!isVideo" @click="copyImage" class="control-btn" :title="t('imageViewer.copyImage')">
             <i class="fas fa-copy"></i>
           </button>
-          <button v-if="!isVideo" @click="saveImage" class="control-btn" title="Lưu ảnh">
+          <button v-if="!isVideo" @click="saveImage" class="control-btn" :title="t('imageViewer.saveImage')">
             <i class="fas fa-download"></i>
           </button>
-          <button v-if="!isVideo" @click="zoomOut" class="control-btn" title="Thu nhỏ">
+          <button v-if="!isVideo" @click="zoomOut" class="control-btn" :title="t('imageViewer.zoomOut')">
             <i class="fas fa-search-minus"></i>
           </button>
           <span v-if="!isVideo" class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button v-if="!isVideo" @click="zoomIn" class="control-btn" title="Phóng to">
+          <button v-if="!isVideo" @click="zoomIn" class="control-btn" :title="t('imageViewer.zoomIn')">
             <i class="fas fa-search-plus"></i>
           </button>
-          <button v-if="!isVideo" @click="resetZoom" class="control-btn" title="Kích thước gốc">
+          <button v-if="!isVideo" @click="resetZoom" class="control-btn" :title="t('imageViewer.resetZoom')">
             <i class="fas fa-expand-arrows-alt"></i>
           </button>
-          <button @click="closeViewer" class="control-btn close-btn" title="Đóng">
+          <button @click="closeViewer" class="control-btn close-btn" :title="t('imageViewer.close')">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -37,7 +37,7 @@
           class="viewer-video"
           @error="handleVideoError"
         >
-          Your browser does not support the video tag.
+          {{ t('imageViewer.videoUnsupported') }}
         </video>
         
         <img 
@@ -60,9 +60,9 @@
 
       <div class="image-viewer-footer">
         <span v-if="!isVideo" class="image-size">{{ imageSize }}</span>
-        <span v-if="isVideo" class="video-info">Video Player</span>
-        <span v-if="!isVideo" class="navigation-hint">Scroll để zoom, kéo để di chuyển</span>
-        <span v-if="isVideo" class="navigation-hint">Click controls để điều khiển video</span>
+        <span v-if="isVideo" class="video-info">{{ t('imageViewer.videoPlayer') }}</span>
+        <span v-if="!isVideo" class="navigation-hint">{{ t('imageViewer.scrollHint') }}</span>
+        <span v-if="isVideo" class="navigation-hint">{{ t('imageViewer.controlsHint') }}</span>
       </div>
     </div>
   </div>
@@ -70,6 +70,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { t } from '../i18n.js'
 
 interface Props {
   isVisible: boolean
@@ -174,7 +175,10 @@ const copyImage = async () => {
 const saveImage = async () => {
   try {
     const filePath = props.imageUrl.replace('file:///', '').replace('file://', '')
-    const fileName = props.imageName.replace(' - Cover Image', '') + '.jpg'
+    // imageName is always "<song name> - <suffix>", so dropping the last
+    // segment keeps the base name in every language.
+    const baseName = props.imageName.split(' - ').slice(0, -1).join(' - ') || props.imageName
+    const fileName = baseName + '.jpg'
     
     const result = await window.electronAPI.saveFile(filePath, fileName)
     

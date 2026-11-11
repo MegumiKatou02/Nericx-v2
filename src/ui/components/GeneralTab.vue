@@ -1,28 +1,28 @@
 <template>
   <div class="general-tab">
-    <h2>Cấu hình osu!</h2>
+    <h2>{{ t('general.title') }}</h2>
     
     <div class="form-group">
-      <label>Đường dẫn tới thư mục osu!:</label>
+      <label>{{ t('general.osuPath') }}</label>
       <div class="input-group">
         <input 
           type="text" 
           v-model="osuPath" 
-          placeholder="Chọn thư mục osu!"
+          :placeholder="t('general.placeholder')"
           readonly
         >
-        <button @click="selectOsuFolder" class="btn-select">Chọn thư mục</button>
+        <button @click="selectOsuFolder" class="btn-select">{{ t('general.selectFolder') }}</button>
       </div>
     </div>
 
     <div class="guide" v-if="!osuPath">
-      <h3>Hướng dẫn tìm thư mục osu!</h3>
+      <h3>{{ t('general.guideTitle') }}</h3>
       <ol>
-        <li>Mở osu!</li>
-        <li>Nhấn Alt + Enter để mở cài đặt</li>
-        <li>Chọn tab "General"</li>
-        <li>Kéo xuống mục "Location"</li>
-        <li>Nhấn "Open osu! folder"</li>
+        <li>{{ t('general.guide.step1') }}</li>
+        <li>{{ t('general.guide.step2') }}</li>
+        <li>{{ t('general.guide.step3') }}</li>
+        <li>{{ t('general.guide.step4') }}</li>
+        <li>{{ t('general.guide.step5') }}</li>
       </ol>
     </div>
 
@@ -31,11 +31,11 @@
         <i class="fas fa-check-circle"></i>
       </div>
       <div class="notification-content">
-        <div class="notification-title">Đã lưu cấu hình thành công!</div>
+        <div class="notification-title">{{ t('general.saved') }}</div>
         <div class="notification-subtitle">
-          Nhấn <kbd>Ctrl + R</kbd> hoặc 
-          <button @click="reloadApp" class="reload-btn">nhấn vào đây</button> 
-          để khởi động lại ứng dụng
+          {{ t('general.restart.before') }} <kbd>Ctrl + R</kbd> {{ t('general.restart.middle') }}
+          <button @click="reloadApp" class="reload-btn">{{ t('general.restart.click') }}</button> 
+          {{ t('general.restart.after') }}
         </div>
       </div>
       <button @click="closeNotification" class="close-btn">
@@ -48,13 +48,14 @@
       class="btn-save"
       :disabled="!osuPath"
     >
-      Lưu cấu hình
+      {{ t('general.save') }}
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { t } from '../i18n.js'
 
 const osuPath = ref('')
 const showSuccessNotification = ref(false)

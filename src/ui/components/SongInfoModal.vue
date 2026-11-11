@@ -6,7 +6,7 @@
           <div class="modal-header">
             <h3 class="modal-title">
               <i class="fas fa-info-circle"></i>
-              Thông tin chi tiết
+              {{ t('songInfo.title') }}
             </h3>
             <button class="close-button" @click="closeModal">
               <i class="fas fa-times"></i>
@@ -29,17 +29,17 @@
 
             <div class="song-details-section">
               <div class="detail-group">
-                <h4 class="group-title">Thông tin cơ bản</h4>
+                <h4 class="group-title">{{ t('songInfo.basics') }}</h4>
                 <div class="detail-item">
-                  <span class="detail-label">Tên bài hát:</span>
+                  <span class="detail-label">{{ t('songInfo.songTitle') }}</span>
                   <span class="detail-value">{{ songDetails.title }}</span>
                 </div>
                 <div class="detail-item">
-                  <span class="detail-label">Nghệ sĩ:</span>
+                  <span class="detail-label">{{ t('songInfo.artist') }}</span>
                   <span class="detail-value">{{ songDetails.artist }}</span>
                 </div>
                 <div class="detail-item">
-                  <span class="detail-label">Thời lượng:</span>
+                  <span class="detail-label">{{ t('songInfo.duration') }}</span>
                   <span class="detail-value">{{ formattedDuration }}</span>
                 </div>
                 <div class="detail-item" v-if="song.beatmapsetId">
@@ -49,31 +49,31 @@
                     <button 
                       class="beatmap-link-btn" 
                       @click="openBeatmapset" 
-                      title="Mở beatmapset trên osu! website"
+                      :title="t('songInfo.openOnOsuTitle')"
                       :disabled="isActionLoading"
                     >
                       <i class="fas fa-external-link-alt"></i>
-                      <span>Xem trên osu!</span>
+                      <span>{{ t('songInfo.openOnOsu') }}</span>
                     </button>
                   </div>
                 </div>
               </div>
 
               <div class="detail-group">
-                <h4 class="group-title">Vị trí file</h4>
+                <h4 class="group-title">{{ t('songInfo.fileLocation') }}</h4>
                 <div class="detail-item file-path">
-                  <span class="detail-label">Đường dẫn:</span>
+                  <span class="detail-label">{{ t('songInfo.path') }}</span>
                   <span class="detail-value path-text">{{ song.path }}</span>
-                  <button class="copy-path-btn" @click="copyPath" title="Copy đường dẫn">
+                  <button class="copy-path-btn" @click="copyPath" :title="t('songInfo.copyPathTitle')">
                     <i class="fas fa-copy"></i>
                   </button>
                 </div>
                 <div class="detail-item">
-                  <span class="detail-label">Tên file:</span>
+                  <span class="detail-label">{{ t('songInfo.fileName') }}</span>
                   <span class="detail-value">{{ fileName }}</span>
                 </div>
                 <div class="detail-item">
-                  <span class="detail-label">Thư mục:</span>
+                  <span class="detail-label">{{ t('songInfo.folder') }}</span>
                   <span class="detail-value">{{ folderName }}</span>
                 </div>
               </div>
@@ -85,7 +85,7 @@
                   :disabled="isActionLoading"
                 >
                   <i class="fas fa-folder-open"></i>
-                  <span>Mở thư mục</span>
+                  <span>{{ t('songInfo.openFolder') }}</span>
                 </button>
                 <button 
                   class="action-btn secondary" 
@@ -93,7 +93,7 @@
                   :disabled="isActionLoading"
                 >
                   <i class="fas fa-copy"></i>
-                  <span>Copy đường dẫn</span>
+                  <span>{{ t('songInfo.copyPath') }}</span>
                 </button>
               </div>
             </div>
@@ -107,6 +107,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
+import { t } from '../i18n.js'
 
 interface Props {
   isVisible: boolean
@@ -123,7 +124,7 @@ const isActionLoading = ref(false)
 const imageError = ref(false)
 
 const songDetails = computed(() => {
-  if (!props.song) return { artist: 'Unknown', title: 'Unknown' }
+  if (!props.song) return { artist: t('common.unknown'), title: t('common.unknown') }
   
   const formatSongName = (name: string) => {
     return name.replace(/\s*-\s*Copy(\s*\(\d+\))?$/i, '')
@@ -132,7 +133,7 @@ const songDetails = computed(() => {
   const parts = formatSongName(props.song.name).split(' - ')
   return parts.length >= 2 
     ? { artist: parts[0], title: parts.slice(1).join(' - ') }
-    : { artist: 'Unknown', title: props.song.name }
+    : { artist: t('common.unknown'), title: props.song.name }
 })
 
 const formattedDuration = computed(() => {

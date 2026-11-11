@@ -1,14 +1,14 @@
 <template>
   <div class="music-tab" @keydown="handleKeyDown" tabindex="0" ref="musicTabRef">
     <div v-if="!osuPath" class="warning">
-      Vui lòng cấu hình đường dẫn Osu! trong tab Chung trước
+      {{ t('music.noPath') }}
     </div>
     
     <div v-else class="main-container">
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
         <div class="loading-content">
-          <span class="loading-text">{{ loadingText }}</span>
+          <span class="loading-text">{{ t(loadingText) }}</span>
           <div v-if="scanProgress.total > 0" class="scan-progress">
             <div class="progress-bar">
               <div 
@@ -34,7 +34,7 @@
               @input="optimizedFilterSongs"
               @keydown="handleSearchKeyDown"
               type="text" 
-              placeholder="Tìm kiếm bài hát..."
+              :placeholder="t('music.search.placeholder')"
               class="search-input"
             >
             <!-- <div class="search-stats" v-if="searchQuery">
@@ -72,9 +72,9 @@
             <div class="empty-icon">
               <i class="fas fa-music"></i>
             </div>
-            <div class="empty-title">Không có gì</div>
+            <div class="empty-title">{{ t('music.empty.title') }}</div>
             <div class="empty-subtitle">
-              {{ searchQuery ? 'Không tìm thấy bài hát nào phù hợp' : 'Chưa có bài hát nào trong danh sách' }}
+              {{ searchQuery ? t('music.empty.noMatch') : t('music.empty.none') }}
             </div>
           </div>
           
@@ -111,7 +111,7 @@
                     <span class="title">{{ getCachedSongDetails(song.name).title }}</span>
                     <div v-if="song.video" class="video-indicator">
                       <i class="fas fa-play-circle"></i>
-                      <span>video</span>
+                      <span>{{ t('music.video.suffix') }}</span>
                     </div>
                   </div>
                   <div class="song-details">
@@ -138,7 +138,7 @@
             @loadedmetadata="handleVideoLoaded"
             class="video-player"
           >
-            Trình duyệt không hỗ trợ định dạng video này.
+            {{ t('music.videoUnsupported') }}
           </video>
           <div v-if="videoError" class="video-error">
             <i class="fas fa-exclamation-triangle"></i>
@@ -158,7 +158,7 @@
             </button>
             <button @click="stopMusic" class="control-btn stop-btn">
               <i class="fas fa-stop"></i>
-              <span>Dừng</span>
+              <span>{{ t('music.stop') }}</span>
             </button>
             <button @click="togglePlayMode" class="control-btn mode-btn" :title="playModeTitle">
               <span v-html="playModeIcon"></span>
@@ -181,10 +181,10 @@
           <div v-if="showAdvancedControls" class="advanced-controls">
             <div class="controls-grid">
             <div class="navigation-controls">
-              <button @click="previousSong" class="nav-control-btn" title="Bài trước">
+              <button @click="previousSong" class="nav-control-btn" :title="t('music.previous')">
                 <i class="fas fa-step-backward"></i>
               </button>
-              <button @click="nextSong" class="nav-control-btn" title="Bài kế tiếp">
+              <button @click="nextSong" class="nav-control-btn" :title="t('music.next')">
                 <i class="fas fa-step-forward"></i>
               </button>
             </div>
@@ -200,7 +200,7 @@
                 @input="onVolumeChange"
                 @change="persistVolume"
                     class="range-slider compact"
-                    title="Âm lượng"
+                    :title="t('music.volume')"
               >
                   <span class="volume-value">{{ volumePercentage }}%</span>
                 </div>
@@ -218,7 +218,7 @@
                 :value="progressPercentage" 
                 @input="onSeek"
                     class="progress-bar"
-                    title="Tiến độ bài hát"
+                    :title="t('music.progress')"
                   >
                   <div class="progress-track">
                     <div 
@@ -237,7 +237,7 @@
           <div class="current-track">
             <div class="info-header">
               <i class="fas fa-music"></i>
-            <label>Bài hát hiện tại:</label>
+            <label>{{ t('music.currentSong') }}</label>
             </div>
             <div class="current-track-content">
               <span>{{ currentSongFormatted }}</span>
@@ -245,7 +245,7 @@
                 v-if="currentSong" 
                 @click="scrollToCurrentSong" 
                 class="scroll-to-song-btn"
-                title="Đi đến bài hát đang phát"
+                :title="t('music.goToCurrent')"
               >
                 <i class="fas fa-location-arrow"></i>
               </button>
@@ -255,16 +255,16 @@
           <div v-if="discordEnabled" class="discord-status">
             <div class="info-header">
               <i class="fab fa-discord"></i>
-            <label>Trạng thái Discord:</label>
+            <label>{{ t('music.discordStatus') }}</label>
           </div>
-            <span class="status-text connected">{{ discordStatus }}</span>
+            <span class="status-text connected">{{ discordStatus ? t(discordStatus) : '' }}</span>
         </div>
           <div v-else class="discord-status">
             <div class="info-header">
               <i class="fab fa-discord"></i>
-              <label>Trạng thái Discord:</label>
+              <label>{{ t('music.discordStatus') }}</label>
             </div>
-            <span class="status-text disconnected">Chưa kết nối</span>
+            <span class="status-text disconnected">{{ t('music.discord.notConnected') }}</span>
           </div>
         </div>
       </div>
@@ -281,15 +281,15 @@
     >
       <div class="context-menu-item" @click="openFileLocation">
         <i class="fas fa-folder-open"></i>
-        <span>Xem vị trí file</span>
+        <span>{{ t('music.context.viewFile') }}</span>
       </div>
       <div class="context-menu-item" @click="copyFilePath">
         <i class="fas fa-copy"></i>
-        <span>Copy đường dẫn</span>
+        <span>{{ t('music.context.copyPath') }}</span>
       </div>
       <div class="context-menu-item" @click="showSongInfo">
         <i class="fas fa-info-circle"></i>
-        <span>Xem thông tin chi tiết</span>
+        <span>{{ t('music.context.details') }}</span>
       </div>
     </div>
 
@@ -328,6 +328,8 @@ import { createStateTransition } from '../discordClient.js'
 import { discordSettings, ensureDiscordSettingsLoaded, setDiscordEnabled } from '../discordSettings.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
+import { t } from '../i18n.js'
+import type { MessageKey } from '../../electron/i18n.js'
 
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null
@@ -610,15 +612,15 @@ class AudioPlayer {
           if (resolved) return
           resolved = true
           cleanup()
-          const errorMessage = this.audio?.error?.message || 'Không thể phát file này'
-          resolve({ success: false, message: `Lỗi khi tải bài hát: ${errorMessage}` })
+          const errorMessage = this.audio?.error?.message || t('music.playback.errorUnknownFile')
+          resolve({ success: false, message: t('music.playback.errorLoad', { message: errorMessage }) })
         }
 
         setTimeout(() => {
           if (!resolved) {
             resolved = true
             cleanup()
-            resolve({ success: false, message: 'Timeout khi tải bài hát' })
+            resolve({ success: false, message: t('music.playback.timeout') })
           }
         }, 10000)
 
@@ -626,14 +628,16 @@ class AudioPlayer {
           if (!resolved && error.name !== 'AbortError') {
             resolved = true
             cleanup()
-            resolve({ success: false, message: `Lỗi khi phát nhạc: ${error.message}` })
+            resolve({ success: false, message: t('music.playback.errorPlay', { message: error.message }) })
           }
         })
       })
     } catch (error) {
       return { 
         success: false, 
-        message: `Lỗi khi phát nhạc: ${error instanceof Error ? error.message : String(error)}` 
+        message: t('music.playback.errorPlay', {
+          message: error instanceof Error ? error.message : String(error)
+        })
       }
     }
   }
@@ -721,7 +725,7 @@ const volume = ref(0.5)
 const currentTime = ref(0)
 const duration = ref(0)
 const discordEnabled = computed(() => discordSettings.enabled)
-const discordStatus = ref('Chưa kết nối')
+const discordStatus = ref<MessageKey | null>(null)
 const isDiscordLoading = ref(false)
 const discordCooldownActive = ref(false)
 const shuffleMode = ref(false)
@@ -783,7 +787,7 @@ const songInfoModal = ref({
   song: null as Song | null
 })
 
-const loadingText = ref('Đang tải danh sách bài hát...')
+const loadingText = ref<MessageKey>('music.loading.list')
 const scanProgress = ref({
   total: 0,
   processed: 0,
@@ -799,10 +803,10 @@ interface SortOption {
 
 const currentSort = ref<string>('title')
 
-const sortOptions = ref<SortOption[]>([
-  { label: 'Tên bài hát', value: 'title' },
-  { label: 'Tên tác giả', value: 'artist' },
-  { label: 'Thời lượng', value: 'duration' }
+const sortOptions = computed<SortOption[]>(() => [
+  { label: t('music.sort.title'), value: 'title' },
+  { label: t('music.sort.artist'), value: 'artist' },
+  { label: t('music.sort.duration'), value: 'duration' }
 ])
 
 const formatSongName = (name: string) => {
@@ -821,7 +825,7 @@ const getCachedSongDetails = (songName: string) => {
     pooledObj.artist = parts[0]
     pooledObj.title = parts.slice(1).join(' - ')
   } else {
-    pooledObj.artist = 'Unknown'
+    pooledObj.artist = t('common.unknown')
     pooledObj.title = songName
   }
   
@@ -839,19 +843,19 @@ const playModeIcon = computed(() => {
 })
 
 const playModeTitle = computed(() => {
-  if (shuffleMode.value) return 'Shuffle mode'
-  if (repeatOne.value) return 'Repeat one'
-  return 'Repeat'
+  if (shuffleMode.value) return t('music.mode.shuffle')
+  if (repeatOne.value) return t('music.mode.repeatOne')
+  return t('music.mode.repeat')
 })
 
 const currentSortOption = computed(() => {
   return sortOptions.value.find(opt => opt.value === currentSort.value) || sortOptions.value[0]
 })
 
-const playButtonText = computed(() => isPlaying.value ? 'Tạm dừng' : 'Phát nhạc')
+const playButtonText = computed(() => isPlaying.value ? t('music.pause') : t('music.play'))
 
 const advancedControlsText = computed(() => 
-  showAdvancedControls.value ? 'Ẩn tùy chỉnh' : 'Tuỳ chỉnh nhạc'
+  showAdvancedControls.value ? t('music.advanced.hide') : t('music.advanced.show')
 )
 
 const discordButtonClass = computed(() => ({
@@ -865,9 +869,9 @@ const discordIconClass = computed(() =>
 )
 
 const discordButtonText = computed(() => {
-  if (isDiscordLoading.value) return 'Đang xử lý...'
-  if (discordCooldownActive.value) return 'Chờ...'
-  return discordEnabled.value ? 'Tắt Discord' : 'Bật Discord'
+  if (isDiscordLoading.value) return t('music.discord.processing')
+  if (discordCooldownActive.value) return t('music.discord.wait')
+  return discordEnabled.value ? t('music.discord.disable') : t('music.discord.enable')
 })
 
 const volumePercentage = computed(() => Math.round(volume.value * 100))
@@ -948,7 +952,7 @@ const sortedSongs = computed(() => {
 })
 
 const currentSongFormatted = computed(() => {
-  if (!currentSong.value) return 'Không có'
+  if (!currentSong.value) return t('common.none')
   const { artist, title } = getCachedSongDetails(currentSong.value.name)
   return `${artist} - ${title}`
 })
@@ -1083,7 +1087,7 @@ const performMemoryCleanup = () => {
 const loadSongs = async () => {
   try {
     isLoading.value = true
-    loadingText.value = 'Đang tải danh sách bài hát...'
+    loadingText.value = 'music.loading.list'
     scanProgress.value = { 
       total: 0, 
       processed: 0, 
@@ -1117,7 +1121,7 @@ const loadSongs = async () => {
         const percentage = typeof latestProgress.percentage === 'number' ? latestProgress.percentage : 
                           (total > 0 ? Math.round((processed / total) * 100) : 0)
         
-        loadingText.value = 'Đang quét metadata...'
+        loadingText.value = 'music.loading.metadata'
         scanProgress.value = {
           total,
           processed,
@@ -1127,7 +1131,7 @@ const loadSongs = async () => {
         console.log(`Quét nhạc: ${processed}/${total} (${percentage}%)`)
       })
 
-      loadingText.value = 'Đang quét thư mục nhạc...'
+      loadingText.value = 'music.loading.scanning'
       const loadResult = await window.electronAPI.musicGetSongs(osuPath.value)
       
       if (loadResult.success) {
@@ -1154,7 +1158,7 @@ const loadSongs = async () => {
     }
   } catch (error) {
     console.error('Error loading songs:', error)
-    loadingText.value = 'Lỗi khi tải danh sách bài hát'
+    loadingText.value = 'music.loading.error'
   } finally {
     isLoading.value = false
     setTimeout(() => {
@@ -1339,13 +1343,13 @@ const initDiscord = async (): Promise<boolean> => {
   try {
     const result = await window.electronAPI.discordInit()
     if (result.success) {
-      discordStatus.value = 'Đã kết nối'
+      discordStatus.value = 'music.discord.connected'
       return true
     }
     throw new Error(result.message)
   } catch (error) {
     console.error('Discord RPC error:', error)
-    discordStatus.value = 'Lỗi kết nối'
+    discordStatus.value = 'music.discord.connectionError'
     return false
   }
 }
@@ -1414,7 +1418,7 @@ const disconnectDiscord = async () => {
   } catch (error) {
     console.error('Failed to destroy Discord client:', error)
   }
-  discordStatus.value = 'Đã tắt'
+  discordStatus.value = 'music.discord.disabled'
 }
 
 /**
@@ -1577,7 +1581,7 @@ const showFullImage = () => {
   const song = selectedSong.value || currentSong.value
   if (song?.image) {
     currentImageUrl.value = 'file://' + song.image
-    currentImageName.value = song.name + ' - Cover Image'
+    currentImageName.value = song.name + ' - ' + t('music.cover.suffix')
     showImageViewer.value = true
   }
 }
@@ -1838,7 +1842,7 @@ const startNormalizationWatcher = () => {
     
     try {
       const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
-      if (savedNormalization !== undefined) {
+      if (savedNormalization !== null) {
         const newValue = savedNormalization === 'true'
         if (newValue !== normalizationEnabled.value) {
           normalizationEnabled.value = newValue
@@ -1857,7 +1861,7 @@ const startVideoWatcher = () => {
   videoCheckInterval = setInterval(async () => {
     try {
       const savedVideo = await window.electronAPI.getConfig('videoEnabled')
-      if (savedVideo !== undefined) {
+      if (savedVideo !== null) {
         const newValue = savedVideo === 'true'
         if (newValue !== videoEnabled.value) {
           videoEnabled.value = newValue
@@ -1937,7 +1941,7 @@ const openFileLocation = async () => {
 const showCopyNotification = () => {
   copyNotification.value = {
     visible: true,
-    message: 'Đã copy đường dẫn!'
+    message: t('music.copied')
   }
   
   setTimeout(() => {
@@ -2021,13 +2025,13 @@ onMounted(async () => {
     audioPlayer.setVolume(resolvedVolume)
 
     const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
-    if (savedNormalization !== undefined) {
+    if (savedNormalization !== null) {
       normalizationEnabled.value = savedNormalization === 'true'
       audioPlayer.toggleNormalization(normalizationEnabled.value)
     }
 
     const savedVideo = await window.electronAPI.getConfig('videoEnabled')
-    if (savedVideo !== undefined) {
+    if (savedVideo !== null) {
       videoEnabled.value = savedVideo === 'true'
     }
   } catch (error) {
@@ -2129,23 +2133,23 @@ const handleVideoError = (event: Event) => {
   console.error('Video load error:', event)
   const video = event.target as HTMLVideoElement
   if (video && video.error) {
-    let errorMessage = 'Lỗi không xác định'
+    let errorMessage = t('music.video.errorUnknown')
     
     switch (video.error.code) {
       case MediaError.MEDIA_ERR_ABORTED:
-        errorMessage = 'Tải video bị hủy bởi người dùng'
+        errorMessage = t('music.video.errorAborted')
         break
       case MediaError.MEDIA_ERR_NETWORK:
-        errorMessage = 'Lỗi mạng khi tải video'
+        errorMessage = t('music.video.errorNetwork')
         break
       case MediaError.MEDIA_ERR_DECODE:
-        errorMessage = 'Video bị lỗi không thể decode'
+        errorMessage = t('music.video.errorDecode')
         break
       case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-        errorMessage = 'Định dạng video không được hỗ trợ (có thể cần convert sang .mp4)'
+        errorMessage = t('music.video.errorUnsupported')
         break
       default:
-        errorMessage = `Lỗi video (code: ${video.error.code})`
+        errorMessage = t('music.video.errorCode', { code: video.error.code })
     }
     
     videoError.value = errorMessage
@@ -2157,7 +2161,7 @@ const handleVideoError = (event: Event) => {
       src: video.src
     })
   } else {
-    videoError.value = 'Không thể tải video'
+    videoError.value = t('music.video.errorLoad')
     if (video) {
       video.style.display = 'none'
     }
@@ -2173,7 +2177,7 @@ const showFullVideo = () => {
   const song = selectedSong.value || currentSong.value
   if (song?.video && videoEnabled.value) {
     currentImageUrl.value = 'file://' + song.video
-    currentImageName.value = song.name + ' - Video'
+    currentImageName.value = song.name + ' - ' + t('music.video.suffix')
     showImageViewer.value = true
   }
 }

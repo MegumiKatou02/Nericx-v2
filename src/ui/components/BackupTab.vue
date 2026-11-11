@@ -1,9 +1,9 @@
 <template>
   <div class="backup-tab">
-    <h2>Sao lưu dữ liệu osu!</h2>
+    <h2>{{ t('backup.title') }}</h2>
 
     <div v-if="!osuPath" class="warning">
-      Vui lòng cấu hình đường dẫn osu! trong tab Chung trước khi sao lưu.
+      {{ t('backup.noPath') }}
     </div>
 
     <template v-else>
@@ -20,15 +20,15 @@
       </div>
 
       <div class="output-section">
-        <label>Thư mục xuất:</label>
+        <label>{{ t('backup.outputFolder') }}</label>
         <div class="input-group">
           <input 
             type="text" 
             v-model="outputPath" 
-            placeholder="Chọn thư mục xuất"
+            :placeholder="t('backup.outputPlaceholder')"
             readonly
           >
-          <button @click="selectOutputFolder" class="btn-select">Chọn thư mục</button>
+          <button @click="selectOutputFolder" class="btn-select">{{ t('general.selectFolder') }}</button>
         </div>
       </div>
 
@@ -37,7 +37,7 @@
         class="btn-backup"
         :disabled="!canBackup"
       >
-        Bắt đầu sao lưu
+        {{ t('backup.start') }}
       </button>
 
       <div v-if="backupStatus" class="status">
@@ -49,6 +49,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { t } from '../i18n.js'
 
 const osuPath = ref('')
 const outputPath = ref('')
@@ -80,7 +81,7 @@ const startBackup = async () => {
       .filter(([_, opt]) => opt.selected)
       .map(([key]) => key)
 
-    backupStatus.value = 'Đang tạo bản sao lưu...'
+    backupStatus.value = t('backup.creating')
     
     const result = await window.electronAPI.createBackup({
       osuPath: osuPath.value,
@@ -90,7 +91,7 @@ const startBackup = async () => {
 
     backupStatus.value = result.message
   } catch (error) {
-    backupStatus.value = 'Có lỗi xảy ra không xác định'
+    backupStatus.value = t('backup.unknownError')
     console.error('Backup error:', error)
   }
 }

@@ -36,7 +36,7 @@
       </div>
     </div>
     
-    <button class="collapse-btn" @click.stop="$emit('toggle-collapse')" :title="collapsed ? 'Mở rộng' : 'Thu gọn'">
+    <button class="collapse-btn" @click.stop="$emit('toggle-collapse')" :title="collapsed ? t('common.expand') : t('common.collapse')">
       <i :class="collapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
     </button>
   </div>
@@ -44,6 +44,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { t } from '../i18n.js'
 
 interface Props {
   currentSong: any
@@ -223,18 +224,18 @@ const getArtistAndTitle = (songName: string) => {
   const parts = formatSongName(songName).split(' - ')
   const result = parts.length >= 2 
     ? { artist: parts[0], title: parts.slice(1).join(' - ') }
-    : { artist: 'Unknown', title: songName }
+    : { artist: t('common.unknown'), title: songName }
   
   return result
 }
 
 const getTitle = () => {
-  if (!props.currentSong) return 'Không có'
+  if (!props.currentSong) return t('common.none')
   return getArtistAndTitle(props.currentSong.name).title
 }
 
 const getArtist = () => {
-  if (!props.currentSong) return 'Không có'
+  if (!props.currentSong) return t('common.none')
   return getArtistAndTitle(props.currentSong.name).artist
 }
 

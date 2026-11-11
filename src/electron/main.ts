@@ -1,8 +1,9 @@
 import { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage, shell } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig } from './util.js'
+import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig, setAppLocale, getAppLocale, t } from './util.js'
 import { getPreloadPath } from './pathResolver.js'
+import { LOCALE_CONFIG_KEY, resolveLocale } from './i18n.js'
 import { copyFileSync, existsSync, readdirSync } from 'fs'
 
 let MusicPlayer: any = null
@@ -214,6 +215,9 @@ ipcMain.handle('get-config', createIPCHandler(async (_: any, key: string) => {
 }))
 
 ipcMain.handle('set-config', createIPCHandler(async (_: any, key: string, value: string) => {
+  // The main process answers IPC calls with localized text, so it mirrors the
+  // renderer's language choice instead of reading the database again per reply.
+  if (key === LOCALE_CONFIG_KEY) setAppLocale(resolveLocale(value))
   return await setConfig(key, value)
 }))
 
@@ -222,19 +226,19 @@ ipcMain.handle('save-file', createIPCHandler(async (_: any, sourcePath: string, 
     const { filePath } = await dialog.showSaveDialog({
       defaultPath: fileName,
       filters: [
-        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp'] },
-        { name: 'All Files', extensions: ['*'] }
+        { name: await t('dialog.imageFilter'), extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp'] },
+        { name: await t('dialog.allFilesFilter'), extensions: ['*'] }
       ]
     })
     
     if (filePath && existsSync(sourcePath)) {
       copyFileSync(sourcePath, filePath)
-      return { success: true, message: 'Đã lưu file thành công!' }
+      return { success: true, message: await t('dialog.saveSuccess') }
     }
     
-    return { success: false, message: 'Hủy lưu file' }
+    return { success: false, message: await t('dialog.saveCancelled') }
   } catch (error) {
-    return { success: false, message: `Lỗi khi lưu file: ${error}` }
+    return { success: false, message: await t('dialog.saveError', { message: String(error) }) }
   }
 }))
 
@@ -243,18 +247,18 @@ ipcMain.handle('copy-file', createIPCHandler(async (_: any, filePath: string) =>
     if (existsSync(filePath)) {
       const image = nativeImage.createFromPath(filePath)
       if (image.isEmpty()) {
-        return { success: false, message: 'Không đọc được ảnh' }
+        return { success: false, message: await t('dialog.copyImageEmpty') }
       }
       await clipboard.write([
         new ClipboardItem({
           'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' })
         })
       ])
-      return { success: true, message: 'Đã copy ảnh vào clipboard!' }
+      return { success: true, message: await t('dialog.copyImageSuccess') }
     }
-    return { success: false, message: 'File không tồn tại' }
+    return { success: false, message: await t('dialog.fileMissing') }
   } catch (error) {
-    return { success: false, message: `Lỗi khi copy file: ${error}` }
+    return { success: false, message: await t('dialog.copyFileError', { message: String(error) }) }
   }
 }))
 
@@ -262,11 +266,11 @@ ipcMain.handle('show-item-in-folder', createIPCHandler(async (_: any, filePath: 
   try {
     if (existsSync(filePath)) {
       shell.showItemInFolder(filePath)
-      return { success: true, message: 'Đã mở vị trí file' }
+      return { success: true, message: await t('dialog.revealed') }
     }
-    return { success: false, message: 'File không tồn tại' }
+    return { success: false, message: await t('dialog.fileMissing') }
   } catch (error) {
-    return { success: false, message: `Lỗi khi mở vị trí file: ${error}` }
+    return { success: false, message: await t('dialog.revealError', { message: String(error) }) }
   }
 }))
 
@@ -276,13 +280,13 @@ ipcMain.handle('open-external', createIPCHandler(async (_: any, url: string) => 
     const allowedProtocols = ['http:', 'https:']
     
     if (!allowedProtocols.includes(urlObj.protocol)) {
-      return { success: false, message: 'Protocol không được hỗ trợ' }
+      return { success: false, message: await t('dialog.unsupportedProtocol') }
     }
     
     await shell.openExternal(url)
-    return { success: true, message: `Đã mở URL: ${url}` }
+    return { success: true, message: await t('dialog.openedUrl', { url }) }
   } catch (error) {
-    return { success: false, message: `Lỗi khi mở URL: ${error}` }
+    return { success: false, message: await t('dialog.openUrlError', { message: String(error) }) }
   }
 }))
 
@@ -426,6 +430,9 @@ ipcMain.handle('get-performance-stats', createIPCHandler(async () => {
 
 app.whenReady().then(async () => {
   await initDatabase()
+  // Seed the main-process locale before any window exists, so every IPC reply
+  // is already translated even before the renderer writes its language back.
+  await getAppLocale()
   
   const iconPath = getIconPath()
   if (existsSync(iconPath)) {

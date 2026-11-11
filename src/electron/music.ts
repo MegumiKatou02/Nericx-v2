@@ -8,6 +8,7 @@ import { EventEmitter } from 'events'
 import { createHash } from 'crypto'
 import { tmpdir } from 'os'
 import { cpus } from 'os'
+import { t } from './util.js'
 
 interface CachedMetadata {
   duration: number
@@ -602,7 +603,7 @@ export class MusicPlayer extends EventEmitter {
     this.songsData = []
 
     if (!existsSync(songsPath)) {
-      return { success: false, message: 'Không tìm thấy thư mục Songs!' }
+      return { success: false, message: await t('music.songsFolderMissing') }
     }
 
     try {
@@ -774,7 +775,7 @@ export class MusicPlayer extends EventEmitter {
 
       return { 
         success: true, 
-        message: `Đã tải ${this.songsData.length} bài hát (chọn file tốt nhất)`, 
+        message: await t('music.loadedCount', { count: this.songsData.length }), 
         songs: this.filteredSongs 
       }
 
@@ -782,7 +783,9 @@ export class MusicPlayer extends EventEmitter {
       this.processingStats = null
       return { 
         success: false, 
-        message: `Lỗi khi tải danh sách bài hát: ${error instanceof Error ? error.message : String(error)}` 
+        message: await t('music.loadFailed', {
+          message: error instanceof Error ? error.message : String(error)
+        })
       }
     }
   }

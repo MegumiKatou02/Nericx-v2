@@ -20,14 +20,14 @@ test('large image uses the beatmap cover and adds buttons when a beatmapset exis
   const activity = buildActivity({ name: 'Artist - Song', beatmapsetId: '123' }, NOW)
   assert.equal(activity.assets.large_image, 'https://assets.ppy.sh/beatmaps/123/covers/list@2x.jpg')
   assert.deepEqual(activity.buttons, [
-    { label: 'Xem Beatmap', url: 'https://osu.ppy.sh/beatmapsets/123' },
+    { label: 'View Beatmap', url: 'https://osu.ppy.sh/beatmapsets/123' },
     { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
   ])
 })
 
 test('no video means no badge and the plain listening state', () => {
   const activity = buildActivity({ name: 'Song Title', beatmapsetId: '123' }, NOW)
-  assert.equal(activity.state, 'Nghe nhạc trong Nericx')
+  assert.equal(activity.state, 'Listening in Nericx')
   assert.equal(activity.assets.small_image, undefined)
   assert.equal(activity.assets.small_text, undefined)
 })
@@ -35,14 +35,14 @@ test('no video means no badge and the plain listening state', () => {
 test('explicit videoPlaying false keeps the badge off', () => {
   const activity = buildActivity({ name: 'Song Title', videoPlaying: false }, NOW)
   assert.equal(activity.assets.small_image, undefined)
-  assert.equal(activity.state, 'Nghe nhạc trong Nericx')
+  assert.equal(activity.state, 'Listening in Nericx')
 })
 
 test('video playing adds the camera badge and the video state', () => {
   const activity = buildActivity({ name: 'Song Title', videoPlaying: true }, NOW)
   assert.equal(activity.assets.small_image, VIDEO_BADGE_IMAGE)
-  assert.equal(activity.assets.small_text, 'Đang phát video')
-  assert.equal(activity.state, 'Đang phát video beatmap')
+  assert.equal(activity.assets.small_text, 'Video playing')
+  assert.equal(activity.state, 'Playing a beatmap video')
 })
 
 test('video badge keeps the beatmap cover as the large image', () => {
@@ -114,7 +114,7 @@ test('a beatmapset without a usable cover falls back to the app asset', () => {
 test('a beatmapset without a usable cover still links to the beatmap', () => {
   const activity = buildActivity({ name: 'A - B', beatmapsetId: '1000', coverAvailable: false }, NOW)
   assert.deepEqual(activity.buttons, [
-    { label: 'Xem Beatmap', url: 'https://osu.ppy.sh/beatmapsets/1000' },
+    { label: 'View Beatmap', url: 'https://osu.ppy.sh/beatmapsets/1000' },
     { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
   ])
 })
@@ -150,7 +150,7 @@ test('duplicate-file suffix is stripped along with the no-video tag', () => {
 test('a name without a dash is the title and keeps the generic state', () => {
   const activity = buildActivity({ name: 'Some Song Title' }, NOW)
   assert.equal(activity.details, 'Some Song Title')
-  assert.equal(activity.state, 'Nghe nhạc trong Nericx')
+  assert.equal(activity.state, 'Listening in Nericx')
   assert.equal(activity.assets.large_text, 'osu!')
 })
 
@@ -163,13 +163,13 @@ test('only the first dash splits artist from title', () => {
 test('a title that becomes empty after stripping falls back to the raw name', () => {
   const activity = buildActivity({ name: 'Artist - [no video]' }, NOW)
   assert.equal(activity.details, 'Artist - [no video]')
-  assert.equal(activity.state, 'Nghe nhạc trong Nericx')
+  assert.equal(activity.state, 'Listening in Nericx')
 })
 
 test('video plus a known artist keeps the badge and shows the artist', () => {
   const activity = buildActivity({ name: 'Artist - Song', videoPlaying: true }, NOW)
   assert.equal(activity.assets.small_image, VIDEO_BADGE_IMAGE)
-  assert.equal(activity.assets.small_text, 'Đang phát video')
+  assert.equal(activity.assets.small_text, 'Video playing')
   assert.equal(activity.state, 'Artist')
 })
 
@@ -214,7 +214,7 @@ test('the beatmap button can be hidden while the github button stays', () => {
 test('the github button can be hidden while the beatmap button stays', () => {
   const activity = buildActivity({ name: 'A - B', beatmapsetId: '123', githubButton: false }, NOW)
   assert.deepEqual(activity.buttons, [
-    { label: 'Xem Beatmap', url: 'https://osu.ppy.sh/beatmapsets/123' }
+    { label: 'View Beatmap', url: 'https://osu.ppy.sh/beatmapsets/123' }
   ])
 })
 

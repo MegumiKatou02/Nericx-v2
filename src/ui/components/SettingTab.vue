@@ -1,53 +1,75 @@
 <template>
   <div class="setting-tab" :class="theme">
-    <h2>Cài đặt</h2>
+    <h2>{{ t('settings.title') }}</h2>
 
     <div class="setting-section">
-      <h3>Giao diện</h3>
+      <h3>{{ t('settings.language') }}</h3>
       <div class="setting-option">
-        <label>Theme:</label>
+        <label>{{ t('settings.language') }}:</label>
+        <div class="language-section">
+          <div class="theme-selector">
+            <button
+              v-for="option in languageOptions"
+              :key="option.value"
+              :class="{ active: locale === option.value }"
+              @click="setLocale(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+          <div class="video-description">
+            <span>{{ t('settings.language.description') }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="setting-section">
+      <h3>{{ t('settings.appearance') }}</h3>
+      <div class="setting-option">
+        <label>{{ t('settings.theme') }}</label>
         <div class="theme-selector">
           <button 
             :class="{ active: theme === 'light' }" 
             @click="setTheme('light')"
           >
-            Sáng
+            {{ t('settings.theme.light') }}
           </button>
           <button 
             :class="{ active: theme === 'dark' }" 
             @click="setTheme('dark')"
           >
-            Tối
+            {{ t('settings.theme.dark') }}
           </button>
           <button 
             :class="{ active: theme === 'ash' }" 
             @click="setTheme('ash')"
           >
-            Xám tro
+            {{ t('settings.theme.ash') }}
           </button>
           <button 
             :class="{ active: theme === 'pitch-black' }" 
             @click="setTheme('pitch-black')"
           >
-            Đen đặc
+            {{ t('settings.theme.pitchBlack') }}
           </button>
           <button 
             :class="{ active: theme === 'midnight' }" 
             @click="setTheme('midnight')"
           >
-            Xanh đêm
+            {{ t('settings.theme.midnight') }}
           </button>
           <button 
             :class="{ active: theme === 'warm' }" 
             @click="setTheme('warm')"
           >
-            Ấm áp
+            {{ t('settings.theme.warm') }}
           </button>
         </div>
       </div>
 
       <div class="setting-option">
-        <label>Màu chủ đạo:</label>
+        <label>{{ t('settings.accentColor') }}</label>
         <div class="accent-color-section">
           <div class="preset-colors">
             <div 
@@ -66,7 +88,7 @@
               :value="accentColor" 
               @input="setAccentColor(($event.target as HTMLInputElement).value)"
               class="color-picker"
-              title="Chọn màu tùy chỉnh"
+              :title="t('settings.customColor')"
             >
             <input 
               type="text" 
@@ -82,21 +104,21 @@
       </div>
 
       <div class="setting-option">
-        <label>Độ trong suốt:</label>
+        <label>{{ t('settings.transparency') }}</label>
         <div class="transparency-section">
           <div class="transparency-toggle">
             <button 
               :class="{ active: transparencyEnabled }" 
               @click="toggleTransparency"
             >
-              {{ transparencyEnabled ? 'Bật' : 'Tắt' }}
+              {{ transparencyEnabled ? t('common.on') : t('common.off') }}
             </button>
           </div>
         </div>
       </div>
 
       <div class="setting-option" v-if="transparencyEnabled">
-        <label>Độ mờ:</label>
+        <label>{{ t('settings.opacity') }}</label>
         <div class="opacity-section">
           <input 
             type="range" 
@@ -113,54 +135,58 @@
     </div>
 
     <div class="setting-section">
-      <h3>Âm thanh</h3>
+      <h3>{{ t('settings.audio') }}</h3>
       <div class="setting-option">
-        <label>Cân bằng âm lượng:</label>
+        <label>{{ t('settings.normalization') }}</label>
         <div class="normalization-section">
           <div class="normalization-toggle">
             <button 
               :class="{ active: normalizationEnabled }" 
               @click="toggleNormalization"
             >
-              {{ normalizationEnabled ? 'Bật' : 'Tắt' }}
+              {{ normalizationEnabled ? t('common.on') : t('common.off') }}
             </button>
           </div>
           <div class="normalization-description">
-            <span>Tự động điều chỉnh âm lượng giữa các bài hát. <strong>Lưu ý:</strong> Có thể làm giảm chất lượng âm thanh do compression</span>
+            <span>
+              {{ t('settings.normalization.description') }}
+              <strong>{{ t('settings.normalization.note') }}</strong>
+              {{ t('settings.normalization.warning') }}
+            </span>
           </div>
         </div>
       </div>
 
       <div class="setting-option">
-        <label>Hiển thị video:</label>
+        <label>{{ t('settings.video') }}</label>
         <div class="video-section">
           <div class="video-toggle">
             <button 
               :class="{ active: videoEnabled }" 
               @click="toggleVideo"
             >
-              {{ videoEnabled ? 'Bật' : 'Tắt' }}
+              {{ videoEnabled ? t('common.on') : t('common.off') }}
             </button>
           </div>
           <div class="video-description">
-            <span>Hiển thị video .mp4 thay vì ảnh cover khi có sẵn</span>
+            <span>{{ t('settings.video.description') }}</span>
           </div>
         </div>
       </div>
 
       <div class="setting-option">
-        <label>Mini Player:</label>
+        <label>{{ t('settings.miniPlayer') }}</label>
         <div class="video-section">
           <div class="video-toggle">
             <button 
               :class="{ active: miniPlayerEnabled }" 
               @click="toggleMiniPlayer"
             >
-              {{ miniPlayerEnabled ? 'Bật' : 'Tắt' }}
+              {{ miniPlayerEnabled ? t('common.on') : t('common.off') }}
             </button>
           </div>
           <div class="video-description">
-            <span>Hiển thị trình phát nhỏ khi chuyển tab khác. Tắt để tiết kiệm CPU và bộ nhớ</span>
+            <span>{{ t('settings.miniPlayer.description') }}</span>
           </div>
         </div>
       </div>
@@ -169,82 +195,88 @@
     <div class="setting-section">
       <h3>Discord</h3>
       <div class="setting-option">
-        <label>Rich Presence:</label>
+        <label>{{ t('settings.discord.richPresence') }}</label>
         <div class="video-section">
           <div class="video-toggle">
             <button
               :class="{ active: discordSettings.enabled }"
               @click="toggleDiscordEnabled"
             >
-              {{ discordSettings.enabled ? 'Bật' : 'Tắt' }}
+              {{ discordSettings.enabled ? t('common.on') : t('common.off') }}
             </button>
           </div>
           <div class="video-description">
-            <span>Tự động hiển thị bài đang nghe trên Discord mỗi khi mở app</span>
+            <span>{{ t('settings.discord.richPresence.description') }}</span>
           </div>
         </div>
       </div>
 
       <div class="setting-option">
-        <label>Nút "Xem Beatmap":</label>
+        <label>{{ t('settings.discord.beatmapButton') }}</label>
         <div class="video-section">
           <div class="video-toggle">
             <button
               :class="{ active: discordSettings.beatmapButton }"
               @click="toggleDiscordBeatmapButton"
             >
-              {{ discordSettings.beatmapButton ? 'Hiện' : 'Ẩn' }}
+              {{ discordSettings.beatmapButton ? t('common.show') : t('common.hide') }}
             </button>
           </div>
           <div class="video-description">
-            <span>Nút mở beatmapset của bài hát trên osu!. Chỉ áp dụng cho bài có beatmapset</span>
+            <span>{{ t('settings.discord.beatmapButton.description') }}</span>
           </div>
         </div>
       </div>
 
       <div class="setting-option">
-        <label>Nút "Github":</label>
+        <label>{{ t('settings.discord.githubButton') }}</label>
         <div class="video-section">
           <div class="video-toggle">
             <button
               :class="{ active: discordSettings.githubButton }"
               @click="toggleDiscordGithubButton"
             >
-              {{ discordSettings.githubButton ? 'Hiện' : 'Ẩn' }}
+              {{ discordSettings.githubButton ? t('common.show') : t('common.hide') }}
             </button>
           </div>
           <div class="video-description">
-            <span>Nút mở trang Github của Nericx. Chỉ áp dụng cho bài có beatmapset</span>
+            <span>{{ t('settings.discord.githubButton.description') }}</span>
           </div>
         </div>
       </div>
     </div>
 
     <div class="setting-section">
-      <h3>Quản lý Cache</h3>
+      <h3>{{ t('settings.cache.title') }}</h3>
       <div class="setting-option">
-        <label>Cache nhạc:</label>
+        <label>{{ t('settings.cache.music') }}</label>
         <div class="cache-info">
           <div class="cache-stats">
-            <span class="cache-size">{{ cacheStats.size }} / {{ cacheStats.maxSize }} files</span>
+            <span class="cache-size">
+              {{ t('settings.cache.files', { count: cacheStats.size, max: cacheStats.maxSize }) }}
+            </span>
             <span class="cache-memory">{{ cacheStats.memoryUsage }}</span>
-            <span class="cache-hit-rate">Hit rate: {{ Math.round(cacheStats.hitRate) }}%</span>
-            <span class="cache-songs">{{ totalSongs.toLocaleString() }} bài hát</span>
+            <span class="cache-hit-rate">
+              {{ t('settings.cache.hitRate', { value: Math.round(cacheStats.hitRate) }) }}
+            </span>
+            <span class="cache-songs">
+              {{ t('settings.cache.songs', { count: totalSongs.toLocaleString() }) }}
+            </span>
           </div>
           <div class="cache-controls">
-            <button @click="clearCache" class="cache-btn clear-btn" title="Xoá toàn bộ cache">
+            <button @click="clearCache" class="cache-btn clear-btn" :title="t('settings.cache.clearTitle')">
               <i class="fas fa-trash"></i>
-              <span>Xóa Cache</span>
+              <span>{{ t('settings.cache.clear') }}</span>
             </button>
-            <button @click="forceSaveCache" class="cache-btn save-btn" title="Lưu cache ngay">
+            <button @click="forceSaveCache" class="cache-btn save-btn" :title="t('settings.cache.saveTitle')">
               <i class="fas fa-save"></i>
-              <span>Lưu Cache</span>
+              <span>{{ t('settings.cache.save') }}</span>
             </button>
           </div>
         </div>
       </div>
       <div class="cache-description">
-        <span>Cache lưu trữ metadata của bài hát để tăng tốc độ tải. Xóa cache khi có vấn đề hoặc file nhạc thay đổi.</span>
+        <span>{{ t('settings.cache.description') }}</span>
       </div>
     </div>
   </div>
@@ -259,6 +291,14 @@ import {
   setDiscordEnabled,
   setDiscordGithubButton
 } from '../discordSettings.js'
+import { locale, setLocale, t } from '../i18n.js'
+import type { Locale } from '../../electron/i18n.js'
+
+const languageOptions: { value: Locale; label: string }[] = [
+  { value: 'en', label: 'English' },
+  { value: 'vi', label: 'Tiếng Việt' },
+  { value: 'ja', label: '日本語' }
+]
 
 const theme = ref('dark')
 const accentColor = ref('#7289da')
@@ -442,12 +482,12 @@ onMounted(async () => {
     }
 
     const savedTransparency = await window.electronAPI.getConfig('transparencyEnabled')
-    if (savedTransparency !== undefined) {
+    if (savedTransparency !== null) {
       transparencyEnabled.value = savedTransparency === 'true'
     }
 
     const savedOpacity = await window.electronAPI.getConfig('opacity')
-    if (savedOpacity !== undefined) {
+    if (savedOpacity !== null) {
       let opacityValue = parseFloat(savedOpacity) || 1.0
       // Đảm bảo opacity tối thiểu là 0.6
       if (opacityValue < 0.6) {
@@ -458,17 +498,17 @@ onMounted(async () => {
     }
 
     const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
-    if (savedNormalization !== undefined) {
+    if (savedNormalization !== null) {
       normalizationEnabled.value = savedNormalization === 'true'
     }
 
     const savedVideo = await window.electronAPI.getConfig('videoEnabled')
-    if (savedVideo !== undefined) {
+    if (savedVideo !== null) {
       videoEnabled.value = savedVideo === 'true'
     }
 
     const savedMiniPlayer = await window.electronAPI.getConfig('miniPlayerEnabled')
-    if (savedMiniPlayer !== undefined) {
+    if (savedMiniPlayer !== null) {
       miniPlayerEnabled.value = savedMiniPlayer === 'true'
     }
 
@@ -769,6 +809,7 @@ h3 {
 .setting-option .opacity-section,
 .setting-option .normalization-section,
 .setting-option .video-section,
+.setting-option .language-section,
 .setting-option .cache-info {
   flex: 1;
   display: flex;

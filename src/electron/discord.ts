@@ -3,6 +3,7 @@ import { ipcMain } from 'electron'
 import { buildActivity, type DiscordSongInfo } from './discordActivity.js'
 import { createCoverAvailability } from './coverAvailability.js'
 import { createLatestGate } from './latestGate.js'
+import { getAppLocale, t } from './util.js'
 
 let client: Client | null = null
 const clientId = '1353779001147003033'
@@ -27,7 +28,7 @@ async function initDiscord(): Promise<{ success: boolean; message?: string }> {
   } catch (error) {
     console.error('Discord RPC error:', error)
     client = null
-    return { success: false, message: 'Không thể kết nối với Discord' }
+    return { success: false, message: await t('discord.connectingFailed') }
   }
 }
 
@@ -52,7 +53,7 @@ async function updateStatus(songInfo: DiscordSongInfo) {
   // Sending SET_ACTIVITY ourselves is the only way to get Listening (2).
   await (client as any).request('SET_ACTIVITY', {
     pid: process.pid,
-    activity: buildActivity({ ...songInfo, coverAvailable })
+    activity: buildActivity({ ...songInfo, coverAvailable, locale: await getAppLocale() })
   })
 }
 

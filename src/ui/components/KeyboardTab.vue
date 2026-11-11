@@ -3,117 +3,117 @@
     <div class="header">
       <h1>
         <i class="fas fa-keyboard"></i>
-        Tổ hợp phím
+        {{ t('keyboard.title') }}
       </h1>
-      <p class="description">Danh sách tất cả phím tắt có sẵn trong ứng dụng</p>
+      <p class="description">{{ t('keyboard.description') }}</p>
     </div>
 
     <div class="sections-container">
       <div class="shortcut-section">
         <div class="section-header">
           <i class="fas fa-music"></i>
-          <h2>Tab Nghe nhạc</h2>
+          <h2>{{ t('keyboard.musicSection') }}</h2>
         </div>
         
         <div class="shortcuts-grid">
           <div class="shortcut-category">
-            <h3>Điều khiển phát nhạc</h3>
+            <h3>{{ t('keyboard.playback') }}</h3>
             <div class="shortcut-items">
               <div class="shortcut-item">
                 <span class="key">U</span>
                 <div class="shortcut-info">
-                  <span class="action">Phát/Tạm dừng</span>
-                  <span class="desc">Phát hoặc tạm dừng bài hát hiện tại</span>
+                  <span class="action">{{ t('keyboard.playback.toggle') }}</span>
+                  <span class="desc">{{ t('keyboard.playback.toggleDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key">I</span>
                 <div class="shortcut-info">
-                  <span class="action">Dừng nhạc</span>
-                  <span class="desc">Dừng hoàn toàn và reset nhạc</span>
+                  <span class="action">{{ t('keyboard.playback.stop') }}</span>
+                  <span class="desc">{{ t('keyboard.playback.stopDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key">X</span>
                 <div class="shortcut-info">
-                  <span class="action">Chế độ phát</span>
-                  <span class="desc">Chuyển đổi Normal → Shuffle → Repeat</span>
+                  <span class="action">{{ t('keyboard.playback.mode') }}</span>
+                  <span class="desc">{{ t('keyboard.playback.modeDesc') }}</span>
                 </div>
               </div>
 
               <div class="shortcut-item">
                 <span class="key">P / Q</span>
                 <div class="shortcut-info">
-                  <span class="action">Tùy chỉnh nhạc</span>
-                  <span class="desc">Bật/tắt advanced controls (volume, progress)</span>
+                  <span class="action">{{ t('keyboard.playback.controls') }}</span>
+                  <span class="desc">{{ t('keyboard.playback.controlsDesc') }}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <div class="shortcut-category">
-            <h3>Điều hướng</h3>
+            <h3>{{ t('keyboard.navigation') }}</h3>
             <div class="shortcut-items">
               <div class="shortcut-item">
                 <span class="key">← →</span>
                 <div class="shortcut-info">
-                  <span class="action">Chuyển bài</span>
-                  <span class="desc">Bài trước / Bài kế tiếp</span>
+                  <span class="action">{{ t('keyboard.navigation.changeSong') }}</span>
+                  <span class="desc">{{ t('keyboard.navigation.changeSongDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key">↑ ↓</span>
                 <div class="shortcut-info">
-                  <span class="action">Chọn bài</span>
-                  <span class="desc">Di chuyển trong danh sách</span>
+                  <span class="action">{{ t('keyboard.navigation.selectSong') }}</span>
+                  <span class="desc">{{ t('keyboard.navigation.selectSongDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key">Enter</span>
                 <div class="shortcut-info">
-                  <span class="action">Phát bài được chọn</span>
-                  <span class="desc">Phát bài hát đang được highlight</span>
+                  <span class="action">{{ t('keyboard.navigation.playSelected') }}</span>
+                  <span class="desc">{{ t('keyboard.navigation.playSelectedDesc') }}</span>
                 </div>
               </div>
 
               <div class="shortcut-item">
                 <span class="key">M</span>
                 <div class="shortcut-info">
-                  <span class="action">Đi đến bài hiện tại</span>
-                  <span class="desc">Cuộn đến bài hát đang phát</span>
+                  <span class="action">{{ t('keyboard.navigation.goToCurrent') }}</span>
+                  <span class="desc">{{ t('keyboard.navigation.goToCurrentDesc') }}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <div class="shortcut-category">
-            <h3>Tìm kiếm & Discord</h3>
+            <h3>{{ t('keyboard.searchSection') }}</h3>
             <div class="shortcut-items">
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + K</span>
                 <div class="shortcut-info">
-                  <span class="action">Tìm kiếm</span>
-                  <span class="desc">Focus vào ô tìm kiếm bài hát</span>
+                  <span class="action">{{ t('keyboard.search.focus') }}</span>
+                  <span class="desc">{{ t('keyboard.search.focusDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key">O</span>
                 <div class="shortcut-info">
-                  <span class="action">Discord</span>
-                  <span class="desc">Bật/tắt Discord Rich Presence</span>
+                  <span class="action">{{ t('keyboard.search.discord') }}</span>
+                  <span class="desc">{{ t('keyboard.search.discordDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key">Esc</span>
                 <div class="shortcut-info">
-                  <span class="action">Thoát tìm kiếm</span>
-                  <span class="desc">Xóa nội dung và thoát search</span>
+                  <span class="action">{{ t('keyboard.search.exit') }}</span>
+                  <span class="desc">{{ t('keyboard.search.exitDesc') }}</span>
                 </div>
               </div>
             </div>
@@ -124,79 +124,79 @@
       <div class="shortcut-section">
         <div class="section-header">
           <i class="fas fa-cog"></i>
-          <h2>Tổng quát</h2>
+          <h2>{{ t('keyboard.generalSection') }}</h2>
         </div>
         
         <div class="shortcuts-grid">
           <div class="shortcut-category">
-            <h3>Điều hướng ứng dụng</h3>
+            <h3>{{ t('keyboard.tabs') }}</h3>
             <div class="shortcut-items">
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 1</span>
                 <div class="shortcut-info">
-                  <span class="action">Tab Chung</span>
-                  <span class="desc">Chuyển đến tab Chung</span>
+                  <span class="action">{{ t('keyboard.tabs.general') }}</span>
+                  <span class="desc">{{ t('keyboard.tabs.generalDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 2</span>
                 <div class="shortcut-info">
-                  <span class="action">Tab Sao lưu</span>
-                  <span class="desc">Chuyển đến tab Sao lưu</span>
+                  <span class="action">{{ t('keyboard.tabs.backup') }}</span>
+                  <span class="desc">{{ t('keyboard.tabs.backupDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 3</span>
                 <div class="shortcut-info">
-                  <span class="action">Tab Nghe nhạc</span>
-                  <span class="desc">Chuyển đến tab Nghe nhạc</span>
+                  <span class="action">{{ t('keyboard.tabs.music') }}</span>
+                  <span class="desc">{{ t('keyboard.tabs.musicDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 4</span>
                 <div class="shortcut-info">
-                  <span class="action">Tab Phím tắt</span>
-                  <span class="desc">Chuyển đến tab Phím tắt (hiện tại)</span>
+                  <span class="action">{{ t('keyboard.tabs.keyboard') }}</span>
+                  <span class="desc">{{ t('keyboard.tabs.keyboardDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 5</span>
                 <div class="shortcut-info">
-                  <span class="action">Tab Cài đặt</span>
-                  <span class="desc">Chuyển đến tab Cài đặt</span>
+                  <span class="action">{{ t('keyboard.tabs.setting') }}</span>
+                  <span class="desc">{{ t('keyboard.tabs.settingDesc') }}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <div class="shortcut-category">
-            <h3>Cửa sổ ứng dụng</h3>
+            <h3>{{ t('keyboard.window') }}</h3>
             <div class="shortcut-items">
               <div class="shortcut-item">
                 <span class="key combo">Alt + F4</span>
                 <div class="shortcut-info">
-                  <span class="action">Đóng ứng dụng</span>
-                  <span class="desc">Thoát hoàn toàn khỏi Nericx</span>
+                  <span class="action">{{ t('keyboard.window.close') }}</span>
+                  <span class="desc">{{ t('keyboard.window.closeDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key">F11</span>
                 <div class="shortcut-info">
-                  <span class="action">Toàn màn hình</span>
-                  <span class="desc">Bật/tắt chế độ fullscreen</span>
+                  <span class="action">{{ t('keyboard.window.fullscreen') }}</span>
+                  <span class="desc">{{ t('keyboard.window.fullscreenDesc') }}</span>
                 </div>
               </div>
               
               <div class="shortcut-item">
                 <span class="key">Ctrl + Shift + I</span>
                 <div class="shortcut-info">
-                  <span class="action">DevTools</span>
-                  <span class="desc">Mở công cụ phát triển</span>
+                  <span class="action">{{ t('keyboard.window.devtools') }}</span>
+                  <span class="desc">{{ t('keyboard.window.devtoolsDesc') }}</span>
                 </div>
               </div>
             </div>
@@ -207,39 +207,45 @@
       <div class="tips-section">
         <div class="section-header">
           <i class="fas fa-lightbulb"></i>
-          <h2>Mẹo sử dụng</h2>
+          <h2>{{ t('keyboard.tipsSection') }}</h2>
         </div>
         
         <div class="tips-grid">
           <div class="tip-item">
             <i class="fas fa-info-circle"></i>
             <div class="tip-content">
-              <h4>Phím tắt trong Tab Nghe nhạc</h4>
-              <p>Các phím tắt chỉ hoạt động khi <strong>không đang gõ</strong> trong ô tìm kiếm</p>
+              <h4>{{ t('keyboard.tips.musicKeys') }}</h4>
+              <p>
+                {{ t('keyboard.tips.musicKeysDesc.before') }}<strong>{{ t('keyboard.tips.musicKeysDesc.strong') }}</strong>{{ t('keyboard.tips.musicKeysDesc.after') }}
+              </p>
             </div>
           </div>
           
           <div class="tip-item">
             <i class="fas fa-keyboard"></i>
             <div class="tip-content">
-              <h4>Tổ hợp phím</h4>
-              <p>Sử dụng <strong>Ctrl</strong> + số để chuyển nhanh giữa các tab</p>
+              <h4>{{ t('keyboard.tips.combos') }}</h4>
+              <p>
+                {{ t('keyboard.tips.combosDesc.before') }}<strong>{{ t('keyboard.tips.combosDesc.strong') }}</strong>{{ t('keyboard.tips.combosDesc.after') }}
+              </p>
             </div>
           </div>
           
           <div class="tip-item">
             <i class="fas fa-music"></i>
             <div class="tip-content">
-              <h4>Điều khiển nhạc</h4>
-              <p>Có thể sử dụng phím tắt ngay cả khi không focus vào player</p>
+              <h4>{{ t('keyboard.tips.controls') }}</h4>
+              <p>{{ t('keyboard.tips.controlsDesc') }}</p>
             </div>
           </div>
           
           <div class="tip-item">
             <i class="fas fa-search"></i>
             <div class="tip-content">
-              <h4>Tìm kiếm nhanh</h4>
-              <p>Nhấn <strong>Ctrl + K</strong> từ bất kỳ đâu để tìm kiếm nhạc ngay lập tức</p>
+              <h4>{{ t('keyboard.tips.search') }}</h4>
+              <p>
+                {{ t('keyboard.tips.searchDesc.before') }}<strong>{{ t('keyboard.tips.searchDesc.strong') }}</strong>{{ t('keyboard.tips.searchDesc.after') }}
+              </p>
             </div>
           </div>
         </div>
@@ -249,7 +255,7 @@
 </template>
 
 <script setup lang="ts">
-
+import { t } from '../i18n.js'
 </script>
 
 <style scoped>

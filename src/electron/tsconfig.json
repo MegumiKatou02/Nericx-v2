@@ -6,6 +6,7 @@
         "outDir": "../../dist-electron",
         "skipLibCheck": true,
         "resolveJsonModule": true,
+        "rewriteRelativeImportExtensions": true,
         "types": ["../../types.d.ts"]
     }
 }

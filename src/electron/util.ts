@@ -4,8 +4,34 @@ import { ZipArchive } from 'archiver'
 import { open } from 'sqlite'
 import sqlite3 from 'sqlite3'
 import { app } from 'electron'
+import { LOCALE_CONFIG_KEY, resolveLocale, translate, type Locale } from './i18n.js'
 
 export const isDev = () => process.env.NODE_ENV === 'development'
+
+/**
+ * The renderer owns the language switch, but IPC replies carry user-facing text
+ * too, so the main process keeps a copy of the same choice. It is seeded from
+ * the config row (or the OS locale on first launch) and refreshed whenever the
+ * renderer writes a new language.
+ */
+let mainLocale: Locale | null = null
+
+export const setAppLocale = (locale: Locale): void => {
+  mainLocale = locale
+}
+
+export const getAppLocale = async (): Promise<Locale> => {
+  if (!mainLocale) {
+    const stored = await getConfig(LOCALE_CONFIG_KEY)
+    mainLocale = resolveLocale(stored && stored.trim() ? stored : app.getLocale())
+  }
+  return mainLocale
+}
+
+export const t = async (
+  key: Parameters<typeof translate>[1],
+  params?: Record<string, string | number>
+): Promise<string> => translate(await getAppLocale(), key, params)
 
 export const createZip = (sourcePath: string, outputPath: string): Promise<void> => {
   return new Promise((resolve, reject) => {
@@ -86,10 +112,10 @@ export const createBackup = async (
 
     zipFiles.forEach(file => unlinkSync(file))
 
-    return { success: true, message: 'Sao lưu hoàn tất!' }
+    return { success: true, message: await t('backup.done') }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Có lỗi xảy ra không xác định'
-    return { success: false, message: `Có lỗi xảy ra: ${message}` }
+    const message = error instanceof Error ? error.message : await t('backup.unknownError')
+    return { success: false, message: await t('backup.failed', { message }) }
   }
 }
 

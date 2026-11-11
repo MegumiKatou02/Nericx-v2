@@ -10,7 +10,7 @@ declare global {
       selectedOptions: string[]
     }): Promise<{ success: boolean; message: string }>
     setConfig(key: string, value: string): Promise<boolean>
-    getConfig(key: string): Promise<string>
+    getConfig(key: string): Promise<string | null>
     
     saveFile(sourcePath: string, fileName: string): Promise<{ success: boolean; message: string }>
     copyFile(filePath: string): Promise<{ success: boolean; message: string }>

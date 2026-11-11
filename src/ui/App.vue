@@ -5,6 +5,7 @@ import BackupTab from './components/BackupTab.vue'
 import MusicTab from './components/MusicTab.vue'
 import SettingTab from './components/SettingTab.vue'
 import KeyboardTab from './components/KeyboardTab.vue'
+import { initLocale, t } from './i18n.js'
 import './styles/theme.css'
 
 const fontAwesome = document.createElement('link')
@@ -281,18 +282,18 @@ const getArtistAndTitle = (songName: string) => {
     }
   }
   return {
-    artist: 'Unknown',
+    artist: t('common.unknown'),
     title: songName
   }
 }
 
 const getTitle = () => {
-  if (!currentSong.value) return 'Không có'
+  if (!currentSong.value) return t('common.none')
   return getArtistAndTitle(currentSong.value.name).title
 }
 
 const getArtist = () => {
-  if (!currentSong.value) return 'Không có'
+  if (!currentSong.value) return t('common.none')
   return getArtistAndTitle(currentSong.value.name).artist
 }
 
@@ -322,6 +323,7 @@ const closeWindow = () => {
 
 onMounted(async () => {
   try {
+    await initLocale()
     const savedTheme = await window.electronAPI.getConfig('theme')
     if (savedTheme) {
       updateTheme(savedTheme)
@@ -333,7 +335,7 @@ onMounted(async () => {
     }
 
     const savedMiniPlayerEnabled = await window.electronAPI.getConfig('miniPlayerEnabled')
-    if (savedMiniPlayerEnabled !== undefined) {
+    if (savedMiniPlayerEnabled !== null) {
       miniPlayerEnabled.value = savedMiniPlayerEnabled === 'true'
     }
   } catch (error) {
@@ -513,7 +515,7 @@ onUnmounted(() => {
             @click="currentTab = 'general'"
           >
             <i class="fas fa-home"></i>
-            <span v-show="isMenuOpen">Chung</span>
+            <span v-show="isMenuOpen">{{ t('app.tab.general') }}</span>
           </div>
           <div 
             class="menu-item" 
@@ -521,7 +523,7 @@ onUnmounted(() => {
             @click="currentTab = 'backup'"
           >
             <i class="fas fa-cloud-upload-alt"></i>
-            <span v-show="isMenuOpen">Sao lưu</span>
+            <span v-show="isMenuOpen">{{ t('app.tab.backup') }}</span>
           </div>
           <div 
             class="menu-item" 
@@ -529,7 +531,7 @@ onUnmounted(() => {
             @click="currentTab = 'music'"
           >
             <i class="fas fa-music"></i>
-            <span v-show="isMenuOpen">Nghe nhạc</span>
+            <span v-show="isMenuOpen">{{ t('app.tab.music') }}</span>
           </div>
           <div 
             class="menu-item" 
@@ -537,7 +539,7 @@ onUnmounted(() => {
             @click="currentTab = 'keyboard'"
           >
             <i class="fas fa-keyboard"></i>
-            <span v-show="isMenuOpen">Phím tắt</span>
+            <span v-show="isMenuOpen">{{ t('app.tab.keyboard') }}</span>
           </div>
           <div 
             class="menu-item" 
@@ -545,7 +547,7 @@ onUnmounted(() => {
             @click="currentTab = 'setting'"
           >
             <i class="fas fa-cog"></i>
-            <span v-show="isMenuOpen">Cài đặt</span>
+            <span v-show="isMenuOpen">{{ t('app.tab.setting') }}</span>
           </div>
           
         </div>
@@ -598,7 +600,7 @@ onUnmounted(() => {
         </div>
       </div>
       
-      <button class="collapse-btn" @click.stop="toggleMiniPlayerCollapse" :title="miniPlayerCollapsed ? 'Mở rộng' : 'Thu gọn'">
+      <button class="collapse-btn" @click.stop="toggleMiniPlayerCollapse" :title="miniPlayerCollapsed ? t('common.expand') : t('common.collapse')">
         <i :class="miniPlayerCollapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
       </button>
     </div>
