@@ -469,6 +469,7 @@ class AudioPlayer {
   private audioContext: AudioContext | null = null
   private graph: AudioGraph | null = null
   private normalizationEnabled: boolean = false
+  private pendingPlay: { timeout: ReturnType<typeof setTimeout>; abandon: () => void } | null = null
 
   constructor() {
     // One element for the whole lifetime. Replacing it per track used to leave
@@ -528,6 +529,20 @@ class AudioPlayer {
     this.graph?.setNormalization(enabled)
   }
 
+  /**
+   * A superseded `play()` must settle: leaving its promise pending would pin the
+   * awaiting `playSong` (and this handler closure) until the process exits. Its
+   * 10 s timer must also die, or it fires against the *next* track's element
+   * state and clears handlers it does not own.
+   */
+  private abandonPendingPlay() {
+    const pending = this.pendingPlay
+    this.pendingPlay = null
+    if (!pending) return
+    clearTimeout(pending.timeout)
+    pending.abandon()
+  }
+
   async play(song: Song): Promise<{ success: boolean; message: string }> {
     try {
       if (!this.audio) {
@@ -540,6 +555,8 @@ class AudioPlayer {
       if (this.audioContext && this.audioContext.state === 'suspended') {
         await this.audioContext.resume()
       }
+      // Any still-pending load belongs to a track that is already being replaced.
+      this.abandonPendingPlay()
       // Handlers from the previous track must not resolve this call.
       this.audio!.onloadedmetadata = null
       this.audio!.onerror = null
@@ -550,22 +567,15 @@ class AudioPlayer {
       
       return new Promise((resolve) => {
         let resolved = false
-        
-        const cleanup = () => {
-          if (this.audio) {
-            this.audio.onloadedmetadata = null
-            this.audio.onerror = null
-          }
-        }
-        
-        this.audio!.onloadedmetadata = () => {
+
+        const onLoaded = () => {
           if (resolved) return
           resolved = true
           cleanup()
           resolve({ success: true, message: song.name })
         }
 
-        this.audio!.onerror = () => {
+        const onError = () => {
           if (resolved) return
           resolved = true
           cleanup()
@@ -573,13 +583,36 @@ class AudioPlayer {
           resolve({ success: false, message: t('music.playback.errorLoad', { message: errorMessage }) })
         }
 
-        setTimeout(() => {
-          if (!resolved) {
-            resolved = true
-            cleanup()
-            resolve({ success: false, message: t('music.playback.timeout') })
+        // Only detach what this call installed: the element is shared, so a
+        // stale call must not clear the handlers of the track that replaced it.
+        const cleanup = () => {
+          if (!this.audio) return
+          if (this.audio.onloadedmetadata === onLoaded) this.audio.onloadedmetadata = null
+          if (this.audio.onerror === onError) this.audio.onerror = null
+          if (this.pendingPlay && this.pendingPlay.timeout === timeout) {
+            clearTimeout(timeout)
+            this.pendingPlay = null
           }
+        }
+
+        const timeout = setTimeout(() => {
+          if (resolved) return
+          resolved = true
+          cleanup()
+          resolve({ success: false, message: t('music.playback.timeout') })
         }, 10000)
+
+        this.pendingPlay = {
+          timeout,
+          abandon: () => {
+            if (resolved) return
+            resolved = true
+            resolve({ success: false, message: t('music.playback.cancelled') })
+          }
+        }
+
+        this.audio!.onloadedmetadata = onLoaded
+        this.audio!.onerror = onError
 
         this.audio!.play().catch(error => {
           if (!resolved && error.name !== 'AbortError') {
@@ -705,6 +738,10 @@ const progressTicker: ProgressTicker = createProgressTicker(systemTimers, 250, (
   }
 })
 const videoEnabled = ref(false)
+
+// Bumped by every playSong call so a slow, superseded load cannot write the
+// playback state of the track that replaced it.
+let playRequestId = 0
 
 const statsIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
 const cleanupIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
@@ -1160,7 +1197,9 @@ const playSong = async (song: Song) => {
     
     await new Promise(resolve => setTimeout(resolve, 100))
     
+    const requestId = ++playRequestId
     const result = await audioPlayer.play(song)
+    if (requestId !== playRequestId) return
     if (result.success) {
       currentSong.value = song
       selectedSong.value = song

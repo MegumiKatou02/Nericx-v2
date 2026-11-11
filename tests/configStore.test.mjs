@@ -86,6 +86,25 @@ test('overlapping writes all land', async () => {
   await db.close()
 })
 
+test('a failed open is retried on the next call instead of wedging the store', async () => {
+  // The store leaves its handle null when `openDatabase` rejects, so the next
+  // call has to try again rather than reuse a failed connection forever.
+  let attempts = 0
+  const db = createConfigStore({
+    openDatabase: async () => {
+      attempts++
+      if (attempts === 1) throw new Error('disk on fire')
+      return open({ filename: ':memory:', driver: sqlite3.Database })
+    }
+  })
+
+  await assert.rejects(db.init(SCHEMA, []), /disk on fire/)
+  await db.init(SCHEMA, [])
+  assert.equal(attempts, 2)
+  assert.equal(await db.get('nope'), null)
+  await db.close()
+})
+
 test('a failing write rejects the caller and keeps the store usable', async () => {
   const { db } = await openedStore()
   await assert.rejects(db.set('bad', null), /NOT NULL|constraint/i)
