@@ -1193,6 +1193,9 @@ const playSong = async (song: Song) => {
       // running against an element that never started.
       isPlaying.value = false
       progressTicker.stop()
+      if (updateMiniPlayer) {
+        updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
+      }
     }
   } catch (error) {
     console.error('Error in playSong:', error)
