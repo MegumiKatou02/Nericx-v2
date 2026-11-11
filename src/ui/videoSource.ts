@@ -19,8 +19,8 @@ export interface VideoSourceInput {
 
 /**
  * Returns the `file://` url of the video to render, or `null` when no video
- * should be rendered at all. The song's `path` is the identity here: two
- * entries for the same file are different objects.
+ * should be rendered at all. Tracks are matched by `path`: the same file can
+ * arrive as a different object, so object identity is not reliable here.
  */
 export function videoUrlFor({ videoEnabled, current, selected, isPlaying }: VideoSourceInput): string | null {
   if (!videoEnabled) return null

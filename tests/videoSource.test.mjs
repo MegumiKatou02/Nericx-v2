@@ -39,3 +39,17 @@ test('a playing video song with nothing selected renders its video', () => {
 test('no current song means no url', () => {
   assert.equal(videoUrlFor({ videoEnabled: true, current: null, selected: playing, isPlaying: true }), null)
 })
+
+test('a second object for the same file still counts as the playing track', () => {
+  const copy = { path: 'a.mp3', video: 'C:/songs/a.mp4' }
+  assert.notEqual(copy, playing)
+  assert.equal(
+    videoUrlFor({ videoEnabled: true, current: playing, selected: copy, isPlaying: true }),
+    'file://C:/songs/a.mp4'
+  )
+})
+
+test('an empty video path has no url', () => {
+  const empty = { path: 'd.mp3', video: '' }
+  assert.equal(videoUrlFor({ videoEnabled: true, current: empty, selected: empty, isPlaying: true }), null)
+})
