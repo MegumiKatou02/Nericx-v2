@@ -322,6 +322,7 @@
 import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
 import { isVideoPlaying as isVideoPlayingForPresence, playbackWindow } from '../presence.js'
+import { videoUrlFor } from '../videoSource.js'
 import { createAudioGraph, type AudioGraph, type AudioGraphContext } from '../audioGraph.js'
 import { fileUrlForPath } from '../fileUrl.js'
 import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
@@ -858,8 +859,7 @@ const formattedDuration = computed(() => formatTime(duration.value))
 
 const currentCoverImage = computed(() => {
   const song = selectedSong.value || currentSong.value
-  const isShowingCurrentVideo = videoEnabled.value && currentSong.value?.video && isPlaying.value && selectedSong.value?.path === currentSong.value?.path
-  if (!isShowingCurrentVideo && song?.image) {
+  if (!currentVideoUrl.value && song?.image) {
     return 'file://' + song.image
   }
   return null
@@ -870,19 +870,12 @@ const currentSongName = computed(() => {
   return song?.name || ''
 })
 
-const currentVideoUrl = computed(() => {
-  if (!videoEnabled.value) return null
-  
-  if (selectedSong.value?.video) {
-    return 'file://' + selectedSong.value.video
-  }
-  
-  if (currentSong.value?.video && isPlaying.value && !selectedSong.value) {
-    return 'file://' + currentSong.value.video
-  }
-  
-  return null
-})
+const currentVideoUrl = computed(() => videoUrlFor({
+  videoEnabled: videoEnabled.value,
+  current: currentSong.value,
+  selected: selectedSong.value,
+  isPlaying: isPlaying.value
+}))
 
 // Video counts as "playing" only when the rendered video belongs to the song
 // that is actually playing, so browsing other songs never lies in the presence.
