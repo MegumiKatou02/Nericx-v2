@@ -222,8 +222,11 @@ ipcMain.handle('set-config', createIPCHandler(async (_: any, key: string, value:
   // The renderer keeps a few settings in local state; a broadcast keeps them in
   // sync without each tab polling the database on a timer.
   if (saved) {
-    for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send('config:changed', key, value)
+    for (const win of BrowserWindow.getAllWindows()) {
+      // The broadcast is a notification: a window already tearing down must not
+      // turn a successful write into a rejected invoke for the caller.
+      if (win.webContents.isDestroyed()) continue
+      win.webContents.send('config:changed', key, value)
     }
   }
   return saved
