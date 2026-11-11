@@ -1163,6 +1163,7 @@ const playSong = async (song: Song) => {
       audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
       audioPlayer.stop()
     }
+    progressTicker.stop()
     
     await new Promise(resolve => setTimeout(resolve, 100))
     
@@ -1188,6 +1189,10 @@ const playSong = async (song: Song) => {
       audioPlayer.getAudio()?.addEventListener('ended', handleSongEnd)
     } else {
       console.error(result.message)
+      // A failed load must not leave the UI claiming to play, nor the ticker
+      // running against an element that never started.
+      isPlaying.value = false
+      progressTicker.stop()
     }
   } catch (error) {
     console.error('Error in playSong:', error)
