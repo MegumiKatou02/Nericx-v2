@@ -322,6 +322,8 @@
 import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
 import { isVideoPlaying as isVideoPlayingForPresence, playbackWindow } from '../presence.js'
+import { createAudioGraph, type AudioGraph, type AudioGraphContext } from '../audioGraph.js'
+import { fileUrlForPath } from '../fileUrl.js'
 import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
 import { createCoalescingWriter } from '../coalesce.js'
 import { createStateTransition } from '../discordClient.js'
@@ -463,57 +465,47 @@ class AudioPlayer {
   private audio: HTMLAudioElement | null = null
   private volume: number = 0.5
   private audioContext: AudioContext | null = null
-  private sourceNode: MediaElementAudioSourceNode | null = null
-  private gainNode: GainNode | null = null
-  private compressorNode: DynamicsCompressorNode | null = null
-  private analyserNode: AnalyserNode | null = null
-  private normalizationEnabled: boolean = false 
+  private graph: AudioGraph | null = null
+  private normalizationEnabled: boolean = false
 
   constructor() {
-    this.initAudio()
-    this.initAudioContext()
+    // One element for the whole lifetime. Replacing it per track used to leave
+    // every old source node connected to the destination, which kept each
+    // played track's media element (and its buffers) alive.
+    this.createAudioChain()
   }
 
-  private initAudioContext() {
+  /**
+   * An element can be bound to a source node once in its life: re-running
+   * `createMediaElementSource` on the same element throws InvalidStateError. So
+   * rebuilding the chain after `destroy()` also has to discard the element.
+   */
+  private createAudioChain() {
+    if (this.audio) {
+      this.audio.pause()
+      this.audio.removeAttribute('src')
+      this.audio.load()
+    }
+    this.graph?.dispose()
+    this.graph = null
+
+    this.audio = new Audio()
+    // Volume is applied once, in the graph, so the element stays at unity. If the
+    // graph cannot be built (no Web Audio) the element carries the volume instead.
+    this.audio.volume = this.volume
+
     try {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      this.graph = createAudioGraph(
+        this.audioContext as unknown as AudioGraphContext,
+        this.audio,
+        this.volume
+      )
+      this.graph.setNormalization(this.normalizationEnabled)
+      this.audio.volume = 1
     } catch (error) {
       console.warn('Web Audio API not supported:', error)
-    }
-  }
-
-  private setupAudioNodes() {
-    if (!this.audioContext || !this.audio) return
-
-    try {
-      this.sourceNode = this.audioContext.createMediaElementSource(this.audio)
-      this.gainNode = this.audioContext.createGain()
-      this.compressorNode = this.audioContext.createDynamicsCompressor()
-      this.analyserNode = this.audioContext.createAnalyser()
-
-      this.compressorNode.threshold.setValueAtTime(-18, this.audioContext.currentTime)
-      this.compressorNode.knee.setValueAtTime(15, this.audioContext.currentTime)
-      this.compressorNode.ratio.setValueAtTime(3, this.audioContext.currentTime)
-      this.compressorNode.attack.setValueAtTime(0.008, this.audioContext.currentTime)
-      this.compressorNode.release.setValueAtTime(0.15, this.audioContext.currentTime)
-
-      this.analyserNode.fftSize = 2048
-      this.analyserNode.smoothingTimeConstant = 0.8
-
-      if (this.normalizationEnabled) {
-        this.sourceNode.connect(this.compressorNode)
-        this.compressorNode.connect(this.gainNode)
-        this.gainNode.connect(this.analyserNode)
-        this.analyserNode.connect(this.audioContext.destination)
-      } else {
-        this.sourceNode.connect(this.gainNode)
-        this.gainNode.connect(this.analyserNode)
-        this.analyserNode.connect(this.audioContext.destination)
-      }
-
-      this.gainNode.gain.setValueAtTime(this.volume, this.audioContext!.currentTime)
-    } catch (error) {
-      console.warn('Error setting up audio nodes:', error)
+      this.audioContext = null
     }
   }
 
@@ -529,67 +521,28 @@ class AudioPlayer {
     return this.normalizationEnabled
   }
 
-  public toggleNormalization(enabled: boolean) {
+  toggleNormalization(enabled: boolean) {
     this.normalizationEnabled = enabled
-    if (this.audio && this.audioContext) {
-      this.setupAudioNodes()
-    }
-  }
-
-  public getAudioLevel(): number {
-    if (!this.analyserNode) return 0
-    
-    const bufferLength = this.analyserNode.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
-    this.analyserNode.getByteFrequencyData(dataArray)
-    
-    let sum = 0
-    for (let i = 0; i < bufferLength; i++) {
-      sum += dataArray[i] * dataArray[i]
-    }
-    const rms = Math.sqrt(sum / bufferLength)
-    return rms / 255 
-  }
-
-  private initAudio() {
-    if (this.audio) {
-      this.audio.pause()
-      this.audio.src = ''
-    }
-    this.audio = null
-    this.sourceNode = null
-    this.gainNode = null
-    this.compressorNode = null
-    this.analyserNode = null
+    this.graph?.setNormalization(enabled)
   }
 
   async play(song: Song): Promise<{ success: boolean; message: string }> {
     try {
-      this.initAudio()
-      
-      await new Promise(resolve => setTimeout(resolve, 50))
-      
-      this.audio = new Audio()
-      
+      if (!this.audio || !this.graph) {
+        // `destroy()` closed the context and dropped the element; AudioPlayer is a
+        // module singleton, so a remount has to rebuild the chain.
+        this.createAudioChain()
+      }
       if (this.audioContext && this.audioContext.state === 'suspended') {
         await this.audioContext.resume()
       }
-      
-      const fixedPath = song.path.replace(/\\/g, '/')
-      
-      let srcPath: string
-      try {
-        const encodedPath = fixedPath.split('/').map(part => encodeURIComponent(part)).join('/')
-        srcPath = `file:///${encodedPath}`
-      } catch (error) {
-        console.warn('Encoding thất bại, sử dụng fallback:', error)
-        srcPath = new URL(`file:///${fixedPath}`).href
-      }
-      
-      this.audio.src = srcPath
-      this.audio.volume = this.volume
-      
-      this.setupAudioNodes()
+      // Handlers from the previous track must not resolve this call.
+      this.audio!.onloadedmetadata = null
+      this.audio!.onerror = null
+
+      const srcPath = fileUrlForPath(song.path)
+
+      this.audio!.src = srcPath
       
       return new Promise((resolve) => {
         let resolved = false
@@ -655,29 +608,23 @@ class AudioPlayer {
       if (this.audio) {
         this.audio.pause()
         this.audio.currentTime = 0
-        
-        setTimeout(() => {
-          if (this.audio) {
-            this.audio.src = ''
-            this.audio.load()
-          }
-        }, 50)
-        
-        this.audio = null
+        // Reset immediately: a deferred reset would wipe the `src` that the next
+        // `play()` sets on this same, now-reused, element.
+        this.audio.removeAttribute('src')
+        this.audio.load()
       }
     } catch (error) {
       console.warn('Error stopping audio:', error)
-      this.audio = null
     }
   }
 
   setVolume(volume: number) {
     this.volume = Math.max(0, Math.min(1, volume))
-    if (this.audio) {
+    if (this.graph) {
+      this.graph.setVolume(this.volume)
+    } else if (this.audio) {
+      // No Web Audio available: the element is the only gain stage.
       this.audio.volume = this.volume
-    }
-    if (this.gainNode) {
-      this.gainNode.gain.setValueAtTime(this.volume, this.audioContext!.currentTime)
     }
   }
 
@@ -711,6 +658,11 @@ class AudioPlayer {
 
   destroy() {
     this.stop()
+    this.graph?.dispose()
+    this.graph = null
+    this.audio = null
+    void this.audioContext?.close()
+    this.audioContext = null
   }
 }
 
@@ -740,7 +692,6 @@ const isDropdownOpen = ref(false)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const musicTabRef = ref<HTMLElement | null>(null)
 const normalizationEnabled = ref(false)
-const audioLevel = ref(0)
 const progressUpdateId = ref<number | null>(null)
 const videoEnabled = ref(false)
 
@@ -1554,11 +1505,7 @@ const updateProgress = rafThrottle(() => {
   if (isPlaying.value) {
     currentTime.value = audioPlayer.getCurrentTime()
     duration.value = audioPlayer.getDuration()
-    
-    if (normalizationEnabled.value) {
-      audioLevel.value = audioPlayer.getAudioLevel()
-    }
-  
+
     if (updateMiniPlayer) {
       updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
     }
