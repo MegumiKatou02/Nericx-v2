@@ -329,7 +329,7 @@ import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
 import { createCoalescingWriter } from '../coalesce.js'
 import { createProgressTicker, systemTimers, type ProgressTicker } from '../progressTicker.js'
 import { createStateTransition } from '../discordClient.js'
-import { discordSettings, ensureDiscordSettingsLoaded, setDiscordEnabled } from '../discordSettings.js'
+import { discordSettings, ensureDiscordSettingsLoaded, parseStoredBoolean, setDiscordEnabled } from '../discordSettings.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 import { t } from '../i18n.js'
@@ -1775,44 +1775,7 @@ const scrollToSelectedSong = (songIndex: number) => {
   }
 }
 
-let normalizationCheckInterval: ReturnType<typeof setTimeout> | null = null
-
-const startNormalizationWatcher = () => {
-  normalizationCheckInterval = setInterval(async () => {
-    if (!isPlaying.value) return
-    
-    try {
-      const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
-      if (savedNormalization !== null) {
-        const newValue = savedNormalization === 'true'
-        if (newValue !== normalizationEnabled.value) {
-          normalizationEnabled.value = newValue
-          audioPlayer.toggleNormalization(normalizationEnabled.value)
-        }
-      }
-    } catch (error) {
-      console.error('Error checking normalization setting:', error)
-    }
-  }, 5000) 
-}
-
-let videoCheckInterval: ReturnType<typeof setTimeout> | null = null
-
-const startVideoWatcher = () => {
-  videoCheckInterval = setInterval(async () => {
-    try {
-      const savedVideo = await window.electronAPI.getConfig('videoEnabled')
-      if (savedVideo !== null) {
-        const newValue = savedVideo === 'true'
-        if (newValue !== videoEnabled.value) {
-          videoEnabled.value = newValue
-        }
-      }
-    } catch (error) {
-      console.error('Error checking video setting:', error)
-    }
-  }, 2000) 
-}
+let configUnsubscribe: (() => void) | null = null
 
 const focusTab = () => {
   if (currentSong.value && !selectedSong.value) {
@@ -1966,21 +1929,26 @@ onMounted(async () => {
     audioPlayer.setVolume(resolvedVolume)
 
     const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
-    if (savedNormalization !== null) {
-      normalizationEnabled.value = savedNormalization === 'true'
-      audioPlayer.toggleNormalization(normalizationEnabled.value)
-    }
+    normalizationEnabled.value = parseStoredBoolean(savedNormalization, false)
+    audioPlayer.toggleNormalization(normalizationEnabled.value)
 
     const savedVideo = await window.electronAPI.getConfig('videoEnabled')
-    if (savedVideo !== null) {
-      videoEnabled.value = savedVideo === 'true'
-    }
+    videoEnabled.value = parseStoredBoolean(savedVideo, false)
   } catch (error) {
     console.error('Error loading settings:', error)
   }
-  
-  startNormalizationWatcher()
-  startVideoWatcher()
+
+  configUnsubscribe = window.electronAPI.onConfigChanged((key, value) => {
+    if (key === 'normalizationEnabled') {
+      const next = parseStoredBoolean(value, false)
+      if (next !== normalizationEnabled.value) {
+        normalizationEnabled.value = next
+        audioPlayer.toggleNormalization(next)
+      }
+    } else if (key === 'videoEnabled') {
+      videoEnabled.value = parseStoredBoolean(value, false)
+    }
+  })
   
   nextTick(() => {
     if (musicTabRef.value) {
@@ -2008,10 +1976,9 @@ onUnmounted(() => {
     cleanupIntervalId.value = null
   }
 
-  if (normalizationCheckInterval) {
-    clearInterval(normalizationCheckInterval)
-  }
-  
+  configUnsubscribe?.()
+  configUnsubscribe = null
+
   progressTicker.stop()
   
   if (audioPlayer.getAudio()) {
@@ -2042,10 +2009,6 @@ onUnmounted(() => {
   
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('click', handleGlobalClick)
-  
-  if (videoCheckInterval) {
-    clearInterval(videoCheckInterval)
-  }
   
   performMemoryCleanup()
   

@@ -218,7 +218,15 @@ ipcMain.handle('set-config', createIPCHandler(async (_: any, key: string, value:
   // The main process answers IPC calls with localized text, so it mirrors the
   // renderer's language choice instead of reading the database again per reply.
   if (key === LOCALE_CONFIG_KEY) setAppLocale(resolveLocale(value))
-  return await setConfig(key, value)
+  const saved = await setConfig(key, value)
+  // The renderer keeps a few settings in local state; a broadcast keeps them in
+  // sync without each tab polling the database on a timer.
+  if (saved) {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('config:changed', key, value)
+    }
+  }
+  return saved
 }))
 
 ipcMain.handle('save-file', createIPCHandler(async (_: any, sourcePath: string, fileName: string) => {

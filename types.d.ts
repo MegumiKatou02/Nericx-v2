@@ -11,6 +11,7 @@ declare global {
     }): Promise<{ success: boolean; message: string }>
     setConfig(key: string, value: string): Promise<boolean>
     getConfig(key: string): Promise<string | null>
+    onConfigChanged(callback: (key: string, value: string) => void): () => void
     
     saveFile(sourcePath: string, fileName: string): Promise<{ success: boolean; message: string }>
     copyFile(filePath: string): Promise<{ success: boolean; message: string }>
