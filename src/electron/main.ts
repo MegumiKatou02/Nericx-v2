@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage, shell } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig, setAppLocale, getAppLocale, t } from './util.js'
+import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig, closeConfigStore, setAppLocale, getAppLocale, t } from './util.js'
 import { getPreloadPath } from './pathResolver.js'
 import { LOCALE_CONFIG_KEY, resolveLocale } from './i18n.js'
 import { copyFileSync, existsSync, readdirSync } from 'fs'
@@ -472,6 +472,8 @@ app.on('window-all-closed', () => {
   }
   
   ipcBatcher.destroy()
+
+  void closeConfigStore()
   
   if (process.platform !== 'darwin') {
     app.quit()
@@ -484,6 +486,8 @@ app.on('before-quit', () => {
   }
   
   ipcBatcher.destroy()
+
+  void closeConfigStore()
 })
 
 process.on('uncaughtException', (error) => {
