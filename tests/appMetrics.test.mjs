@@ -35,3 +35,15 @@ test('a missing memory block counts as zero instead of breaking the total', () =
 test('an empty list summarises to zero without throwing', () => {
   assert.deepEqual(summarizeAppMetrics([]), { totalMB: 0, processes: [] })
 })
+
+test('kilobytes round to the nearest megabyte, not down', () => {
+  const summary = summarizeAppMetrics([
+    // 1100 KB = 1.074 MB: rounds and floors to 1, so this alone proves nothing
+    { pid: 1, type: 'Browser', memory: { privateBytes: 1100 } },
+    // 600 KB = 0.586 MB: rounds up to 1, floors to 0
+    { pid: 2, type: 'Utility', memory: { privateBytes: 600 } }
+  ])
+
+  assert.equal(summary.processes.find(p => p.pid === 2).privateMB, 1)
+  assert.equal(summary.totalMB, 2)
+})
