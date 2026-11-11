@@ -326,6 +326,7 @@ import { createAudioGraph, type AudioGraph, type AudioGraphContext } from '../au
 import { fileUrlForPath } from '../fileUrl.js'
 import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
 import { createCoalescingWriter } from '../coalesce.js'
+import { createProgressTicker, systemTimers, type ProgressTicker } from '../progressTicker.js'
 import { createStateTransition } from '../discordClient.js'
 import { discordSettings, ensureDiscordSettingsLoaded, setDiscordEnabled } from '../discordSettings.js'
 import ImageViewer from './ImageViewer.vue'
@@ -694,7 +695,14 @@ const isDropdownOpen = ref(false)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const musicTabRef = ref<HTMLElement | null>(null)
 const normalizationEnabled = ref(false)
-const progressUpdateId = ref<number | null>(null)
+const progressTicker: ProgressTicker = createProgressTicker(systemTimers, 250, () => {
+  if (!isPlaying.value) return
+  currentTime.value = audioPlayer.getCurrentTime()
+  duration.value = audioPlayer.getDuration()
+  if (updateMiniPlayer) {
+    updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
+  }
+})
 const videoEnabled = ref(false)
 
 const statsIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
@@ -1163,7 +1171,7 @@ const playSong = async (song: Song) => {
       currentSong.value = song
       selectedSong.value = song
       isPlaying.value = true
-      startProgressUpdate()
+      progressTicker.start()
       updateDiscordStatus()
       
       nextTick(() => {
@@ -1240,10 +1248,11 @@ const togglePlay = async () => {
     if (isPlaying.value) {
       audioPlayer.pause()
       isPlaying.value = false
+      progressTicker.stop()
     } else {
       audioPlayer.resume()
       isPlaying.value = true
-      startProgressUpdate()
+      progressTicker.start()
     }
     
     if (updateMiniPlayer) {
@@ -1260,6 +1269,7 @@ const stopMusic = () => {
       audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
     }
     audioPlayer.stop()
+    progressTicker.stop()
     isPlaying.value = false
     currentTime.value = 0
     duration.value = 0
@@ -1501,25 +1511,6 @@ const formatTime = (seconds: number) => {
   const minutes = Math.floor(seconds / 60)
   const remainingSeconds = Math.floor(seconds % 60)
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-}
-
-const updateProgress = rafThrottle(() => {
-  if (isPlaying.value) {
-    currentTime.value = audioPlayer.getCurrentTime()
-    duration.value = audioPlayer.getDuration()
-
-    if (updateMiniPlayer) {
-      updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
-    }
-        
-    requestAnimationFrame(updateProgress)
-  }
-})
-
-const startProgressUpdate = () => {
-  if (isPlaying.value) {
-    requestAnimationFrame(updateProgress)
-  }
 }
 
 const showImageViewer = ref(false)
@@ -2020,10 +2011,7 @@ onUnmounted(() => {
     clearInterval(normalizationCheckInterval)
   }
   
-  if (progressUpdateId.value) {
-    cancelAnimationFrame(progressUpdateId.value)
-    progressUpdateId.value = null
-  }
+  progressTicker.stop()
   
   if (audioPlayer.getAudio()) {
     audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
