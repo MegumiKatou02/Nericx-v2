@@ -43,7 +43,12 @@ export function parseStoredBoolean(
 export const discordSettings: DiscordSettings = reactive({ ...DEFAULT_DISCORD_SETTINGS })
 
 async function persist(key: string, value: boolean): Promise<void> {
-  await window.electronAPI.setConfig(key, value.toString())
+  const saved = await window.electronAPI.setConfig(key, value.toString())
+  if (!saved) {
+    // The store already shows the new value, so a silent failure would look
+    // right until the next launch reverts it.
+    console.warn(`Discord setting "${key}" was not saved; it will revert on next launch`)
+  }
 }
 
 export async function loadDiscordSettings(): Promise<void> {
@@ -62,6 +67,19 @@ export async function loadDiscordSettings(): Promise<void> {
     githubButton,
     DEFAULT_DISCORD_SETTINGS.githubButton
   )
+}
+
+let loaded: Promise<void> | null = null
+
+/**
+ * Both tabs mount at startup and share one store, so the rows are read once.
+ * A second read could also overwrite a value the other tab just changed.
+ */
+export function ensureDiscordSettingsLoaded(): Promise<void> {
+  if (!loaded) {
+    loaded = loadDiscordSettings()
+  }
+  return loaded
 }
 
 export async function setDiscordEnabled(value: boolean): Promise<void> {

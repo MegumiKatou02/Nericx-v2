@@ -254,7 +254,7 @@
 import { ref, onMounted, inject } from 'vue'
 import {
   discordSettings,
-  loadDiscordSettings,
+  ensureDiscordSettingsLoaded,
   setDiscordBeatmapButton,
   setDiscordEnabled,
   setDiscordGithubButton
@@ -476,7 +476,7 @@ onMounted(async () => {
       await updateAppTransparency()
     }
 
-    await loadDiscordSettings()
+    await ensureDiscordSettingsLoaded()
     await updateCacheStats()
   } catch (error) {
     console.error('Error loading config:', error)

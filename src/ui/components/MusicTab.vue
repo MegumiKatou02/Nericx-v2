@@ -324,7 +324,8 @@ import type { Song } from '../../electron/type.js'
 import { isVideoPlaying as isVideoPlayingForPresence, playbackWindow } from '../presence.js'
 import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
 import { createCoalescingWriter } from '../coalesce.js'
-import { discordSettings, loadDiscordSettings, setDiscordEnabled } from '../discordSettings.js'
+import { createStateTransition } from '../discordClient.js'
+import { discordSettings, ensureDiscordSettingsLoaded, setDiscordEnabled } from '../discordSettings.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 
@@ -1416,45 +1417,47 @@ const disconnectDiscord = async () => {
   discordStatus.value = 'Đã tắt'
 }
 
-const syncDiscordClient = async () => {
-  if (discordEnabled.value) {
+/**
+ * Requests arrive from the music tab button and from the settings switch, and a
+ * toggle during startup's slow RPC login must not be lost. Serialising here
+ * means an `init` can never interleave with a `destroy`, and the newest request
+ * wins over anything queued behind it.
+ */
+const requestDiscordState = createStateTransition<boolean | null>(async (enabled) => {
+  if (enabled) {
     await connectDiscord()
   } else {
-    try {
-      await window.electronAPI.discordDestroy()
-    } catch (error) {
-      console.error('Failed to destroy Discord client:', error)
-    }
-    discordStatus.value = 'Đã tắt'
+    await disconnectDiscord()
   }
-}
+}, null)
 
-// Loading the stored value writes the store, which would otherwise look like a
-// user toggle and start the client a second time.
-let discordReady = false
+let discordBusy = 0
 
-// Both the music tab button and the settings switch write the same stored
-// setting; this watcher is the single place that starts or stops the client.
-watch(
-  () => discordSettings.enabled,
-  async (enabled) => {
-    if (!discordReady) return
-    isDiscordLoading.value = true
-    try {
-      if (enabled) {
-        await connectDiscord()
-      } else {
-        await disconnectDiscord()
-      }
-    } catch (error) {
-      console.error('Discord toggle error:', error)
-    } finally {
+const applyDiscordState = async (enabled: boolean) => {
+  isDiscordLoading.value = true
+  discordBusy++
+  try {
+    await requestDiscordState(enabled)
+  } catch (error) {
+    console.error('Discord toggle error:', error)
+  } finally {
+    discordBusy--
+    if (discordBusy === 0) {
       isDiscordLoading.value = false
       discordCooldownActive.value = true
       setTimeout(() => {
         discordCooldownActive.value = false
       }, 2000)
     }
+  }
+}
+
+// Both the music tab button and the settings switch write the same stored
+// setting; this watcher is the single place that starts or stops the client.
+watch(
+  () => discordSettings.enabled,
+  (enabled) => {
+    applyDiscordState(enabled)
   }
 )
 
@@ -1474,14 +1477,9 @@ const toggleDiscord = async () => {
     return
   }
 
-  // Set the guard synchronously: the client work happens in the watcher, so a
-  // second click in the meantime would otherwise flip the setting back.
+  // The client work happens in the watcher, so guard synchronously: a second
+  // click before the request lands would otherwise flip the setting back.
   isDiscordLoading.value = true
-  discordCooldownActive.value = true
-  setTimeout(() => {
-    discordCooldownActive.value = false
-  }, 2000)
-
   try {
     await setDiscordEnabled(!discordSettings.enabled)
   } catch (error) {
@@ -1998,9 +1996,11 @@ const handleGlobalClick = (e: MouseEvent) => {
 }
 
 onMounted(async () => {
-  await loadDiscordSettings()
-  await syncDiscordClient()
-  discordReady = true
+  // The music library must not wait on Discord's RPC handshake, which can stall
+  // for seconds: load the setting, start the song path, and let the client
+  // connect in the background behind the serialised transition.
+  await ensureDiscordSettingsLoaded()
+  applyDiscordState(discordEnabled.value)
   loadFonts()
   await loadSongs()
   
