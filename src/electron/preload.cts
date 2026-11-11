@@ -53,6 +53,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMusicScanProgress: (callback: (progress: any) => void) => {
     ipcRenderer.on('music:scanProgress', (_, progress) => callback(progress))
   },
+  onConfigChanged: (callback: (key: string, value: string) => void) => {
+    const listener = (_: unknown, key: string, value: string) => callback(key, value)
+    ipcRenderer.on('config:changed', listener)
+    return () => ipcRenderer.removeListener('config:changed', listener)
+  },
   removeMusicScanProgressListener: () => {
     ipcRenderer.removeAllListeners('music:scanProgress')
   },

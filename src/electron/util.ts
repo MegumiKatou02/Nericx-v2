@@ -4,6 +4,7 @@ import { ZipArchive } from 'archiver'
 import { open } from 'sqlite'
 import sqlite3 from 'sqlite3'
 import { app } from 'electron'
+import { createConfigStore, type ConfigDatabase } from './configStore.js'
 import { LOCALE_CONFIG_KEY, resolveLocale, translate, type Locale } from './i18n.js'
 
 export const isDev = () => process.env.NODE_ENV === 'development'
@@ -51,13 +52,13 @@ const getConfigPath = () => {
   return join(app.getPath('userData'), 'config.db')
 }
 
-export const getOsuPath = async (): Promise<string | null> => {
+/**
+ * The connection lives for the whole session: opening it and running the
+ * PRAGMAs once beats doing it for every settings read.
+ */
+const openConfigDatabase = async (): Promise<ConfigDatabase> => {
+  const db = await open({ filename: getConfigPath(), driver: sqlite3.Database })
   try {
-    const db = await open({
-      filename: getConfigPath(),
-      driver: sqlite3.Database
-    })
-
     await db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;
@@ -65,11 +66,21 @@ export const getOsuPath = async (): Promise<string | null> => {
       PRAGMA temp_store = MEMORY;
       PRAGMA mmap_size = 268435456;
     `)
-
-    const result = await db.get('SELECT value FROM config WHERE key = ?', 'osuPath')
+  } catch (error) {
+    // The caller never receives this handle, so a failed PRAGMA would leak it.
     await db.close()
-    
-    return result ? result.value : null
+    throw error
+  }
+  return db as unknown as ConfigDatabase
+}
+
+const configStore = createConfigStore({ openDatabase: openConfigDatabase })
+
+export const closeConfigStore = (): Promise<void> => configStore.close()
+
+export const getOsuPath = async (): Promise<string | null> => {
+  try {
+    return await configStore.get('osuPath')
   } catch (error) {
     console.error('Error getting osu path:', error)
     return null
@@ -121,32 +132,19 @@ export const createBackup = async (
 
 export const initDatabase = async (): Promise<void> => {
   try {
-    const db = await open({
-      filename: getConfigPath(),
-      driver: sqlite3.Database
-    })
-
-    await db.exec(`
+    await configStore.init(
+      `
       CREATE TABLE IF NOT EXISTS config (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       )
-    `)
-
-    await db.run(
-      `INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)`,
-      'theme', 'warm'
+    `,
+      [
+        ['theme', 'warm'],
+        ['accentColor', '#f599b8'],
+        ['volume', '0.5']
+      ]
     )
-    await db.run(
-      `INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)`,
-      'accentColor', '#f599b8'
-    )
-    await db.run(
-      `INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)`,
-      'volume', '0.5'
-    )
-
-    await db.close()
   } catch (error) {
     console.error('Error initializing database:', error)
   }
@@ -154,27 +152,9 @@ export const initDatabase = async (): Promise<void> => {
 
 export const getConfig = async (key: string): Promise<string | null> => {
   try {
-    const configPath = getConfigPath()
-    console.log('Getting config from:', configPath, 'key:', key)
-    
-    const db = await open({
-      filename: configPath,
-      driver: sqlite3.Database
-    })
-
-    await db.exec(`
-      PRAGMA journal_mode = WAL;
-      PRAGMA synchronous = NORMAL;
-      PRAGMA cache_size = 1000;
-      PRAGMA temp_store = MEMORY;
-      PRAGMA mmap_size = 268435456;
-    `)
-
-    const result = await db.get('SELECT value FROM config WHERE key = ?', key)
-    await db.close()
-    
-    console.log('Config result for', key, ':', result?.value)
-    return result ? result.value : null
+    const value = await configStore.get(key)
+    console.log('Config result for', key, ':', value)
+    return value
   } catch (error) {
     console.error('Error getting config:', error)
     return null
@@ -183,25 +163,7 @@ export const getConfig = async (key: string): Promise<string | null> => {
 
 export const setConfig = async (key: string, value: string): Promise<boolean> => {
   try {
-    const configPath = getConfigPath()
-    console.log('Setting config to:', configPath, 'key:', key, 'value:', value)
-    
-    const db = await open({
-      filename: configPath,
-      driver: sqlite3.Database
-    })
-
-    await db.exec(`
-      PRAGMA journal_mode = WAL;
-      PRAGMA synchronous = NORMAL;
-      PRAGMA cache_size = 1000;
-      PRAGMA temp_store = MEMORY;
-      PRAGMA mmap_size = 268435456;
-    `)
-
-    await db.run('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', key, value)
-    await db.close()
-    
+    await configStore.set(key, value)
     console.log('Config saved successfully')
     return true
   } catch (error) {

@@ -534,7 +534,7 @@ import { fileUrlForPath } from '../fileUrl.js'
 
 - [ ] **Step 6: Thay phần đầu class**
 
-Xoá các field `sourceNode`, `compressorNode`, `analyserNode`, xoá hẳn method `initAudio` và `setupAudioNodes`; `initAudioContext` thành:
+Xoá các field `sourceNode`, `compressorNode`, `analyserNode`, xoá hẳn method `initAudio` và `setupAudioNodes`; thay bằng:
 
 ```ts
   private audio: HTMLAudioElement | null = null
@@ -547,26 +547,40 @@ Xoá các field `sourceNode`, `compressorNode`, `analyserNode`, xoá hẳn metho
     // One element for the whole lifetime. Replacing it per track used to leave
     // every old source node connected to the destination, which kept each
     // played track's media element (and its buffers) alive.
-    this.audio = new Audio()
-    this.audio.volume = this.volume
-    this.initAudioContext()
+    this.createAudioChain()
   }
 
-  private initAudioContext() {
+  /**
+   * An element can be bound to a source node once in its life: re-running
+   * `createMediaElementSource` on the same element throws InvalidStateError. So
+   * rebuilding the chain after `destroy()` also has to discard the element.
+   */
+  private createAudioChain() {
+    if (this.audio) {
+      this.audio.pause()
+      this.audio.removeAttribute('src')
+      this.audio.load()
+    }
+    this.graph?.dispose()
+    this.graph = null
+
+    this.audio = new Audio()
+    // Volume is applied once, in the graph, so the element stays at unity. If the
+    // graph cannot be built (no Web Audio) the element carries the volume instead.
+    this.audio.volume = this.volume
+
     try {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-      if (this.audioContext && this.audio) {
-        this.graph = createAudioGraph(
-          this.audioContext as unknown as AudioGraphContext,
-          this.audio,
-          this.volume
-        )
-        this.graph.setNormalization(this.normalizationEnabled)
-        // The graph now owns the volume, so the element must not scale it again.
-        this.audio.volume = 1
-      }
+      this.graph = createAudioGraph(
+        this.audioContext as unknown as AudioGraphContext,
+        this.audio,
+        this.volume
+      )
+      this.graph.setNormalization(this.normalizationEnabled)
+      this.audio.volume = 1
     } catch (error) {
       console.warn('Web Audio API not supported:', error)
+      this.audioContext = null
     }
   }
 ```
@@ -578,10 +592,12 @@ Nếu Web Audio không dựng được thì `graph` là `null` và element giữ
 Bỏ dòng `this.initAudio()` và `await new Promise(resolve => setTimeout(resolve, 50))` đầu `play()`, bỏ khối `this.audio = new Audio()` / `this.audio.volume = this.volume`, bỏ `this.setupAudioNodes()`. Phần đầu `play()` còn lại:
 
 ```ts
-      if (!this.audioContext || this.audioContext.state === 'closed' || !this.graph) {
-        // `destroy()` closes the context, and AudioPlayer is a module singleton, so
-        // a remount has to rebuild the chain instead of staying silent forever.
-        this.initAudioContext()
+      if (!this.audio) {
+        // Only `destroy()` drops the element, so a missing element means the chain
+        // was torn down (AudioPlayer is a module singleton, so a remount has to
+        // rebuild it). A null `graph` with a live element is the no-Web-Audio
+        // fallback and must not trigger a rebuild per track.
+        this.createAudioChain()
       }
       if (this.audioContext && this.audioContext.state === 'suspended') {
         await this.audioContext.resume()
@@ -614,7 +630,26 @@ Phần encode đường dẫn thay bằng `const srcPath = fileUrlForPath(song.p
 
 Cùng lý do, `toggleNormalization` chỉ cần `this.graph?.setNormalization(enabled)` (khi không có graph thì không có gì để nối lại).
 
-`stop()`: `pause()`, `removeAttribute('src')`, `load()`, **không** gán `this.audio = null`. `destroy()`: `stop()`, `this.graph?.dispose()`, `this.graph = null`, `void this.audioContext?.close()`, `this.audioContext = null`.
+`stop()` hiện bọc phần reset `src` trong `setTimeout(..., 50)` rồi gán `this.audio = null`. Phải **bỏ cả `setTimeout` lẫn phép gán `null`**, nếu không lần phát kế tiếp sẽ bị xoá `src` sau 50ms:
+
+```ts
+  stop() {
+    try {
+      if (this.audio) {
+        this.audio.pause()
+        this.audio.currentTime = 0
+        // Reset immediately: a deferred reset would wipe the `src` that the next
+        // `play()` sets on this same, now-reused, element.
+        this.audio.removeAttribute('src')
+        this.audio.load()
+      }
+    } catch (error) {
+      console.warn('Error stopping audio:', error)
+    }
+  }
+```
+
+`destroy()`: `stop()`, `this.graph?.dispose()`, `this.graph = null`, `this.audio = null`, `void this.audioContext?.close()`, `this.audioContext = null`. Bỏ `this.audio` là **bắt buộc**, không chỉ để giải phóng: một element chỉ được bind vào một `MediaElementAudioSourceNode` đúng một lần trong đời, nên chain dựng lại sau `destroy()` phải dùng element mới — và `play()` đã lo việc đó qua `createAudioChain()` ở Step 7.
 
 - [ ] **Step 9: Xoá `getAudioLevel` và mọi chỗ dùng `audioLevel`**
 

@@ -170,6 +170,7 @@ const en = {
   'music.playback.errorUnknownFile': 'Cannot play this file',
   'music.playback.errorLoad': 'Failed to load the song: {message}',
   'music.playback.timeout': 'Timed out while loading the song',
+  'music.playback.cancelled': 'Playback cancelled',
   'music.playback.errorPlay': 'Playback error: {message}',
 
   'songInfo.title': 'Song details',
@@ -429,6 +430,7 @@ const vi: Record<MessageKey, string> = {
   'music.playback.errorUnknownFile': 'Không thể phát file này',
   'music.playback.errorLoad': 'Lỗi khi tải bài hát: {message}',
   'music.playback.timeout': 'Timeout khi tải bài hát',
+  'music.playback.cancelled': 'Đã huỷ phát',
   'music.playback.errorPlay': 'Lỗi khi phát nhạc: {message}',
 
   'songInfo.title': 'Thông tin chi tiết',
@@ -685,6 +687,7 @@ const ja: Record<MessageKey, string> = {
   'music.playback.errorUnknownFile': 'このファイルを再生できません',
   'music.playback.errorLoad': '曲の読み込みに失敗しました: {message}',
   'music.playback.timeout': '曲の読み込みがタイムアウトしました',
+  'music.playback.cancelled': '再生を中止しました',
   'music.playback.errorPlay': '再生エラー: {message}',
 
   'songInfo.title': '曲の詳細',

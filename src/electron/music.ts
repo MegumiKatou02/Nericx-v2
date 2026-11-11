@@ -391,10 +391,6 @@ export class MusicPlayer extends EventEmitter {
       await this.processBatch(chunk, processor, batchSize)
       
       await new Promise(resolve => setImmediate(resolve))
-      
-      if (global.gc && i % (this.chunkSize * 3) === 0) {
-        global.gc()
-      }
     }
   }
 
@@ -813,10 +809,6 @@ export class MusicPlayer extends EventEmitter {
       if (now - cached.timestamp > this.fileStatCacheTTL) {
         this.fileStatCache.delete(path)
       }
-    }
-    
-    if (global.gc) {
-      global.gc()
     }
   }
 

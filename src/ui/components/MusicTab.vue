@@ -322,10 +322,14 @@
 import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
 import { isVideoPlaying as isVideoPlayingForPresence, playbackWindow } from '../presence.js'
+import { videoUrlFor } from '../videoSource.js'
+import { createAudioGraph, type AudioGraph, type AudioGraphContext } from '../audioGraph.js'
+import { fileUrlForPath } from '../fileUrl.js'
 import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
 import { createCoalescingWriter } from '../coalesce.js'
+import { createProgressTicker, systemTimers, type ProgressTicker } from '../progressTicker.js'
 import { createStateTransition } from '../discordClient.js'
-import { discordSettings, ensureDiscordSettingsLoaded, setDiscordEnabled } from '../discordSettings.js'
+import { discordSettings, ensureDiscordSettingsLoaded, parseStoredBoolean, setDiscordEnabled } from '../discordSettings.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 import { t } from '../i18n.js'
@@ -463,57 +467,48 @@ class AudioPlayer {
   private audio: HTMLAudioElement | null = null
   private volume: number = 0.5
   private audioContext: AudioContext | null = null
-  private sourceNode: MediaElementAudioSourceNode | null = null
-  private gainNode: GainNode | null = null
-  private compressorNode: DynamicsCompressorNode | null = null
-  private analyserNode: AnalyserNode | null = null
-  private normalizationEnabled: boolean = false 
+  private graph: AudioGraph | null = null
+  private normalizationEnabled: boolean = false
+  private pendingPlay: { timeout: ReturnType<typeof setTimeout>; abandon: () => void } | null = null
 
   constructor() {
-    this.initAudio()
-    this.initAudioContext()
+    // One element for the whole lifetime. Replacing it per track used to leave
+    // every old source node connected to the destination, which kept each
+    // played track's media element (and its buffers) alive.
+    this.createAudioChain()
   }
 
-  private initAudioContext() {
+  /**
+   * An element can be bound to a source node once in its life: re-running
+   * `createMediaElementSource` on the same element throws InvalidStateError. So
+   * rebuilding the chain after `destroy()` also has to discard the element.
+   */
+  private createAudioChain() {
+    if (this.audio) {
+      this.audio.pause()
+      this.audio.removeAttribute('src')
+      this.audio.load()
+    }
+    this.graph?.dispose()
+    this.graph = null
+
+    this.audio = new Audio()
+    // Volume is applied once, in the graph, so the element stays at unity. If the
+    // graph cannot be built (no Web Audio) the element carries the volume instead.
+    this.audio.volume = this.volume
+
     try {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      this.graph = createAudioGraph(
+        this.audioContext as unknown as AudioGraphContext,
+        this.audio,
+        this.volume
+      )
+      this.graph.setNormalization(this.normalizationEnabled)
+      this.audio.volume = 1
     } catch (error) {
       console.warn('Web Audio API not supported:', error)
-    }
-  }
-
-  private setupAudioNodes() {
-    if (!this.audioContext || !this.audio) return
-
-    try {
-      this.sourceNode = this.audioContext.createMediaElementSource(this.audio)
-      this.gainNode = this.audioContext.createGain()
-      this.compressorNode = this.audioContext.createDynamicsCompressor()
-      this.analyserNode = this.audioContext.createAnalyser()
-
-      this.compressorNode.threshold.setValueAtTime(-18, this.audioContext.currentTime)
-      this.compressorNode.knee.setValueAtTime(15, this.audioContext.currentTime)
-      this.compressorNode.ratio.setValueAtTime(3, this.audioContext.currentTime)
-      this.compressorNode.attack.setValueAtTime(0.008, this.audioContext.currentTime)
-      this.compressorNode.release.setValueAtTime(0.15, this.audioContext.currentTime)
-
-      this.analyserNode.fftSize = 2048
-      this.analyserNode.smoothingTimeConstant = 0.8
-
-      if (this.normalizationEnabled) {
-        this.sourceNode.connect(this.compressorNode)
-        this.compressorNode.connect(this.gainNode)
-        this.gainNode.connect(this.analyserNode)
-        this.analyserNode.connect(this.audioContext.destination)
-      } else {
-        this.sourceNode.connect(this.gainNode)
-        this.gainNode.connect(this.analyserNode)
-        this.analyserNode.connect(this.audioContext.destination)
-      }
-
-      this.gainNode.gain.setValueAtTime(this.volume, this.audioContext!.currentTime)
-    } catch (error) {
-      console.warn('Error setting up audio nodes:', error)
+      this.audioContext = null
     }
   }
 
@@ -529,86 +524,58 @@ class AudioPlayer {
     return this.normalizationEnabled
   }
 
-  public toggleNormalization(enabled: boolean) {
+  toggleNormalization(enabled: boolean) {
     this.normalizationEnabled = enabled
-    if (this.audio && this.audioContext) {
-      this.setupAudioNodes()
-    }
+    this.graph?.setNormalization(enabled)
   }
 
-  public getAudioLevel(): number {
-    if (!this.analyserNode) return 0
-    
-    const bufferLength = this.analyserNode.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
-    this.analyserNode.getByteFrequencyData(dataArray)
-    
-    let sum = 0
-    for (let i = 0; i < bufferLength; i++) {
-      sum += dataArray[i] * dataArray[i]
-    }
-    const rms = Math.sqrt(sum / bufferLength)
-    return rms / 255 
-  }
-
-  private initAudio() {
-    if (this.audio) {
-      this.audio.pause()
-      this.audio.src = ''
-    }
-    this.audio = null
-    this.sourceNode = null
-    this.gainNode = null
-    this.compressorNode = null
-    this.analyserNode = null
+  /**
+   * A superseded `play()` must settle: leaving its promise pending would pin the
+   * awaiting `playSong` (and this handler closure) until the process exits. Its
+   * 10 s timer must also die, or it fires against the *next* track's element
+   * state and clears handlers it does not own.
+   */
+  private abandonPendingPlay() {
+    const pending = this.pendingPlay
+    this.pendingPlay = null
+    if (!pending) return
+    clearTimeout(pending.timeout)
+    pending.abandon()
   }
 
   async play(song: Song): Promise<{ success: boolean; message: string }> {
     try {
-      this.initAudio()
-      
-      await new Promise(resolve => setTimeout(resolve, 50))
-      
-      this.audio = new Audio()
-      
+      if (!this.audio) {
+        // Only `destroy()` drops the element, so a missing element means the chain
+        // was torn down (AudioPlayer is a module singleton, so a remount has to
+        // rebuild it). A null `graph` with a live element is the no-Web-Audio
+        // fallback and must not trigger a rebuild per track.
+        this.createAudioChain()
+      }
       if (this.audioContext && this.audioContext.state === 'suspended') {
         await this.audioContext.resume()
       }
-      
-      const fixedPath = song.path.replace(/\\/g, '/')
-      
-      let srcPath: string
-      try {
-        const encodedPath = fixedPath.split('/').map(part => encodeURIComponent(part)).join('/')
-        srcPath = `file:///${encodedPath}`
-      } catch (error) {
-        console.warn('Encoding thất bại, sử dụng fallback:', error)
-        srcPath = new URL(`file:///${fixedPath}`).href
-      }
-      
-      this.audio.src = srcPath
-      this.audio.volume = this.volume
-      
-      this.setupAudioNodes()
+      // Any still-pending load belongs to a track that is already being replaced.
+      this.abandonPendingPlay()
+      // Handlers from the previous track must not resolve this call.
+      this.audio!.onloadedmetadata = null
+      this.audio!.onerror = null
+
+      const srcPath = fileUrlForPath(song.path)
+
+      this.audio!.src = srcPath
       
       return new Promise((resolve) => {
         let resolved = false
-        
-        const cleanup = () => {
-          if (this.audio) {
-            this.audio.onloadedmetadata = null
-            this.audio.onerror = null
-          }
-        }
-        
-        this.audio!.onloadedmetadata = () => {
+
+        const onLoaded = () => {
           if (resolved) return
           resolved = true
           cleanup()
           resolve({ success: true, message: song.name })
         }
 
-        this.audio!.onerror = () => {
+        const onError = () => {
           if (resolved) return
           resolved = true
           cleanup()
@@ -616,13 +583,36 @@ class AudioPlayer {
           resolve({ success: false, message: t('music.playback.errorLoad', { message: errorMessage }) })
         }
 
-        setTimeout(() => {
-          if (!resolved) {
-            resolved = true
-            cleanup()
-            resolve({ success: false, message: t('music.playback.timeout') })
+        // Only detach what this call installed: the element is shared, so a
+        // stale call must not clear the handlers of the track that replaced it.
+        const cleanup = () => {
+          if (!this.audio) return
+          if (this.audio.onloadedmetadata === onLoaded) this.audio.onloadedmetadata = null
+          if (this.audio.onerror === onError) this.audio.onerror = null
+          if (this.pendingPlay && this.pendingPlay.timeout === timeout) {
+            clearTimeout(timeout)
+            this.pendingPlay = null
           }
+        }
+
+        const timeout = setTimeout(() => {
+          if (resolved) return
+          resolved = true
+          cleanup()
+          resolve({ success: false, message: t('music.playback.timeout') })
         }, 10000)
+
+        this.pendingPlay = {
+          timeout,
+          abandon: () => {
+            if (resolved) return
+            resolved = true
+            resolve({ success: false, message: t('music.playback.cancelled') })
+          }
+        }
+
+        this.audio!.onloadedmetadata = onLoaded
+        this.audio!.onerror = onError
 
         this.audio!.play().catch(error => {
           if (!resolved && error.name !== 'AbortError') {
@@ -655,29 +645,23 @@ class AudioPlayer {
       if (this.audio) {
         this.audio.pause()
         this.audio.currentTime = 0
-        
-        setTimeout(() => {
-          if (this.audio) {
-            this.audio.src = ''
-            this.audio.load()
-          }
-        }, 50)
-        
-        this.audio = null
+        // Reset immediately: a deferred reset would wipe the `src` that the next
+        // `play()` sets on this same, now-reused, element.
+        this.audio.removeAttribute('src')
+        this.audio.load()
       }
     } catch (error) {
       console.warn('Error stopping audio:', error)
-      this.audio = null
     }
   }
 
   setVolume(volume: number) {
     this.volume = Math.max(0, Math.min(1, volume))
-    if (this.audio) {
+    if (this.graph) {
+      this.graph.setVolume(this.volume)
+    } else if (this.audio) {
+      // No Web Audio available: the element is the only gain stage.
       this.audio.volume = this.volume
-    }
-    if (this.gainNode) {
-      this.gainNode.gain.setValueAtTime(this.volume, this.audioContext!.currentTime)
     }
   }
 
@@ -711,6 +695,11 @@ class AudioPlayer {
 
   destroy() {
     this.stop()
+    this.graph?.dispose()
+    this.graph = null
+    this.audio = null
+    void this.audioContext?.close()
+    this.audioContext = null
   }
 }
 
@@ -740,9 +729,19 @@ const isDropdownOpen = ref(false)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const musicTabRef = ref<HTMLElement | null>(null)
 const normalizationEnabled = ref(false)
-const audioLevel = ref(0)
-const progressUpdateId = ref<number | null>(null)
+const progressTicker: ProgressTicker = createProgressTicker(systemTimers, 250, () => {
+  if (!isPlaying.value) return
+  currentTime.value = audioPlayer.getCurrentTime()
+  duration.value = audioPlayer.getDuration()
+  if (updateMiniPlayer) {
+    updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
+  }
+})
 const videoEnabled = ref(false)
+
+// Bumped by every playSong call so a slow, superseded load cannot write the
+// playback state of the track that replaced it.
+let playRequestId = 0
 
 const statsIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
 const cleanupIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
@@ -897,8 +896,7 @@ const formattedDuration = computed(() => formatTime(duration.value))
 
 const currentCoverImage = computed(() => {
   const song = selectedSong.value || currentSong.value
-  const isShowingCurrentVideo = videoEnabled.value && currentSong.value?.video && isPlaying.value && selectedSong.value?.path === currentSong.value?.path
-  if (!isShowingCurrentVideo && song?.image) {
+  if (!currentVideoUrl.value && song?.image) {
     return 'file://' + song.image
   }
   return null
@@ -909,19 +907,12 @@ const currentSongName = computed(() => {
   return song?.name || ''
 })
 
-const currentVideoUrl = computed(() => {
-  if (!videoEnabled.value) return null
-  
-  if (selectedSong.value?.video) {
-    return 'file://' + selectedSong.value.video
-  }
-  
-  if (currentSong.value?.video && isPlaying.value && !selectedSong.value) {
-    return 'file://' + currentSong.value.video
-  }
-  
-  return null
-})
+const currentVideoUrl = computed(() => videoUrlFor({
+  videoEnabled: videoEnabled.value,
+  current: currentSong.value,
+  selected: selectedSong.value,
+  isPlaying: isPlaying.value
+}))
 
 // Video counts as "playing" only when the rendered video belongs to the song
 // that is actually playing, so browsing other songs never lies in the presence.
@@ -1202,15 +1193,18 @@ const playSong = async (song: Song) => {
       audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
       audioPlayer.stop()
     }
+    progressTicker.stop()
     
     await new Promise(resolve => setTimeout(resolve, 100))
     
+    const requestId = ++playRequestId
     const result = await audioPlayer.play(song)
+    if (requestId !== playRequestId) return
     if (result.success) {
       currentSong.value = song
       selectedSong.value = song
       isPlaying.value = true
-      startProgressUpdate()
+      progressTicker.start()
       updateDiscordStatus()
       
       nextTick(() => {
@@ -1227,6 +1221,13 @@ const playSong = async (song: Song) => {
       audioPlayer.getAudio()?.addEventListener('ended', handleSongEnd)
     } else {
       console.error(result.message)
+      // A failed load must not leave the UI claiming to play, nor the ticker
+      // running against an element that never started.
+      isPlaying.value = false
+      progressTicker.stop()
+      if (updateMiniPlayer) {
+        updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
+      }
     }
   } catch (error) {
     console.error('Error in playSong:', error)
@@ -1287,10 +1288,11 @@ const togglePlay = async () => {
     if (isPlaying.value) {
       audioPlayer.pause()
       isPlaying.value = false
+      progressTicker.stop()
     } else {
       audioPlayer.resume()
       isPlaying.value = true
-      startProgressUpdate()
+      progressTicker.start()
     }
     
     if (updateMiniPlayer) {
@@ -1307,6 +1309,7 @@ const stopMusic = () => {
       audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
     }
     audioPlayer.stop()
+    progressTicker.stop()
     isPlaying.value = false
     currentTime.value = 0
     duration.value = 0
@@ -1548,29 +1551,6 @@ const formatTime = (seconds: number) => {
   const minutes = Math.floor(seconds / 60)
   const remainingSeconds = Math.floor(seconds % 60)
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-}
-
-const updateProgress = rafThrottle(() => {
-  if (isPlaying.value) {
-    currentTime.value = audioPlayer.getCurrentTime()
-    duration.value = audioPlayer.getDuration()
-    
-    if (normalizationEnabled.value) {
-      audioLevel.value = audioPlayer.getAudioLevel()
-    }
-  
-    if (updateMiniPlayer) {
-      updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
-    }
-        
-    requestAnimationFrame(updateProgress)
-  }
-})
-
-const startProgressUpdate = () => {
-  if (isPlaying.value) {
-    requestAnimationFrame(updateProgress)
-  }
 }
 
 const showImageViewer = ref(false)
@@ -1834,44 +1814,7 @@ const scrollToSelectedSong = (songIndex: number) => {
   }
 }
 
-let normalizationCheckInterval: ReturnType<typeof setTimeout> | null = null
-
-const startNormalizationWatcher = () => {
-  normalizationCheckInterval = setInterval(async () => {
-    if (!isPlaying.value) return
-    
-    try {
-      const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
-      if (savedNormalization !== null) {
-        const newValue = savedNormalization === 'true'
-        if (newValue !== normalizationEnabled.value) {
-          normalizationEnabled.value = newValue
-          audioPlayer.toggleNormalization(normalizationEnabled.value)
-        }
-      }
-    } catch (error) {
-      console.error('Error checking normalization setting:', error)
-    }
-  }, 5000) 
-}
-
-let videoCheckInterval: ReturnType<typeof setTimeout> | null = null
-
-const startVideoWatcher = () => {
-  videoCheckInterval = setInterval(async () => {
-    try {
-      const savedVideo = await window.electronAPI.getConfig('videoEnabled')
-      if (savedVideo !== null) {
-        const newValue = savedVideo === 'true'
-        if (newValue !== videoEnabled.value) {
-          videoEnabled.value = newValue
-        }
-      }
-    } catch (error) {
-      console.error('Error checking video setting:', error)
-    }
-  }, 2000) 
-}
+let configUnsubscribe: (() => void) | null = null
 
 const focusTab = () => {
   if (currentSong.value && !selectedSong.value) {
@@ -2025,21 +1968,26 @@ onMounted(async () => {
     audioPlayer.setVolume(resolvedVolume)
 
     const savedNormalization = await window.electronAPI.getConfig('normalizationEnabled')
-    if (savedNormalization !== null) {
-      normalizationEnabled.value = savedNormalization === 'true'
-      audioPlayer.toggleNormalization(normalizationEnabled.value)
-    }
+    normalizationEnabled.value = parseStoredBoolean(savedNormalization, false)
+    audioPlayer.toggleNormalization(normalizationEnabled.value)
 
     const savedVideo = await window.electronAPI.getConfig('videoEnabled')
-    if (savedVideo !== null) {
-      videoEnabled.value = savedVideo === 'true'
-    }
+    videoEnabled.value = parseStoredBoolean(savedVideo, false)
   } catch (error) {
     console.error('Error loading settings:', error)
   }
-  
-  startNormalizationWatcher()
-  startVideoWatcher()
+
+  configUnsubscribe = window.electronAPI.onConfigChanged((key, value) => {
+    if (key === 'normalizationEnabled') {
+      const next = parseStoredBoolean(value, false)
+      if (next !== normalizationEnabled.value) {
+        normalizationEnabled.value = next
+        audioPlayer.toggleNormalization(next)
+      }
+    } else if (key === 'videoEnabled') {
+      videoEnabled.value = parseStoredBoolean(value, false)
+    }
+  })
   
   nextTick(() => {
     if (musicTabRef.value) {
@@ -2067,14 +2015,10 @@ onUnmounted(() => {
     cleanupIntervalId.value = null
   }
 
-  if (normalizationCheckInterval) {
-    clearInterval(normalizationCheckInterval)
-  }
-  
-  if (progressUpdateId.value) {
-    cancelAnimationFrame(progressUpdateId.value)
-    progressUpdateId.value = null
-  }
+  configUnsubscribe?.()
+  configUnsubscribe = null
+
+  progressTicker.stop()
   
   if (audioPlayer.getAudio()) {
     audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
@@ -2104,10 +2048,6 @@ onUnmounted(() => {
   
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('click', handleGlobalClick)
-  
-  if (videoCheckInterval) {
-    clearInterval(videoCheckInterval)
-  }
   
   performMemoryCleanup()
   

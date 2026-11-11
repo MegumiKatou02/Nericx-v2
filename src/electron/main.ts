@@ -1,9 +1,10 @@
 import { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage, shell } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig, setAppLocale, getAppLocale, t } from './util.js'
+import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig, closeConfigStore, setAppLocale, getAppLocale, t } from './util.js'
 import { getPreloadPath } from './pathResolver.js'
 import { LOCALE_CONFIG_KEY, resolveLocale } from './i18n.js'
+import { summarizeAppMetrics } from './appMetrics.js'
 import { copyFileSync, existsSync, readdirSync } from 'fs'
 
 let MusicPlayer: any = null
@@ -17,8 +18,7 @@ let musicPlayerInstance: any = null
 
 const performanceMetrics = {
   startTime: Date.now(),
-  ipcCalls: 0,
-  memoryPeaks: [] as number[]
+  ipcCalls: 0
 }
 
 class IPCBatcher {
@@ -68,19 +68,9 @@ const ipcBatcher = new IPCBatcher()
 
 const startMemoryMonitoring = () => {
   setInterval(() => {
-    const memoryUsage = process.memoryUsage()
-    const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024)
-    
-    performanceMetrics.memoryPeaks.push(heapUsedMB)
-    
-    if (performanceMetrics.memoryPeaks.length > 100) {
-      performanceMetrics.memoryPeaks.shift()
-    }
-    
-    if (heapUsedMB > 512 && global.gc) {
-      global.gc()
-    }
-  }, 30000) // Every 30 seconds
+    const summary = summarizeAppMetrics(app.getAppMetrics())
+    console.log('[memory]', JSON.stringify(summary))
+  }, 60000) // Every 60 seconds
 }
 
 const getConfigPath = () => {
@@ -218,7 +208,18 @@ ipcMain.handle('set-config', createIPCHandler(async (_: any, key: string, value:
   // The main process answers IPC calls with localized text, so it mirrors the
   // renderer's language choice instead of reading the database again per reply.
   if (key === LOCALE_CONFIG_KEY) setAppLocale(resolveLocale(value))
-  return await setConfig(key, value)
+  const saved = await setConfig(key, value)
+  // The renderer keeps a few settings in local state; a broadcast keeps them in
+  // sync without each tab polling the database on a timer.
+  if (saved) {
+    for (const win of BrowserWindow.getAllWindows()) {
+      // The broadcast is a notification: a window already tearing down must not
+      // turn a successful write into a rejected invoke for the caller.
+      if (win.webContents.isDestroyed()) continue
+      win.webContents.send('config:changed', key, value)
+    }
+  }
+  return saved
 }))
 
 ipcMain.handle('save-file', createIPCHandler(async (_: any, sourcePath: string, fileName: string) => {
@@ -424,7 +425,7 @@ ipcMain.handle('get-performance-stats', createIPCHandler(async () => {
       heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
       rss: Math.round(memoryUsage.rss / 1024 / 1024)
     },
-    memoryPeaks: performanceMetrics.memoryPeaks
+    app: summarizeAppMetrics(app.getAppMetrics())
   }
 }))
 
@@ -461,6 +462,8 @@ app.on('window-all-closed', () => {
   }
   
   ipcBatcher.destroy()
+
+  void closeConfigStore()
   
   if (process.platform !== 'darwin') {
     app.quit()
@@ -473,6 +476,8 @@ app.on('before-quit', () => {
   }
   
   ipcBatcher.destroy()
+
+  void closeConfigStore()
 })
 
 process.on('uncaughtException', (error) => {
