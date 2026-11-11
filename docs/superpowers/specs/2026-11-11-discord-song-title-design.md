@@ -31,7 +31,9 @@ Tên folder có dạng `A - B` → `A` là tác giả, `B` là tên bài. Tên f
 - Discord từ chối cả activity khi `details`/`state`/`large_text` nằm ngoài 2–128
   ký tự, nên các field được cắt về 128 ký tự (`Array.from` để không chẻ đôi
   surrogate pair) và tên 1 ký tự được pad bằng U+200B.
-- `large_text` của cover = tên bài; nhánh fallback `image1` giữ `osu!`.
+- `large_text` của cover bị bỏ trống: với activity type 2 (Listening) Discord in
+  `large_text` thành dòng thứ ba ngay dưới `state`, nên đặt nó bằng tên bài sẽ
+  lặp lại tên bài hai lần. Nhánh fallback `image1` vẫn giữ `osu!`.
 - Badge camera `Đang phát video` giữ nguyên; khi có video và có tác giả thì tác
   giả chiếm dòng `state`, badge camera vẫn báo video.
 - Phần còn lại của presence (timestamps, buttons, activity type 2) không đổi.

@@ -77,11 +77,10 @@ function fitField(text: string): string {
 export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now()) {
   const { artist, title } = splitSongName(songInfo.name)
   const useCover = Boolean(songInfo.beatmapsetId) && songInfo.coverAvailable !== false
+  // Discord prints `large_text` as a third line under type 2 (Listening), so a
+  // cover tooltip equal to the title repeats it right below `state`.
   const assets: Record<string, string> = useCover
-    ? {
-        large_image: `https://assets.ppy.sh/beatmaps/${songInfo.beatmapsetId}/covers/list@2x.jpg`,
-        large_text: fitField(title)
-      }
+    ? { large_image: `https://assets.ppy.sh/beatmaps/${songInfo.beatmapsetId}/covers/list@2x.jpg` }
     : { large_image: 'image1', large_text: 'osu!' }
 
   if (songInfo.videoPlaying) {

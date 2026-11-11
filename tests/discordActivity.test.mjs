@@ -19,7 +19,6 @@ test('large image falls back to the app asset when there is no beatmapset', () =
 test('large image uses the beatmap cover and adds buttons when a beatmapset exists', () => {
   const activity = buildActivity({ name: 'Artist - Song', beatmapsetId: '123' }, NOW)
   assert.equal(activity.assets.large_image, 'https://assets.ppy.sh/beatmaps/123/covers/list@2x.jpg')
-  assert.equal(activity.assets.large_text, 'Song')
   assert.deepEqual(activity.buttons, [
     { label: 'Xem Beatmap', url: 'https://osu.ppy.sh/beatmapsets/123' },
     { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
@@ -132,7 +131,14 @@ test('artist prefix moves to the state line and the title loses its suffix', () 
   }, NOW)
   assert.equal(activity.details, 'Pink Lemonade (TV Size)')
   assert.equal(activity.state, 'Sangatsu no Phantasia')
-  assert.equal(activity.assets.large_text, 'Pink Lemonade (TV Size)')
+  assert.equal(activity.assets.large_text, undefined)
+})
+
+test('the cover tooltip is omitted so the title is not printed twice', () => {
+  const activity = buildActivity({ name: 'Artist - Song', beatmapsetId: '123' }, NOW)
+  assert.equal(activity.assets.large_image, 'https://assets.ppy.sh/beatmaps/123/covers/list@2x.jpg')
+  assert.equal(activity.assets.large_text, undefined)
+  assert.equal(activity.details, 'Song')
 })
 
 test('duplicate-file suffix is stripped along with the no-video tag', () => {
