@@ -197,3 +197,32 @@ test('an over-long title and artist are cut to Discord 128-character limit', () 
   assert.equal(activity.state.length, 128)
   assert.equal(activity.details, 'x'.repeat(128))
 })
+
+test('the beatmap button can be hidden while the github button stays', () => {
+  const activity = buildActivity({ name: 'A - B', beatmapsetId: '123', beatmapButton: false }, NOW)
+  assert.deepEqual(activity.buttons, [
+    { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
+  ])
+})
+
+test('the github button can be hidden while the beatmap button stays', () => {
+  const activity = buildActivity({ name: 'A - B', beatmapsetId: '123', githubButton: false }, NOW)
+  assert.deepEqual(activity.buttons, [
+    { label: 'Xem Beatmap', url: 'https://osu.ppy.sh/beatmapsets/123' }
+  ])
+})
+
+test('hiding both buttons drops the buttons field entirely', () => {
+  const activity = buildActivity({
+    name: 'A - B',
+    beatmapsetId: '123',
+    beatmapButton: false,
+    githubButton: false
+  }, NOW)
+  assert.equal(activity.buttons, undefined)
+})
+
+test('button flags do not add buttons to a song without a beatmapset', () => {
+  const activity = buildActivity({ name: 'A - B', beatmapButton: true, githubButton: true }, NOW)
+  assert.equal(activity.buttons, undefined)
+})
