@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig, closeConfigStore, setAppLocale, getAppLocale, t } from './util.js'
 import { getPreloadPath } from './pathResolver.js'
 import { LOCALE_CONFIG_KEY, resolveLocale } from './i18n.js'
+import { summarizeAppMetrics } from './appMetrics.js'
 import { copyFileSync, existsSync, readdirSync } from 'fs'
 
 let MusicPlayer: any = null
@@ -17,8 +18,7 @@ let musicPlayerInstance: any = null
 
 const performanceMetrics = {
   startTime: Date.now(),
-  ipcCalls: 0,
-  memoryPeaks: [] as number[]
+  ipcCalls: 0
 }
 
 class IPCBatcher {
@@ -68,19 +68,9 @@ const ipcBatcher = new IPCBatcher()
 
 const startMemoryMonitoring = () => {
   setInterval(() => {
-    const memoryUsage = process.memoryUsage()
-    const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024)
-    
-    performanceMetrics.memoryPeaks.push(heapUsedMB)
-    
-    if (performanceMetrics.memoryPeaks.length > 100) {
-      performanceMetrics.memoryPeaks.shift()
-    }
-    
-    if (heapUsedMB > 512 && global.gc) {
-      global.gc()
-    }
-  }, 30000) // Every 30 seconds
+    const summary = summarizeAppMetrics(app.getAppMetrics())
+    console.log('[memory]', JSON.stringify(summary))
+  }, 60000) // Every 60 seconds
 }
 
 const getConfigPath = () => {
@@ -435,7 +425,7 @@ ipcMain.handle('get-performance-stats', createIPCHandler(async () => {
       heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
       rss: Math.round(memoryUsage.rss / 1024 / 1024)
     },
-    memoryPeaks: performanceMetrics.memoryPeaks
+    app: summarizeAppMetrics(app.getAppMetrics())
   }
 }))
 
