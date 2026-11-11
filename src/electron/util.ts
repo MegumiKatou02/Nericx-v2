@@ -58,13 +58,19 @@ const getConfigPath = () => {
  */
 const openConfigDatabase = async (): Promise<ConfigDatabase> => {
   const db = await open({ filename: getConfigPath(), driver: sqlite3.Database })
-  await db.exec(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA synchronous = NORMAL;
-    PRAGMA cache_size = 1000;
-    PRAGMA temp_store = MEMORY;
-    PRAGMA mmap_size = 268435456;
-  `)
+  try {
+    await db.exec(`
+      PRAGMA journal_mode = WAL;
+      PRAGMA synchronous = NORMAL;
+      PRAGMA cache_size = 1000;
+      PRAGMA temp_store = MEMORY;
+      PRAGMA mmap_size = 268435456;
+    `)
+  } catch (error) {
+    // The caller never receives this handle, so a failed PRAGMA would leak it.
+    await db.close()
+    throw error
+  }
   return db as unknown as ConfigDatabase
 }
 
