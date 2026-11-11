@@ -167,6 +167,60 @@
     </div>
 
     <div class="setting-section">
+      <h3>Discord</h3>
+      <div class="setting-option">
+        <label>Rich Presence:</label>
+        <div class="video-section">
+          <div class="video-toggle">
+            <button
+              :class="{ active: discordSettings.enabled }"
+              @click="toggleDiscordEnabled"
+            >
+              {{ discordSettings.enabled ? 'Bật' : 'Tắt' }}
+            </button>
+          </div>
+          <div class="video-description">
+            <span>Tự động hiển thị bài đang nghe trên Discord mỗi khi mở app</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-option">
+        <label>Nút "Xem Beatmap":</label>
+        <div class="video-section">
+          <div class="video-toggle">
+            <button
+              :class="{ active: discordSettings.beatmapButton }"
+              @click="toggleDiscordBeatmapButton"
+            >
+              {{ discordSettings.beatmapButton ? 'Hiện' : 'Ẩn' }}
+            </button>
+          </div>
+          <div class="video-description">
+            <span>Nút mở beatmapset của bài hát trên osu!. Chỉ áp dụng cho bài có beatmapset</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-option">
+        <label>Nút "Github":</label>
+        <div class="video-section">
+          <div class="video-toggle">
+            <button
+              :class="{ active: discordSettings.githubButton }"
+              @click="toggleDiscordGithubButton"
+            >
+              {{ discordSettings.githubButton ? 'Hiện' : 'Ẩn' }}
+            </button>
+          </div>
+          <div class="video-description">
+            <span>Nút mở trang Github của Nericx. Chỉ áp dụng cho bài có beatmapset</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="setting-section">
       <h3>Quản lý Cache</h3>
       <div class="setting-option">
         <label>Cache nhạc:</label>
@@ -198,6 +252,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted, inject } from 'vue'
+import {
+  discordSettings,
+  ensureDiscordSettingsLoaded,
+  setDiscordBeatmapButton,
+  setDiscordEnabled,
+  setDiscordGithubButton
+} from '../discordSettings.js'
 
 const theme = ref('dark')
 const accentColor = ref('#7289da')
@@ -320,6 +381,18 @@ const toggleTransparency = async () => {
   await updateAppTransparency()
 }
 
+const toggleDiscordEnabled = async () => {
+  await setDiscordEnabled(!discordSettings.enabled)
+}
+
+const toggleDiscordBeatmapButton = async () => {
+  await setDiscordBeatmapButton(!discordSettings.beatmapButton)
+}
+
+const toggleDiscordGithubButton = async () => {
+  await setDiscordGithubButton(!discordSettings.githubButton)
+}
+
 const updateCacheStats = async () => {
   try {
     const stats = await window.electronAPI.musicGetCacheStats()
@@ -403,6 +476,7 @@ onMounted(async () => {
       await updateAppTransparency()
     }
 
+    await ensureDiscordSettingsLoaded()
     await updateCacheStats()
   } catch (error) {
     console.error('Error loading config:', error)

@@ -8,6 +8,10 @@ export interface DiscordSongInfo {
   duration?: number
   /** Kết quả kiểm tra cover; `false` buộc dùng asset `image1`. */
   coverAvailable?: boolean
+  /** `false` ẩn nút "Xem Beatmap"; thiếu thì hiện. */
+  beatmapButton?: boolean
+  /** `false` ẩn nút "Github"; thiếu thì hiện. */
+  githubButton?: boolean
 }
 
 export const VIDEO_BADGE_IMAGE =
@@ -97,10 +101,20 @@ export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now(
   }
 
   if (songInfo.beatmapsetId) {
-    activity.buttons = [
-      { label: 'Xem Beatmap', url: `https://osu.ppy.sh/beatmapsets/${songInfo.beatmapsetId}` },
-      { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
-    ]
+    const buttons: Array<{ label: string; url: string }> = []
+    if (songInfo.beatmapButton !== false) {
+      buttons.push({
+        label: 'Xem Beatmap',
+        url: `https://osu.ppy.sh/beatmapsets/${songInfo.beatmapsetId}`
+      })
+    }
+    if (songInfo.githubButton !== false) {
+      buttons.push({ label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' })
+    }
+    // Discord rejects an empty array, so the field only exists when it has a button.
+    if (buttons.length > 0) {
+      activity.buttons = buttons
+    }
   }
 
   return activity

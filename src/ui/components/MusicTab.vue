@@ -324,6 +324,8 @@ import type { Song } from '../../electron/type.js'
 import { isVideoPlaying as isVideoPlayingForPresence, playbackWindow } from '../presence.js'
 import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
 import { createCoalescingWriter } from '../coalesce.js'
+import { createStateTransition } from '../discordClient.js'
+import { discordSettings, ensureDiscordSettingsLoaded, setDiscordEnabled } from '../discordSettings.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 
@@ -718,7 +720,7 @@ const showAdvancedControls = ref(false)
 const volume = ref(0.5)
 const currentTime = ref(0)
 const duration = ref(0)
-const discordEnabled = ref(false)
+const discordEnabled = computed(() => discordSettings.enabled)
 const discordStatus = ref('Chưa kết nối')
 const isDiscordLoading = ref(false)
 const discordCooldownActive = ref(false)
@@ -1149,7 +1151,6 @@ const loadSongs = async () => {
           }
         })
       }
-      await initDiscord()
     }
   } catch (error) {
     console.error('Error loading songs:', error)
@@ -1334,19 +1335,27 @@ const togglePlayMode = () => {
   window.electronAPI.musicSetPlaybackMode(shuffleMode.value, repeatOne.value)
 }
 
-const initDiscord = async () => {
+const initDiscord = async (): Promise<boolean> => {
   try {
     const result = await window.electronAPI.discordInit()
     if (result.success) {
-      discordEnabled.value = true
       discordStatus.value = 'Đã kết nối'
-    } else {
-      throw new Error(result.message)
+      return true
     }
+    throw new Error(result.message)
   } catch (error) {
     console.error('Discord RPC error:', error)
-    discordEnabled.value = false
     discordStatus.value = 'Lỗi kết nối'
+    return false
+  }
+}
+
+const connectDiscord = async () => {
+  const connected = await initDiscord()
+  if (connected && currentSong.value && isPlaying.value) {
+    setTimeout(async () => {
+      await updateDiscordStatus()
+    }, 500)
   }
 }
 
@@ -1364,6 +1373,8 @@ const updateDiscordStatus = async () => {
       name: currentSong.value.name,
       beatmapsetId: currentSong.value.beatmapsetId,
       videoPlaying: isVideoPlaying.value,
+      beatmapButton: discordSettings.beatmapButton,
+      githubButton: discordSettings.githubButton,
       ...playbackWindow(isPlaying.value, currentTime.value, songDuration)
     })
   } catch (error) {
@@ -1390,40 +1401,90 @@ watch([isVideoPlaying, isPlaying], () => {
   }
 })
 
+const disconnectDiscord = async () => {
+  // The setting is already off by the time this runs, so `clearDiscordStatus`
+  // (which checks the flag) would skip the clear and leave a stale presence.
+  try {
+    await window.electronAPI.discordClear()
+  } catch (error) {
+    console.error('Failed to clear Discord status:', error)
+  }
+  try {
+    await window.electronAPI.discordDestroy()
+  } catch (error) {
+    console.error('Failed to destroy Discord client:', error)
+  }
+  discordStatus.value = 'Đã tắt'
+}
+
+/**
+ * Requests arrive from the music tab button and from the settings switch, and a
+ * toggle during startup's slow RPC login must not be lost. Serialising here
+ * means an `init` can never interleave with a `destroy`, and the newest request
+ * wins over anything queued behind it.
+ */
+const requestDiscordState = createStateTransition<boolean | null>(async (enabled) => {
+  if (enabled) {
+    await connectDiscord()
+  } else {
+    await disconnectDiscord()
+  }
+}, null)
+
+let discordBusy = 0
+
+const applyDiscordState = async (enabled: boolean) => {
+  isDiscordLoading.value = true
+  discordBusy++
+  try {
+    await requestDiscordState(enabled)
+  } catch (error) {
+    console.error('Discord toggle error:', error)
+  } finally {
+    discordBusy--
+    if (discordBusy === 0) {
+      isDiscordLoading.value = false
+      discordCooldownActive.value = true
+      setTimeout(() => {
+        discordCooldownActive.value = false
+      }, 2000)
+    }
+  }
+}
+
+// Both the music tab button and the settings switch write the same stored
+// setting; this watcher is the single place that starts or stops the client.
+watch(
+  () => discordSettings.enabled,
+  (enabled) => {
+    applyDiscordState(enabled)
+  }
+)
+
+// Hiding or showing a button only changes the payload, so the current presence
+// is re-sent instead of reconnecting.
+watch(
+  () => [discordSettings.beatmapButton, discordSettings.githubButton],
+  () => {
+    if (discordEnabled.value && currentSong.value) {
+      updateDiscordStatus()
+    }
+  }
+)
+
 const toggleDiscord = async () => {
   if (discordCooldownActive.value || isDiscordLoading.value) {
     return
   }
 
+  // The client work happens in the watcher, so guard synchronously: a second
+  // click before the request lands would otherwise flip the setting back.
   isDiscordLoading.value = true
-
   try {
-  if (discordEnabled.value) {
-    discordEnabled.value = false
-    await clearDiscordStatus()
-    try {
-      await window.electronAPI.discordDestroy()
-    } catch (error) {
-      console.error('Failed to destroy Discord client:', error)
-    }
-    discordStatus.value = 'Đã tắt'
-  } else {
-    await initDiscord()
-    if (discordEnabled.value && currentSong.value && isPlaying.value) {
-      setTimeout(async () => {
-        await updateDiscordStatus()
-      }, 500)
-    }
-    }
+    await setDiscordEnabled(!discordSettings.enabled)
   } catch (error) {
     console.error('Discord toggle error:', error)
-  } finally {
     isDiscordLoading.value = false
-    
-    discordCooldownActive.value = true
-    setTimeout(() => {
-      discordCooldownActive.value = false
-    }, 2000)
   }
 }
 
@@ -1935,6 +1996,11 @@ const handleGlobalClick = (e: MouseEvent) => {
 }
 
 onMounted(async () => {
+  // The music library must not wait on Discord's RPC handshake, which can stall
+  // for seconds: load the setting, start the song path, and let the client
+  // connect in the background behind the serialised transition.
+  await ensureDiscordSettingsLoaded()
+  applyDiscordState(discordEnabled.value)
   loadFonts()
   await loadSongs()
   
