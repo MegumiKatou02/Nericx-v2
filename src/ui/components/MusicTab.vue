@@ -494,6 +494,11 @@ class AudioPlayer {
     this.graph = null
 
     this.audio = new Audio()
+    // The media is served from another origin. Without a CORS-approved request
+    // the element taints its Web Audio source, which then outputs silence even
+    // though playback works. The protocol answers with `*`, so anonymous is
+    // enough — and it has to be set before the first `src` assignment.
+    this.audio.crossOrigin = 'anonymous'
     // Volume is applied once, in the graph, so the element stays at unity. If the
     // graph cannot be built (no Web Audio) the element carries the volume instead.
     this.audio.volume = this.volume
@@ -1116,7 +1121,7 @@ const loadSongs = async () => {
       })
 
       loadingText.value = 'music.loading.scanning'
-      const loadResult = await window.electronAPI.musicGetSongs(osuPath.value)
+      const loadResult = await window.electronAPI.musicGetSongs()
       
       if (loadResult.success) {
         songsCache.value = loadResult.songs || []

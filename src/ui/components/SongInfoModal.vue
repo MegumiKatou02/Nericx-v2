@@ -108,6 +108,7 @@
 import { computed, ref, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
 import { t } from '../i18n.js'
+import { fileUrlForPath } from '../fileUrl.js'
 
 interface Props {
   isVisible: boolean
@@ -157,7 +158,7 @@ const folderName = computed(() => {
 
 const coverImageSrc = computed(() => {
   if (!props.song?.image || imageError.value) return null
-  return `file://${props.song.image}`
+  return fileUrlForPath(props.song.image)
 })
 
 watch(() => props.song?.image, () => {

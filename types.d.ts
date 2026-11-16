@@ -3,12 +3,12 @@ export {}
 declare global {
   interface ElectronAPI {
     selectDirectory(): Promise<string | null>
-    getOsuPath(): Promise<string>
-    createBackup(args: {
-      osuPath: string
-      outputPath: string
-      selectedOptions: string[]
-    }): Promise<{ success: boolean; message: string }>
+    getOsuPath(): Promise<string | null>
+    createBackup(selectedOptions: string[]): Promise<{
+      success: boolean
+      message: string
+      cancelled?: boolean
+    }>
     setConfig(key: string, value: string): Promise<boolean>
     getConfig(key: string): Promise<string | null>
     onConfigChanged(callback: (key: string, value: string) => void): () => void
@@ -26,23 +26,9 @@ declare global {
     discordClear(): Promise<void>
     discordDestroy(): Promise<void>
 
-    musicFilterSongs(query: string): Promise<void>
     musicGetFilteredSongs(): Promise<any[]>
-    musicPlay(song: any): Promise<{ success: boolean; message: string }>
-    musicTogglePlay(): Promise<{ success: boolean; message: string }>
-    musicStop(): { success: boolean; message: string }
     musicSetPlaybackMode(shuffle: boolean, repeatOne: boolean): Promise<void>
-    musicGetSongs(osuPath: string): Promise<{ success: boolean; message: string; songs?: Song[] }>
-    musicGetCurrentTrack(): Promise<void>
-    musicGetVolume(): Promise<void>
-    musicFormatTime(seconds: number): Promise<void>
-    musicSetVolume(volume: number): Promise<void>
-    musicGetSongList(): Promise<void>
-    musicGetTrackPosition(): { currentTime: number; duration: number }
-    musicSeek(position: number): Promise<void>
-    musicSkipForward(seconds: number): Promise<void>
-    musicSkipBackward(seconds: number): Promise<void>
-    musicDestroy(): Promise<void>
+    musicGetSongs(): Promise<{ success: boolean; message: string; songs?: Song[] }>
     removeMusicMetadataListener(): void
     onMusicMetadataUpdated(callback: () => void): void
 
