@@ -20,7 +20,7 @@ export interface VideoSourceInput {
 }
 
 /**
- * Returns the `file://` url of the video to render, or `null` when no video
+ * Returns the media url of the video to render, or `null` when no video
  * should be rendered at all. Tracks are matched by `path`: the same file can
  * arrive as a different object, so object identity is not reliable here.
  */

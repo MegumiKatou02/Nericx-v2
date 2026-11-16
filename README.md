@@ -7,7 +7,7 @@
   
   A modern desktop application built with Vue 3, TypeScript, and Electron for managing and playing osu! music collections.
 
-  [![Electron](https://img.shields.io/badge/Electron-36.5.0-47848F?style=flat&logo=electron&logoColor=white)](https://electronjs.org/)
+  [![Electron](https://img.shields.io/badge/Electron-45.2.3-47848F?style=flat&logo=electron&logoColor=white)](https://electronjs.org/)
   [![Vue.js](https://img.shields.io/badge/Vue.js-3.5.13-4FC08D?style=flat&logo=vue.js&logoColor=white)](https://vuejs.org/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.7.2-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 </div>
@@ -32,7 +32,7 @@
 
 ### Prerequisites
 
-- Node.js (v16 or higher)
+- Node.js (v22.18 or newer; the test suite imports TypeScript modules directly)
 - npm or yarn
 - osu! installed on your system
 
@@ -41,7 +41,7 @@
 1. **Clone the repository**
    ```bash
    git clone https://github.com/MegumiKatou02/Nericx-v2.git
-   cd nericx
+   cd Nericx-v2
    ```
 
 2. **Install dependencies**
@@ -64,7 +64,7 @@ npm run dev
 # Start only Vue dev server
 npm run dev:vue
 
-# Start only Electron (requires built Vue app)
+# Start only Electron (requires the Vite dev server from another terminal)
 npm run dev:electron
 ```
 
@@ -86,21 +86,13 @@ npm run dist:linux
 ## 📁 Project Structure
 
 ```
-nericx/
+Nericx-v2/
 ├── src/
-│   ├── ui/                 # Vue.js frontend
-│   │   ├── components/     # Vue components
-│   │   ├── styles/         # CSS/SCSS styles
-│   │   └── main.ts         # Vue app entry point
-│   ├── electron/           # Electron main process
-│   │   ├── main.ts         # Main Electron process
-│   │   ├── music.ts        # Music player logic
-│   │   ├── discord.ts      # Discord integration
-│   │   └── util.ts         # Utility functions
-│   └── main/               # Additional main process files
-├── dist-vue/               # Built Vue app
-├── dist-electron/          # Built Electron app
-└── iconhe.jpg              # Application icon
+│   ├── ui/                 # Vue renderer and components
+│   └── electron/           # Electron main, preload, IPC and services
+├── tests/                  # Node test-runner unit and contract tests
+├── dist-vue/               # Generated renderer build
+└── dist-electron/          # Generated Electron main/preload build
 ```
 
 ## 🎛️ Configuration
@@ -110,6 +102,8 @@ nericx/
 2. Navigate to the "General" tab
 3. Select your osu! installation folder
 4. Save the configuration
+
+The Backup tab uses this saved osu! path and opens a native save dialog for the `.zip` destination when you start a backup. Selected sections are validated in the Electron main process; the renderer does not choose source or destination paths.
 
 ### Finding Your osu! Folder
 1. Open osu!

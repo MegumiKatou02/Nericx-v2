@@ -1,14 +1,20 @@
 import { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage, shell } from 'electron'
 import path from 'path'
-import { fileURLToPath } from 'url'
+import { fileURLToPath, pathToFileURL } from 'url'
 import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig, closeConfigStore, setAppLocale, getAppLocale, t } from './util.js'
 import { getPreloadPath } from './pathResolver.js'
+import { validateBackupSections } from './backupPaths.js'
+import { handleMediaRequests, registerMediaScheme } from './mediaProtocol.js'
 import { LOCALE_CONFIG_KEY, resolveLocale } from './i18n.js'
 import { summarizeAppMetrics } from './appMetrics.js'
 import { copyFileSync, existsSync, readdirSync } from 'fs'
 
 let MusicPlayer: any = null
 let setupDiscordHandlers: any = null
+
+// Scheme privileges are read before the app is ready, so this cannot wait for
+// the `whenReady` block below.
+registerMediaScheme()
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -112,13 +118,20 @@ function createWindow() {
     transparent: true,
     webPreferences: {
       preload: getPreloadPath(),
-      webSecurity: false,
       devTools: true,
       nodeIntegration: false,
       contextIsolation: true,
       spellcheck: false,
       backgroundThrottling: false
     }
+  })
+
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const staysInApp = isDev()
+      ? new URL(url).origin === 'http://localhost:5123'
+      : url === pathToFileURL(path.join(app.getAppPath(), 'dist-vue', 'index.html')).href
+    if (!staysInApp) event.preventDefault()
   })
 
   if (process.platform === 'win32' && existsSync(iconPath)) {
@@ -192,12 +205,29 @@ ipcMain.handle('get-osu-path', createIPCHandler(async () => {
   return await getOsuPath()
 }))
 
-ipcMain.handle('create-backup', createIPCHandler(async (_: any, args: { 
-  osuPath: string, 
-  outputPath: string, 
-  selectedOptions: string[] 
-}) => {
-  return await createBackup(args.osuPath, args.outputPath, args.selectedOptions)
+ipcMain.handle('create-backup', createIPCHandler(async (_: any, selectedOptions: unknown) => {
+  const sections = validateBackupSections(selectedOptions)
+  const osuPath = await getOsuPath()
+  if (!osuPath) {
+    return { success: false, message: await t('backup.noPath') }
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const defaultPath = path.join(app.getPath('downloads'), `osu_backup_${timestamp}.zip`)
+  const options = {
+    title: await t('backup.title'),
+    defaultPath,
+    filters: [{ name: 'ZIP archive', extensions: ['zip'] }]
+  }
+  const { canceled, filePath } = mainWindow
+    ? await dialog.showSaveDialog(mainWindow, options)
+    : await dialog.showSaveDialog(options)
+  if (canceled || !filePath) {
+    return { success: false, message: '', cancelled: true }
+  }
+
+  const destination = path.extname(filePath).toLowerCase() === '.zip' ? filePath : `${filePath}.zip`
+  return createBackup(osuPath, destination, sections)
 }))
 
 ipcMain.handle('get-config', createIPCHandler(async (_: any, key: string) => {
@@ -361,11 +391,6 @@ const initDiscordHandlers = async () => {
   }
 }
 
-ipcMain.handle('music:filterSongs', createIPCHandler(async (_: any, query: string) => {
-  const player = await initMusicPlayer()
-  return player.filterSongs(query)
-}))
-
 ipcMain.handle('music:get-filtered-songs', createIPCHandler(async () => {
   const player = await initMusicPlayer()
   return player.getFilteredSongs()
@@ -376,19 +401,11 @@ ipcMain.handle('music:setPlaybackMode', createIPCHandler(async (_: any, shuffle:
   return player.setPlaybackMode(shuffle, repeatOne)
 }))
 
-ipcMain.handle('music:get-songs', createIPCHandler(async (_: any, osuPath: string) => {
+ipcMain.handle('music:get-songs', createIPCHandler(async () => {
+  const osuPath = await getOsuPath()
+  if (!osuPath) return { success: false, message: await t('backup.noPath') }
   const player = await initMusicPlayer()
   return player.loadSongs(osuPath)
-}))
-
-ipcMain.handle('music:format-time', createIPCHandler(async (_: any, seconds: number) => {
-  const player = await initMusicPlayer()
-  return player.formatTime(seconds)
-}))
-
-ipcMain.handle('music:get-song-list', createIPCHandler(async () => {
-  const player = await initMusicPlayer()
-  return player.getSongList()
 }))
 
 ipcMain.handle('music:get-cache-stats', createIPCHandler(async () => {
@@ -440,7 +457,11 @@ app.whenReady().then(async () => {
     const appIcon = nativeImage.createFromPath(iconPath)
     app.dock?.setIcon(appIcon) // macOS
   }
-  
+
+  // Registered after the database is open (the handler reads the osu! path)
+  // and before the window can request a song file.
+  handleMediaRequests()
+
   createWindow()
   
   startMemoryMonitoring()

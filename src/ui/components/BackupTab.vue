@@ -19,19 +19,6 @@
         </div>
       </div>
 
-      <div class="output-section">
-        <label>{{ t('backup.outputFolder') }}</label>
-        <div class="input-group">
-          <input 
-            type="text" 
-            v-model="outputPath" 
-            :placeholder="t('backup.outputPlaceholder')"
-            readonly
-          >
-          <button @click="selectOutputFolder" class="btn-select">{{ t('general.selectFolder') }}</button>
-        </div>
-      </div>
-
       <button 
         @click="startBackup" 
         class="btn-backup"
@@ -52,8 +39,8 @@ import { ref, computed, onMounted } from 'vue'
 import { t } from '../i18n.js'
 
 const osuPath = ref('')
-const outputPath = ref('')
 const backupStatus = ref('')
+const isBackingUp = ref(false)
 
 const backupOptions = ref({
   skins: { label: 'Skins', selected: false },
@@ -63,36 +50,26 @@ const backupOptions = ref({
   scores: { label: 'Scores (data/r)', selected: false }
 })
 
-const canBackup = computed(() => {
-  return outputPath.value && 
-    Object.values(backupOptions.value).some(opt => opt.selected)
-})
-
-const selectOutputFolder = async () => {
-  const result = await window.electronAPI.selectDirectory()
-  if (result) {
-    outputPath.value = result
-  }
-}
+const canBackup = computed(() =>
+  !isBackingUp.value && Object.values(backupOptions.value).some(option => option.selected)
+)
 
 const startBackup = async () => {
+  const selectedOptions = Object.entries(backupOptions.value)
+    .filter(([_, option]) => option.selected)
+    .map(([key]) => key)
+
+  isBackingUp.value = true
+  backupStatus.value = t('backup.creating')
   try {
-    const selectedOptions = Object.entries(backupOptions.value)
-      .filter(([_, opt]) => opt.selected)
-      .map(([key]) => key)
-
-    backupStatus.value = t('backup.creating')
-    
-    const result = await window.electronAPI.createBackup({
-      osuPath: osuPath.value,
-      outputPath: outputPath.value,
-      selectedOptions
-    })
-
-    backupStatus.value = result.message
+    const result = await window.electronAPI.createBackup(selectedOptions)
+    if (!result.cancelled) backupStatus.value = result.message
+    else backupStatus.value = ''
   } catch (error) {
     backupStatus.value = t('backup.unknownError')
     console.error('Backup error:', error)
+  } finally {
+    isBackingUp.value = false
   }
 }
 
@@ -150,49 +127,8 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 
-.output-section {
-  margin-bottom: 20px;
-}
-
-.output-section label {
-  color: var(--text-muted);
-  font-size: 0.9em;
-  display: block;
-  margin-bottom: 8px;
-}
-
-.input-group {
-  display: flex;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-input[type="text"] {
-  flex: 1;
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  font-size: 14px;
-}
-
 input[type="checkbox"] {
   accent-color: var(--accent-color);
-}
-
-.btn-select {
-  padding: 8px 16px;
-  background: var(--accent-color);
-  color: var(--text-primary);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.btn-select:hover {
-  background: var(--accent-hover);
 }
 
 .btn-backup {
@@ -207,7 +143,7 @@ input[type="checkbox"] {
   transition: background-color 0.2s;
 }
 
-.btn-backup:hover {
+.btn-backup:hover:enabled {
   background: var(--accent-hover);
 }
 
