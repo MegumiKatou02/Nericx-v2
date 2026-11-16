@@ -3,7 +3,7 @@
     <div v-if="!osuPath" class="warning">
       {{ t('music.noPath') }}
     </div>
-    
+
     <div v-else class="main-container">
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
@@ -11,29 +11,29 @@
           <span class="loading-text">{{ t(loadingText) }}</span>
           <div v-if="scanProgress.total > 0" class="scan-progress">
             <div class="progress-bar">
-              <div 
-                class="progress-fill" 
+              <div
+                class="progress-fill"
                 :style="{ width: scanProgress.percentage + '%' }"
               ></div>
             </div>
             <div class="progress-text">
-              {{ scanProgress.processed }} / {{ scanProgress.total }} 
+              {{ scanProgress.processed }} / {{ scanProgress.total }}
               ({{ scanProgress.percentage }}%)
             </div>
           </div>
         </div>
       </div>
-      
+
       <div class="songs-container">
         <div class="controls-row">
           <div class="search-box">
             <i class="fas fa-search search-icon"></i>
-            <input 
+            <input
               ref="searchInputRef"
-              v-model="searchQuery" 
+              v-model="searchQuery"
               @input="optimizedFilterSongs"
               @keydown="handleSearchKeyDown"
-              type="text" 
+              type="text"
               :placeholder="t('music.search.placeholder')"
               class="search-input"
             >
@@ -48,8 +48,8 @@
               {{ currentSortOption.label }}
             </div>
             <div v-if="isDropdownOpen" class="dropdown-menu">
-              <div 
-                v-for="option in sortOptions" 
+              <div
+                v-for="option in sortOptions"
                 :key="option.value"
                 class="dropdown-item"
                 :class="{ 'selected': currentSort === option.value }"
@@ -61,10 +61,10 @@
           </div>
         </div>
 
-        <div 
-          class="songs-list" 
+        <div
+          class="songs-list"
           :class="{ 'empty-list': sortedSongs.length === 0 }"
-          ref="songsListRef" 
+          ref="songsListRef"
           @click="hideContextMenu"
           @scroll="handleVirtualScroll"
         >
@@ -74,34 +74,38 @@
             </div>
             <div class="empty-title">{{ t('music.empty.title') }}</div>
             <div class="empty-subtitle">
-              {{ searchQuery ? t('music.empty.noMatch') : t('music.empty.none') }}
+              {{ excludedOnly
+                ? t('music.empty.noExcluded')
+                : favoritesOnly
+                  ? t('music.empty.noFavorites')
+                  : (searchQuery ? t('music.empty.noMatch') : t('music.empty.none')) }}
             </div>
           </div>
-          
-          <div 
-            v-else 
+
+          <div
+            v-else
             class="virtual-scroll-container"
             :style="{ height: virtualScrollHeight + 'px' }"
           >
-            <div 
+            <div
               class="virtual-scroll-content"
-              :style="{ 
+              :style="{
                 transform: `translateY(${virtualScrollOffset}px)`,
                 height: visibleSongs.length * itemHeight + 'px'
               }"
             >
-              <div 
-                v-for="(song, index) in visibleSongs" 
+              <div
+                v-for="(song, index) in visibleSongs"
                 :key="song.beatmapsetId ? `${song.beatmapsetId}-${song.name}` : `${song.name}-${index}`"
                 :class="[
-                  'song-item', 
-                  { 
+                  'song-item',
+                  {
                     'selected': selectedSong?.path === song.path,
                     'playing': currentSong?.path === song.path && isPlaying,
                     'has-video': song.video
                   }
                 ]"
-                
+
                 @click="selectSong(song)"
                 @dblclick="playSong(song)"
                 @contextmenu="showContextMenu($event, song)"
@@ -112,6 +116,14 @@
                     <div v-if="song.video" class="video-indicator">
                       <i class="fas fa-play-circle"></i>
                       <span>{{ t('music.video.suffix') }}</span>
+                    </div>
+                    <div v-if="isFavorite(song.path)" class="video-indicator favorite-indicator">
+                      <i class="fas fa-heart"></i>
+                      <span>{{ t('music.favorite.suffix') }}</span>
+                    </div>
+                    <div v-if="isExcluded(song.path)" class="video-indicator excluded-indicator">
+                      <i class="fas fa-ban"></i>
+                      <span>{{ t('music.excluded.suffix') }}</span>
                     </div>
                   </div>
                   <div class="song-details">
@@ -128,12 +140,12 @@
 
       <div class="player-container">
         <div v-if="currentVideoUrl" class="video-container" @click="showFullVideo">
-          <video 
-            :src="currentVideoUrl" 
+          <video
+            :src="currentVideoUrl"
             :alt="currentSongName"
-            autoplay 
-            muted 
-            loop 
+            autoplay
+            muted
+            loop
             @error="handleVideoError"
             @loadedmetadata="handleVideoLoaded"
             class="video-player"
@@ -163,9 +175,9 @@
             <button @click="togglePlayMode" class="control-btn mode-btn" :title="playModeTitle">
               <span v-html="playModeIcon"></span>
             </button>
-            <button 
-              @click="toggleDiscord" 
-              class="control-btn discord-btn" 
+            <button
+              @click="toggleDiscord"
+              class="control-btn discord-btn"
               :class="discordButtonClass"
               :disabled="isDiscordLoading || discordCooldownActive"
             >
@@ -192,10 +204,10 @@
               <div class="volume-control compact">
                 <div class="control-header compact">
                   <i :class="volumeIcon" @click="toggleMute" class="volume-icon-btn"></i>
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
+              <input
+                type="range"
+                min="0"
+                max="100"
                 :value="volumePercentage"
                 @input="onVolumeChange"
                 @change="persistVolume"
@@ -211,18 +223,18 @@
               <div class="progress-container">
                 <span class="current-time">{{ formattedCurrentTime }}</span>
                 <div class="progress-bar-container">
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                :value="progressPercentage" 
+              <input
+                type="range"
+                min="0"
+                max="100"
+                :value="progressPercentage"
                 @input="onSeek"
                     class="progress-bar"
                     :title="t('music.progress')"
                   >
                   <div class="progress-track">
-                    <div 
-                      class="progress-fill" 
+                    <div
+                      class="progress-fill"
                       :style="{ width: progressPercentage + '%' }"
                     ></div>
                   </div>
@@ -241,14 +253,25 @@
             </div>
             <div class="current-track-content">
               <span>{{ currentSongFormatted }}</span>
-              <button 
-                v-if="currentSong" 
-                @click="scrollToCurrentSong" 
-                class="scroll-to-song-btn"
-                :title="t('music.goToCurrent')"
-              >
-                <i class="fas fa-location-arrow"></i>
-              </button>
+              <div class="track-actions">
+                <button
+                  v-if="favoriteTargetSong"
+                  @click="togglePlayerFavorite"
+                  class="scroll-to-song-btn favorite-track-btn"
+                  :class="{ active: favoriteTargetIsFavorite }"
+                  :title="favoriteTargetIsFavorite ? t('music.favorite.remove') : t('music.favorite.add')"
+                >
+                  <i :class="favoriteTargetIsFavorite ? 'fas fa-heart' : 'far fa-heart'"></i>
+                </button>
+                <button
+                  v-if="currentSong"
+                  @click="scrollToCurrentSong"
+                  class="scroll-to-song-btn"
+                  :title="t('music.goToCurrent')"
+                >
+                  <i class="fas fa-location-arrow"></i>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -270,15 +293,23 @@
       </div>
     </div>
 
-    <div 
-      v-if="contextMenu.visible" 
+    <div
+      v-if="contextMenu.visible"
       class="context-menu"
-      :style="{ 
-        top: contextMenu.y + 'px', 
-        left: contextMenu.x + 'px' 
+      :style="{
+        top: contextMenu.y + 'px',
+        left: contextMenu.x + 'px'
       }"
       @click.stop
     >
+      <div class="context-menu-item" @click="toggleContextFavorite">
+        <i :class="contextSongIsFavorite ? 'fas fa-heart-broken' : 'fas fa-heart'"></i>
+        <span>{{ contextSongIsFavorite ? t('music.context.unfavorite') : t('music.context.favorite') }}</span>
+      </div>
+      <div class="context-menu-item" @click="toggleContextExclusion">
+        <i :class="contextSongIsExcluded ? 'fas fa-undo' : 'fas fa-ban'"></i>
+        <span>{{ contextSongIsExcluded ? t('music.context.restore') : t('music.context.exclude') }}</span>
+      </div>
       <div class="context-menu-item" @click="openFileLocation">
         <i class="fas fa-folder-open"></i>
         <span>{{ t('music.context.viewFile') }}</span>
@@ -294,23 +325,23 @@
     </div>
 
 
-    <div 
-      v-if="copyNotification.visible" 
+    <div
+      v-if="copyNotification.visible"
       class="copy-notification"
     >
       <i class="fas fa-check"></i>
       <span>{{ copyNotification.message }}</span>
     </div>
 
-    <ImageViewer 
-      :is-visible="showImageViewer" 
+    <ImageViewer
+      :is-visible="showImageViewer"
       :image-url="currentImageUrl"
       :image-path="currentImagePath"
       :image-name="currentImageName"
       @close="closeImageViewer"
     />
 
-    <SongInfoModal 
+    <SongInfoModal
       :is-visible="songInfoModal.visible"
       :song="songInfoModal.song"
       @close="closeSongInfo"
@@ -331,6 +362,15 @@ import { createCoalescingWriter } from '../coalesce.js'
 import { createProgressTicker, systemTimers, type ProgressTicker } from '../progressTicker.js'
 import { createStateTransition } from '../discordClient.js'
 import { discordSettings, ensureDiscordSettingsLoaded, parseStoredBoolean, setDiscordEnabled } from '../discordSettings.js'
+import {
+  ensureSongPreferencesLoaded,
+  excludedPathSet,
+  favoritePathSet,
+  isExcluded,
+  isFavorite,
+  toggleExcluded,
+  toggleFavorite
+} from '../songPreferences.js'
 import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 import { t } from '../i18n.js'
@@ -339,11 +379,11 @@ import type { MessageKey } from '../../electron/i18n.js'
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null
   let rafId: number | null = null
-  
+
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout)
     if (rafId) cancelAnimationFrame(rafId)
-    
+
     timeout = setTimeout(() => {
       rafId = requestAnimationFrame(() => {
         func(...args)
@@ -410,7 +450,7 @@ class EnhancedCache<K, V> {
   set(key: K, value: V): void {
     this.cache.set(key, value)
     this.updateAccess(key)
-    
+
     if (this.cache.size > this.maxSize) {
       this.evictLRU()
     }
@@ -437,9 +477,9 @@ class EnhancedCache<K, V> {
   private evictLRU(): void {
     const sortedEntries = Array.from(this.accessOrder.entries())
       .sort((a, b) => a[1] - b[1])
-    
+
     const toRemove = Math.floor(this.cache.size * 0.2)
-    
+
     for (let i = 0; i < toRemove && i < sortedEntries.length; i++) {
       const key = sortedEntries[i][0]
       this.cache.delete(key)
@@ -455,7 +495,7 @@ const loadFonts = () => {
       style: 'normal',
       display: 'swap'
     })
-    
+
     fontAwesome.load().then(() => {
       document.fonts.add(fontAwesome)
     }).catch(err => {
@@ -570,7 +610,7 @@ class AudioPlayer {
       const srcPath = fileUrlForPath(song.path)
 
       this.audio!.src = srcPath
-      
+
       return new Promise((resolve) => {
         let resolved = false
 
@@ -629,8 +669,8 @@ class AudioPlayer {
         })
       })
     } catch (error) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         message: t('music.playback.errorPlay', {
           message: error instanceof Error ? error.message : String(error)
         })
@@ -727,7 +767,7 @@ const shuffleMode = ref(false)
 const repeatOne = ref(false)
 const isMuted = ref(false)
 const previousVolume = ref(0.5)
-const filteredSongs = shallowRef<Song[]>([]) 
+const filteredSongs = shallowRef<Song[]>([])
 const songsListRef = ref<HTMLElement | null>(null)
 const isLoading = ref<boolean>(false)
 const songsCache = shallowRef<Song[]>([])
@@ -811,8 +851,18 @@ const currentSort = ref<string>('title')
 const sortOptions = computed<SortOption[]>(() => [
   { label: t('music.sort.title'), value: 'title' },
   { label: t('music.sort.artist'), value: 'artist' },
-  { label: t('music.sort.duration'), value: 'duration' }
+  { label: t('music.sort.duration'), value: 'duration' },
+  { label: t('music.sort.favorites'), value: 'favorites' },
+  { label: t('music.sort.excluded'), value: 'excluded' }
 ])
+
+/**
+ * "Favorite songs" and "Excluded songs" are filters that live in the sort
+ * menu, not sorts of their own: choosing one narrows the list, still ordered
+ * by title. Excluded songs never appear in the ordinary list.
+ */
+const favoritesOnly = computed(() => currentSort.value === 'favorites')
+const excludedOnly = computed(() => currentSort.value === 'excluded')
 
 const formatSongName = (name: string) => {
   return name.replace(/\s*-\s*Copy(\s*\(\d+\))?$/i, '')
@@ -822,10 +872,10 @@ const getCachedSongDetails = (songName: string) => {
   if (songDetailsCache.has(songName)) {
     return songDetailsCache.get(songName)!
   }
-  
+
   const pooledObj = songDetailsPool.acquire()
   const parts = formatSongName(songName).split(' - ')
-  
+
   if (parts.length >= 2) {
     pooledObj.artist = parts[0]
     pooledObj.title = parts.slice(1).join(' - ')
@@ -833,11 +883,11 @@ const getCachedSongDetails = (songName: string) => {
     pooledObj.artist = t('common.unknown')
     pooledObj.title = songName
   }
-  
+
   const result = { artist: pooledObj.artist, title: pooledObj.title }
   songDetailsCache.set(songName, result)
   songDetailsPool.release(pooledObj)
-  
+
   return result
 }
 
@@ -859,7 +909,7 @@ const currentSortOption = computed(() => {
 
 const playButtonText = computed(() => isPlaying.value ? t('music.pause') : t('music.play'))
 
-const advancedControlsText = computed(() => 
+const advancedControlsText = computed(() =>
   showAdvancedControls.value ? t('music.advanced.hide') : t('music.advanced.show')
 )
 
@@ -869,7 +919,7 @@ const discordButtonClass = computed(() => ({
   'cooldown': discordCooldownActive.value
 }))
 
-const discordIconClass = computed(() => 
+const discordIconClass = computed(() =>
   isDiscordLoading.value ? 'fas fa-spinner fa-spin' : 'fab fa-discord'
 )
 
@@ -893,7 +943,7 @@ const volumeIcon = computed(() => {
   }
 })
 
-const progressPercentage = computed(() => 
+const progressPercentage = computed(() =>
   duration.value > 0 ? (currentTime.value / duration.value) * 100 : 0
 )
 
@@ -921,18 +971,30 @@ const currentVideoUrl = computed(() => videoUrlFor({
 }))
 
 const sortedSongs = computed(() => {
-  return [...filteredSongs.value].sort((a, b) => {
+  // The favourite and excluded filters are applied on top of the search
+  // result, so both can be active at once. Reading the reactive sets makes
+  // toggling a song update the list immediately while a filter is on.
+  let visible: Song[]
+  if (excludedOnly.value) {
+    visible = filteredSongs.value.filter(song => excludedPathSet.value.has(song.path))
+  } else if (favoritesOnly.value) {
+    visible = filteredSongs.value.filter(song => favoritePathSet.value.has(song.path))
+  } else {
+    visible = filteredSongs.value.filter(song => !excludedPathSet.value.has(song.path))
+  }
+
+  return [...visible].sort((a, b) => {
     if (currentSort.value === 'duration') {
       const durationA = a.duration || 0
       const durationB = b.duration || 0
       return durationA - durationB
     }
-    
+
     const songA = getCachedSongDetails(a.name)
     const songB = getCachedSongDetails(b.name)
-    
+
     if (currentSort.value === 'artist') {
-      return songA.artist.localeCompare(songB.artist) || 
+      return songA.artist.localeCompare(songB.artist) ||
              songA.title.localeCompare(songB.title)
     } else {
       return songA.title.localeCompare(songB.title)
@@ -946,19 +1008,32 @@ const currentSongFormatted = computed(() => {
   return `${artist} - ${title}`
 })
 
+const contextSongIsFavorite = computed(() =>
+  contextMenu.value.song ? isFavorite(contextMenu.value.song.path) : false
+)
+
+const contextSongIsExcluded = computed(() =>
+  contextMenu.value.song ? isExcluded(contextMenu.value.song.path) : false
+)
+
+const favoriteTargetSong = computed(() => selectedSong.value || currentSong.value)
+const favoriteTargetIsFavorite = computed(() =>
+  favoriteTargetSong.value ? isFavorite(favoriteTargetSong.value.path) : false
+)
+
 const virtualScrollData = computed(() => {
   const containerHeight = songsListRef.value?.clientHeight || 600
   const totalItems = sortedSongs.value.length
   const totalHeight = totalItems * itemHeight.value
-  
+
   visibleCount.value = Math.ceil(containerHeight / itemHeight.value) + 5
-  
+
   const startIndex = Math.floor(scrollTop.value / itemHeight.value)
   const endIndex = Math.min(startIndex + visibleCount.value, totalItems)
-  
+
   virtualScrollHeight.value = totalHeight
   virtualScrollOffset.value = startIndex * itemHeight.value
-  
+
   return {
     startIndex: Math.max(0, startIndex),
     endIndex,
@@ -981,18 +1056,26 @@ watch(sortedSongs, () => {
   updateVisibleSongs()
 }, { deep: false })
 
+// Switching filters can shrink the list under the current scroll position;
+// returning to the top avoids a blank window until scroll.
+watch([favoritesOnly, excludedOnly], () => {
+  scrollTop.value = 0
+  if (songsListRef.value) songsListRef.value.scrollTop = 0
+  updateVisibleSongs()
+})
+
 watch(virtualScrollData, () => {
   updateVisibleSongs()
 }, { deep: false })
 
 const optimizedFilterSongs = debounce(async (_?: Event) => {
   const query = searchQuery.value.trim()
-  
+
   if (searchCache.has(query)) {
     filteredSongs.value = searchCache.get(query)!
     return
   }
-  
+
   if (!query) {
     const result = [...songsCache.value]
     filteredSongs.value = result
@@ -1009,37 +1092,37 @@ const optimizedFilterSongs = debounce(async (_?: Event) => {
 
   const searchTerms = query.toLowerCase().split(' ')
   const localFiltered: Song[] = []
-  
+
   const chunkSize = 1000
   const processChunk = async (startIndex: number) => {
     const endIndex = Math.min(startIndex + chunkSize, songsCache.value.length)
-    
+
     for (let i = startIndex; i < endIndex; i++) {
       const song = songsCache.value[i]
       const songName = song.name.toLowerCase()
       const { artist, title } = getCachedSongDetails(song.name)
       const artistLower = artist.toLowerCase()
       const titleLower = title.toLowerCase()
-      
-      const matches = searchTerms.every(term => 
-        songName.includes(term) || 
-        artistLower.includes(term) || 
+
+      const matches = searchTerms.every(term =>
+        songName.includes(term) ||
+        artistLower.includes(term) ||
         titleLower.includes(term)
       )
-      
+
       if (matches) {
         localFiltered.push(song)
       }
     }
-    
+
     if (endIndex < songsCache.value.length) {
       await new Promise(resolve => setTimeout(resolve, 0))
       await processChunk(endIndex)
     }
   }
-  
+
   await processChunk(0)
-  
+
   filteredSongs.value = localFiltered
   searchCache.set(query, localFiltered)
 }, 150)
@@ -1062,12 +1145,12 @@ const performMemoryCleanup = () => {
   if (searchCache.size() > 50) {
     searchCache.clear()
   }
-  
+
   if (songDetailsCache.size() > 5000) {
     const currentSize = songDetailsCache.size()
     console.log(`Cleaning song details cache (${currentSize} items)`)
   }
-  
+
   if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
     (globalThis as any).gc()
   }
@@ -1077,16 +1160,16 @@ const loadSongs = async () => {
   try {
     isLoading.value = true
     loadingText.value = 'music.loading.list'
-    scanProgress.value = { 
-      total: 0, 
-      processed: 0, 
+    scanProgress.value = {
+      total: 0,
+      processed: 0,
       percentage: 0
     }
-    
+
     const result = await window.electronAPI.getConfig('osuPath')
     if (result) {
       osuPath.value = result
-      
+
       if (songsCache.value.length > 0) {
         filteredSongs.value = songsCache.value
         updateVisibleSongs()
@@ -1103,26 +1186,26 @@ const loadSongs = async () => {
         if (Array.isArray(progress) && progress.length > 0) {
           latestProgress = progress[progress.length - 1]
         }
-        
+
         console.log('Latest progress:', latestProgress);
         const total = typeof latestProgress.total === 'number' ? latestProgress.total : 0
         const processed = typeof latestProgress.processed === 'number' ? latestProgress.processed : 0
-        const percentage = typeof latestProgress.percentage === 'number' ? latestProgress.percentage : 
+        const percentage = typeof latestProgress.percentage === 'number' ? latestProgress.percentage :
                           (total > 0 ? Math.round((processed / total) * 100) : 0)
-        
+
         loadingText.value = 'music.loading.metadata'
         scanProgress.value = {
           total,
           processed,
           percentage
         }
-        
+
         console.log(`Quét nhạc: ${processed}/${total} (${percentage}%)`)
       })
 
       loadingText.value = 'music.loading.scanning'
       const loadResult = await window.electronAPI.musicGetSongs()
-      
+
       if (loadResult.success) {
         songsCache.value = loadResult.songs || []
         filteredSongs.value = songsCache.value
@@ -1133,9 +1216,9 @@ const loadSongs = async () => {
         window.electronAPI.onMusicMetadataUpdated(async () => {
           const updatedSongs = await window.electronAPI.musicGetFilteredSongs()
           songsCache.value = updatedSongs
-          
+
           searchCache.clear()
-          
+
           if (!searchQuery.value.trim()) {
             filteredSongs.value = [...updatedSongs]
             updateVisibleSongs()
@@ -1151,9 +1234,9 @@ const loadSongs = async () => {
   } finally {
     isLoading.value = false
     setTimeout(() => {
-      scanProgress.value = { 
-        total: 0, 
-        processed: 0, 
+      scanProgress.value = {
+        total: 0,
+        processed: 0,
         percentage: 0
       }
     }, 2000)
@@ -1162,6 +1245,48 @@ const loadSongs = async () => {
 
 const selectSong = (song: Song) => {
   selectedSong.value = song
+}
+
+const toggleSongFavorite = async (song: Song) => {
+  const { artist, title } = getCachedSongDetails(song.name)
+  await toggleFavorite({
+    path: song.path,
+    name: song.name,
+    artist,
+    title,
+    duration: song.duration
+  })
+}
+
+const toggleContextFavorite = async () => {
+  const song = contextMenu.value.song
+  if (!song) return
+  hideContextMenu()
+  await toggleSongFavorite(song)
+}
+
+const toggleSongExclusion = async (song: Song) => {
+  const { artist, title } = getCachedSongDetails(song.name)
+  await toggleExcluded({
+    path: song.path,
+    name: song.name,
+    artist,
+    title,
+    duration: song.duration
+  })
+}
+
+const toggleContextExclusion = async () => {
+  const song = contextMenu.value.song
+  if (!song) return
+  hideContextMenu()
+  await toggleSongExclusion(song)
+}
+
+const togglePlayerFavorite = async () => {
+  if (favoriteTargetSong.value) {
+    await toggleSongFavorite(favoriteTargetSong.value)
+  }
 }
 
 const handleSongEnd = async () => {
@@ -1179,7 +1304,7 @@ const handleSongEnd = async () => {
     const nextIndex = (currentIndex + 1) % sortedSongs.value.length
     await playSong(sortedSongs.value[nextIndex])
   }
-  
+
   nextTick(() => {
     scrollToCurrentSong()
   })
@@ -1192,7 +1317,7 @@ const playSong = async (song: Song) => {
       audioPlayer.stop()
     }
     progressTicker.stop()
-    
+
     const requestId = ++playRequestId
     const result = await audioPlayer.play(song)
     if (requestId !== playRequestId) return
@@ -1202,18 +1327,18 @@ const playSong = async (song: Song) => {
       isPlaying.value = true
       progressTicker.start()
       updateDiscordStatus()
-      
+
       nextTick(() => {
         const songElement = document.querySelector('.song-item.playing')
         if (songElement && songsListRef.value) {
-          songElement.scrollIntoView({ 
-            behavior: 'smooth', 
+          songElement.scrollIntoView({
+            behavior: 'smooth',
             block: 'nearest',
             inline: 'nearest'
           })
         }
       })
-      
+
       audioPlayer.getAudio()?.addEventListener('ended', handleSongEnd)
     } else {
       console.error(result.message)
@@ -1232,11 +1357,11 @@ const playSong = async (song: Song) => {
 
 const nextSong = async () => {
   if (sortedSongs.value.length === 0) return
-  
-  const currentIndex = currentSong.value 
+
+  const currentIndex = currentSong.value
     ? sortedSongs.value.findIndex(song => song.path === currentSong.value?.path)
     : -1
-  
+
   let nextIndex
   if (shuffleMode.value) {
     do {
@@ -1245,17 +1370,17 @@ const nextSong = async () => {
   } else {
     nextIndex = (currentIndex + 1) % sortedSongs.value.length
   }
-  
+
   await playSong(sortedSongs.value[nextIndex])
 }
 
 const previousSong = async () => {
   if (sortedSongs.value.length === 0) return
-  
-  const currentIndex = currentSong.value 
+
+  const currentIndex = currentSong.value
     ? sortedSongs.value.findIndex(song => song.path === currentSong.value?.path)
     : -1
-  
+
   let prevIndex
   if (shuffleMode.value) {
     do {
@@ -1264,7 +1389,7 @@ const previousSong = async () => {
   } else {
     prevIndex = currentIndex <= 0 ? sortedSongs.value.length - 1 : currentIndex - 1
   }
-  
+
   await playSong(sortedSongs.value[prevIndex])
 }
 
@@ -1290,7 +1415,7 @@ const togglePlay = async () => {
       isPlaying.value = true
       progressTicker.start()
     }
-    
+
     if (updateMiniPlayer) {
       updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
     }
@@ -1310,11 +1435,11 @@ const stopMusic = () => {
     currentTime.value = 0
     duration.value = 0
     currentSong.value = null
-    
+
     if (discordEnabled.value) {
       clearDiscordStatus()
     }
-    
+
     if (updateMiniPlayer) {
       updateMiniPlayer(null, false, 0, 0)
     }
@@ -1334,7 +1459,7 @@ const togglePlayMode = () => {
     shuffleMode.value = false
     repeatOne.value = false
   }
-  
+
   window.electronAPI.musicSetPlaybackMode(shuffleMode.value, repeatOne.value)
 }
 
@@ -1498,7 +1623,7 @@ const onVolumeChange = (event: Event) => {
   const value = +(event.target as HTMLInputElement).value
   volume.value = value / 100
   audioPlayer.setVolume(volume.value)
-  
+
   if (isMuted.value && volume.value > 0) {
     isMuted.value = false
   }
@@ -1542,7 +1667,7 @@ const onSeek = (event: Event) => {
 
 const formatTime = (seconds: number) => {
   if (!seconds || isNaN(seconds)) return '0:00'
-  
+
   const minutes = Math.floor(seconds / 60)
   const remainingSeconds = Math.floor(seconds % 60)
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
@@ -1586,7 +1711,7 @@ const handleKeyDown = async (event: KeyboardEvent) => {
 
   if (!sortedSongs.value.length && !['u', 'i', 'o', 'x', 'p', 'q', 'm'].includes(event.key.toLowerCase())) return
 
-  const currentIndex = selectedSong.value 
+  const currentIndex = selectedSong.value
     ? sortedSongs.value.findIndex(song => song.path === selectedSong.value?.path)
     : -1
 
@@ -1727,7 +1852,7 @@ const handleSearchKeyDown = (event: KeyboardEvent) => {
         }
       })
       break
-    
+
     case 'Enter':
       event.preventDefault()
       event.stopPropagation()
@@ -1744,7 +1869,7 @@ const handleSearchKeyDown = (event: KeyboardEvent) => {
 const updateDropdownPosition = () => {
   const sortBox = document.querySelector('.sort-box') as HTMLElement
   const dropdownMenu = document.querySelector('.dropdown-menu') as HTMLElement
-  
+
   if (sortBox && dropdownMenu) {
     const rect = sortBox.getBoundingClientRect()
     dropdownMenu.style.top = `${rect.bottom + 4}px`
@@ -1757,7 +1882,7 @@ const toggleDropdown = (event: Event) => {
   event.preventDefault()
   event.stopPropagation()
   isDropdownOpen.value = !isDropdownOpen.value
-  
+
   if (isDropdownOpen.value) {
     nextTick(() => {
       updateDropdownPosition()
@@ -1772,16 +1897,16 @@ const selectOption = (option: SortOption) => {
 
 const scrollToCurrentSong = () => {
   if (!currentSong.value || !songsListRef.value) return
-  
+
   const currentIndex = sortedSongs.value.findIndex(song => song.path === currentSong.value?.path)
   if (currentIndex === -1) return
-  
+
   selectedSong.value = currentSong.value
-  
+
   const targetScrollTop = currentIndex * itemHeight.value
   const containerHeight = songsListRef.value.clientHeight
   const centeredScrollTop = targetScrollTop - (containerHeight / 2) + (itemHeight.value / 2)
-  
+
   songsListRef.value.scrollTo({
     top: Math.max(0, centeredScrollTop),
     behavior: 'smooth'
@@ -1790,16 +1915,16 @@ const scrollToCurrentSong = () => {
 
 const scrollToSelectedSong = (songIndex: number) => {
   if (!songsListRef.value) return
-  
+
   const container = songsListRef.value
   const containerHeight = container.clientHeight
   const currentScrollTop = container.scrollTop
-  
+
   const itemTop = songIndex * itemHeight.value
   const itemBottom = itemTop + itemHeight.value
   const viewTop = currentScrollTop
   const viewBottom = currentScrollTop + containerHeight
-  
+
   if (itemTop < viewTop) {
     container.scrollTo({
       top: itemTop,
@@ -1819,7 +1944,7 @@ const focusTab = () => {
   if (currentSong.value && !selectedSong.value) {
     selectedSong.value = currentSong.value
   }
-  
+
   nextTick(() => {
     setTimeout(() => {
       if (musicTabRef.value) {
@@ -1832,10 +1957,10 @@ const focusTab = () => {
 const showContextMenu = (event: MouseEvent, song: Song) => {
   event.preventDefault()
   event.stopPropagation()
-  
+
   const rect = songsListRef.value?.getBoundingClientRect()
   if (!rect) return
-  
+
   contextMenu.value = {
     visible: true,
     x: event.clientX,
@@ -1849,7 +1974,7 @@ const showContextMenu = (event: MouseEvent, song: Song) => {
       const menuRect = contextMenuEl.getBoundingClientRect()
       const windowWidth = window.innerWidth
       const windowHeight = window.innerHeight
-      
+
       if (menuRect.right > windowWidth) {
         contextMenu.value.x = windowWidth - menuRect.width - 10
       }
@@ -1867,7 +1992,7 @@ const hideContextMenu = () => {
 
 const openFileLocation = async () => {
   if (!contextMenu.value.song) return
-  
+
   try {
     const result = await window.electronAPI.showItemInFolder(contextMenu.value.song.path)
     if (!result.success) {
@@ -1885,7 +2010,7 @@ const showCopyNotification = () => {
     visible: true,
     message: t('music.copied')
   }
-  
+
   setTimeout(() => {
     copyNotification.value.visible = false
   }, 2000)
@@ -1893,15 +2018,15 @@ const showCopyNotification = () => {
 
 const copyFilePath = async () => {
   if (!contextMenu.value.song) return
-  
+
   try {
     await navigator.clipboard.writeText(contextMenu.value.song.path)
     console.log('Đã copy đường dẫn:', contextMenu.value.song.path)
-    
+
     showCopyNotification()
   } catch (error) {
     console.error('Lỗi khi copy đường dẫn:', error)
-    
+
     // Fallback: method cũ
     try {
       const textArea = document.createElement('textarea')
@@ -1947,18 +2072,19 @@ onMounted(async () => {
   // connect in the background behind the serialised transition.
   await ensureDiscordSettingsLoaded()
   applyDiscordState(discordEnabled.value)
+  await ensureSongPreferencesLoaded()
   loadFonts()
   await loadSongs()
-  
+
   updateVisibleSongs()
-  
+
   const statsInterval = setInterval(updateCacheStats, 30000)
-  
+
   const cleanupInterval = setInterval(performMemoryCleanup, 2 * 60 * 1000)
-  
+
   statsIntervalId.value = statsInterval
   cleanupIntervalId.value = cleanupInterval
-  
+
   try {
     const savedVolume = await window.electronAPI.getConfig(VOLUME_CONFIG_KEY)
     const resolvedVolume = parseStoredVolume(savedVolume)
@@ -1987,7 +2113,7 @@ onMounted(async () => {
       videoEnabled.value = parseStoredBoolean(value, false)
     }
   })
-  
+
   nextTick(() => {
     if (musicTabRef.value) {
       musicTabRef.value.focus()
@@ -2008,7 +2134,7 @@ onUnmounted(() => {
     clearInterval(statsIntervalId.value)
     statsIntervalId.value = null
   }
-  
+
   if (cleanupIntervalId.value) {
     clearInterval(cleanupIntervalId.value)
     cleanupIntervalId.value = null
@@ -2018,44 +2144,44 @@ onUnmounted(() => {
   configUnsubscribe = null
 
   progressTicker.stop()
-  
+
   if (audioPlayer.getAudio()) {
     audioPlayer.getAudio()?.removeEventListener('ended', handleSongEnd)
     audioPlayer.destroy()
   }
-  
+
   if (discordEnabled.value) {
     clearDiscordStatus()
   }
-  
+
   window.electronAPI.removeMusicMetadataListener()
-  
+
   try {
     window.electronAPI.removeMusicScanProgressListener()
   } catch (error) {
     console.warn('Lỗi khi remove scan progress listener:', error)
   }
-  
+
   try {
     window.electronAPI.musicCleanup()
   } catch (error) {
     console.warn('Lỗi khi cleanup music player:', error)
   }
-  
+
   songDetailsCache.clear()
   searchCache.clear()
-  
+
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('click', handleGlobalClick)
-  
+
   performMemoryCleanup()
-  
+
   console.log('MusicTab component cleanup completed')
 })
 
 const showSongInfo = () => {
   if (!contextMenu.value.song) return
-  
+
   songInfoModal.value = {
     visible: true,
     song: contextMenu.value.song
@@ -2073,7 +2199,7 @@ const handleVideoError = (event: Event) => {
   const video = event.target as HTMLVideoElement
   if (video && video.error) {
     let errorMessage = t('music.video.errorUnknown')
-    
+
     switch (video.error.code) {
       case MediaError.MEDIA_ERR_ABORTED:
         errorMessage = t('music.video.errorAborted')
@@ -2090,10 +2216,10 @@ const handleVideoError = (event: Event) => {
       default:
         errorMessage = t('music.video.errorCode', { code: video.error.code })
     }
-    
+
     videoError.value = errorMessage
     video.style.display = 'none'
-    
+
     console.error('Video error details:', {
       code: video.error.code,
       message: video.error.message,
@@ -2275,6 +2401,26 @@ const showFullVideo = () => {
   border: 1px solid var(--accent-color-transparent);
   max-height: 200px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-color) var(--bg-tertiary);
+}
+
+.dropdown-menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dropdown-menu::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb {
+  background: var(--accent-color);
+  border-radius: 4px;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-hover);
 }
 
 .dropdown-item {
@@ -2470,7 +2616,7 @@ const showFullVideo = () => {
   flex-wrap: wrap;
   user-select: none;
 }
-  
+
 .control-btn {
   display: flex;
   align-items: center;
@@ -2724,6 +2870,13 @@ button:not(.control-btn):not(.nav-button):not(.scroll-to-song-btn):hover {
   justify-content: space-between;
 }
 
+.track-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .info-header {
   display: flex;
   align-items: center;
@@ -2818,6 +2971,14 @@ button:not(.control-btn):not(.nav-button):not(.scroll-to-song-btn):hover {
   transform: scale(1.1);
 }
 
+.favorite-track-btn {
+  color: var(--text-muted);
+}
+
+.favorite-track-btn.active {
+  color: var(--accent-color);
+}
+
 label {
   color: var(--text-muted);
   font-size: 0.9em;
@@ -2886,7 +3047,7 @@ label {
   border-left: 2px solid var(--accent-color-transparent);
 }
 
-.song-item.has-video:hover .video-indicator {
+.song-item:hover .video-indicator {
   background: var(--accent-color-transparent);
   color: var(--accent-color);
 }
@@ -3489,4 +3650,3 @@ label {
   font-size: 1.1em;
 }
 </style>
-
