@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, provide, watch, nextTick, watchEffect } fr
 import GeneralTab from './components/GeneralTab.vue'
 import BackupTab from './components/BackupTab.vue'
 import MusicTab from './components/MusicTab.vue'
+import SongCustomizationTab from './components/SongCustomizationTab.vue'
 import SettingTab from './components/SettingTab.vue'
 import KeyboardTab from './components/KeyboardTab.vue'
 import { initLocale, t } from './i18n.js'
@@ -431,6 +432,10 @@ onMounted(async () => {
           event.preventDefault()
           currentTab.value = 'setting'
           break
+        case '6':
+          event.preventDefault()
+          currentTab.value = 'songCustomization'
+          break
       }
     }
   }
@@ -526,13 +531,21 @@ onUnmounted(() => {
             <i class="fas fa-cloud-upload-alt"></i>
             <span v-show="isMenuOpen">{{ t('app.tab.backup') }}</span>
           </div>
-          <div 
-            class="menu-item" 
+          <div
+            class="menu-item"
             :class="{ active: currentTab === 'music' }"
             @click="currentTab = 'music'"
           >
             <i class="fas fa-music"></i>
             <span v-show="isMenuOpen">{{ t('app.tab.music') }}</span>
+          </div>
+          <div
+            class="menu-item"
+            :class="{ active: currentTab === 'songCustomization' }"
+            @click="currentTab = 'songCustomization'"
+          >
+            <i class="fas fa-sliders-h"></i>
+            <span v-show="isMenuOpen">{{ t('app.tab.songCustomization') }}</span>
           </div>
           <div 
             class="menu-item" 
@@ -558,6 +571,7 @@ onUnmounted(() => {
         <GeneralTab v-show="currentTab === 'general'" />
         <BackupTab v-show="currentTab === 'backup'" />
         <MusicTab v-show="currentTab === 'music'" ref="musicTabRef" />
+        <SongCustomizationTab v-show="currentTab === 'songCustomization'" />
         <KeyboardTab v-show="currentTab === 'keyboard'" />
         <SettingTab v-show="currentTab === 'setting'" ref="settingTabRef" />
       </div>
