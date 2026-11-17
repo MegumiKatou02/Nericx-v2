@@ -158,24 +158,24 @@
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 4</span>
                 <div class="shortcut-info">
-                  <span class="action">{{ t('keyboard.tabs.keyboard') }}</span>
-                  <span class="desc">{{ t('keyboard.tabs.keyboardDesc') }}</span>
+                  <span class="action">{{ t('keyboard.tabs.songCustomization') }}</span>
+                  <span class="desc">{{ t('keyboard.tabs.songCustomizationDesc') }}</span>
                 </div>
               </div>
 
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 5</span>
                 <div class="shortcut-info">
-                  <span class="action">{{ t('keyboard.tabs.setting') }}</span>
-                  <span class="desc">{{ t('keyboard.tabs.settingDesc') }}</span>
+                  <span class="action">{{ t('keyboard.tabs.keyboard') }}</span>
+                  <span class="desc">{{ t('keyboard.tabs.keyboardDesc') }}</span>
                 </div>
               </div>
 
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 6</span>
                 <div class="shortcut-info">
-                  <span class="action">{{ t('keyboard.tabs.songCustomization') }}</span>
-                  <span class="desc">{{ t('keyboard.tabs.songCustomizationDesc') }}</span>
+                  <span class="action">{{ t('keyboard.tabs.setting') }}</span>
+                  <span class="desc">{{ t('keyboard.tabs.settingDesc') }}</span>
                 </div>
               </div>
             </div>

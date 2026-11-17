@@ -420,7 +420,7 @@ onMounted(async () => {
           event.preventDefault()
           currentTab.value = 'music'
           break
-        case '4':
+        case '5':
           event.preventDefault()
           currentTab.value = 'keyboard'
           break
@@ -428,11 +428,11 @@ onMounted(async () => {
           event.preventDefault()
           currentTab.value = 'keyboard'
           break
-        case '5':
+        case '6':
           event.preventDefault()
           currentTab.value = 'setting'
           break
-        case '6':
+        case '4':
           event.preventDefault()
           currentTab.value = 'songCustomization'
           break
