@@ -1,13 +1,13 @@
 <template>
   <div class="general-tab">
     <h2>{{ t('general.title') }}</h2>
-    
+
     <div class="form-group">
       <label>{{ t('general.osuPath') }}</label>
       <div class="input-group">
-        <input 
-          type="text" 
-          v-model="osuPath" 
+        <input
+          type="text"
+          v-model="osuPath"
           :placeholder="t('general.placeholder')"
           readonly
         >
@@ -34,7 +34,7 @@
         <div class="notification-title">{{ t('general.saved') }}</div>
         <div class="notification-subtitle">
           {{ t('general.restart.before') }} <kbd>Ctrl + R</kbd> {{ t('general.restart.middle') }}
-          <button @click="reloadApp" class="reload-btn">{{ t('general.restart.click') }}</button> 
+          <button @click="reloadApp" class="reload-btn">{{ t('general.restart.click') }}</button>
           {{ t('general.restart.after') }}
         </div>
       </div>
@@ -43,8 +43,8 @@
       </button>
     </div>
 
-    <button 
-      @click="saveConfig" 
+    <button
+      @click="saveConfig"
       class="btn-save"
       :disabled="!osuPath"
     >
@@ -70,7 +70,7 @@ const selectOsuFolder = async () => {
 const saveConfig = async () => {
   await window.electronAPI.setConfig('osuPath', osuPath.value)
   showSuccessNotification.value = true
-  
+
   setTimeout(() => {
     showSuccessNotification.value = false
   }, 10000)
@@ -102,7 +102,7 @@ onMounted(async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 20px 20px 20px 0;
   color: var(--text-primary);
   background: var(--bg-primary);
   user-select: none;
@@ -309,4 +309,4 @@ h2, h3 {
     transform: translateX(100%);
   }
 }
-</style> 
+</style>
