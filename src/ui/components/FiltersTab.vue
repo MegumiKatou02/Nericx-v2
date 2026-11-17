@@ -1,5 +1,5 @@
 <template>
-  <div class="song-customization-tab">
+  <div class="filters-tab">
     <div class="section-tabs">
       <button
         class="section-tab"
@@ -7,7 +7,7 @@
         @click="activeSection = 'favorites'"
       >
         <i class="fas fa-heart"></i>
-        <span>{{ t('songCustomization.favorites.title') }}</span>
+        <span>{{ t('filters.favorites.title') }}</span>
         <span class="count">{{ favoriteSongs.length }}</span>
       </button>
 
@@ -17,7 +17,7 @@
         @click="activeSection = 'excluded'"
       >
         <i class="fas fa-ban"></i>
-        <span>{{ t('songCustomization.excluded.title') }}</span>
+        <span>{{ t('filters.excluded.title') }}</span>
         <span class="count">{{ excludedSongs.length }}</span>
       </button>
     </div>
@@ -25,7 +25,7 @@
     <section v-if="activeSection === 'favorites'" class="section-content">
       <div v-if="favoriteSongs.length === 0" class="empty-state">
         <i class="far fa-heart"></i>
-        <p>{{ t('songCustomization.favorites.empty') }}</p>
+        <p>{{ t('filters.favorites.empty') }}</p>
       </div>
 
       <ul v-else class="song-list">
@@ -37,7 +37,7 @@
           <span v-if="song.duration" class="song-duration">{{ formatTime(song.duration) }}</span>
           <button
             class="remove-btn"
-            :title="t('songCustomization.remove')"
+            :title="t('filters.remove')"
             @click="removeFavorite(song.path)"
           >
             <i class="fas fa-heart-broken"></i>
@@ -49,7 +49,7 @@
     <section v-else class="section-content">
       <div v-if="excludedSongs.length === 0" class="empty-state">
         <i class="fas fa-ban"></i>
-        <p>{{ t('songCustomization.excluded.empty') }}</p>
+        <p>{{ t('filters.excluded.empty') }}</p>
       </div>
 
       <ul v-else class="song-list">
@@ -61,7 +61,7 @@
           <span v-if="song.duration" class="song-duration">{{ formatTime(song.duration) }}</span>
           <button
             class="remove-btn"
-            :title="t('songCustomization.restore')"
+            :title="t('filters.restore')"
             @click="toggleExcluded(song)"
           >
             <i class="fas fa-undo"></i>
@@ -111,7 +111,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.song-customization-tab {
+.filters-tab {
   height: 100%;
   display: flex;
   flex-direction: column;

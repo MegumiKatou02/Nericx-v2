@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, provide, watch, nextTick, watchEffect } fr
 import GeneralTab from './components/GeneralTab.vue'
 import BackupTab from './components/BackupTab.vue'
 import MusicTab from './components/MusicTab.vue'
-import SongCustomizationTab from './components/SongCustomizationTab.vue'
+import FiltersTab from './components/FiltersTab.vue'
 import SettingTab from './components/SettingTab.vue'
 import KeyboardTab from './components/KeyboardTab.vue'
 import { initLocale, t } from './i18n.js'
@@ -434,7 +434,7 @@ onMounted(async () => {
           break
         case '4':
           event.preventDefault()
-          currentTab.value = 'songCustomization'
+          currentTab.value = 'filters'
           break
       }
     }
@@ -541,11 +541,11 @@ onUnmounted(() => {
           </div>
           <div
             class="menu-item"
-            :class="{ active: currentTab === 'songCustomization' }"
-            @click="currentTab = 'songCustomization'"
+            :class="{ active: currentTab === 'filters' }"
+            @click="currentTab = 'filters'"
           >
             <i class="fas fa-sliders-h"></i>
-            <span v-show="isMenuOpen">{{ t('app.tab.songCustomization') }}</span>
+            <span v-show="isMenuOpen">{{ t('app.tab.filters') }}</span>
           </div>
           <div
             class="menu-item"
@@ -571,7 +571,7 @@ onUnmounted(() => {
         <GeneralTab v-show="currentTab === 'general'" />
         <BackupTab v-show="currentTab === 'backup'" />
         <MusicTab v-show="currentTab === 'music'" ref="musicTabRef" />
-        <SongCustomizationTab v-show="currentTab === 'songCustomization'" />
+        <FiltersTab v-show="currentTab === 'filters'" />
         <KeyboardTab v-show="currentTab === 'keyboard'" />
         <SettingTab v-show="currentTab === 'setting'" ref="settingTabRef" />
       </div>

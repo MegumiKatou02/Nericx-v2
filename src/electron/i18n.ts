@@ -41,7 +41,7 @@ const en = {
   'app.tab.music': 'Music',
   'app.tab.keyboard': 'Shortcuts',
   'app.tab.setting': 'Settings',
-  'app.tab.songCustomization': 'Song customization',
+  'app.tab.filters': 'Filters',
 
   'settings.title': 'Settings',
   'settings.language': 'Language',
@@ -186,14 +186,14 @@ const en = {
   'music.playback.cancelled': 'Playback cancelled',
   'music.playback.errorPlay': 'Playback error: {message}',
 
-  'songCustomization.favorites.title': 'Favorite songs',
-  'songCustomization.favorites.empty':
+  'filters.favorites.title': 'Favorite songs',
+  'filters.favorites.empty':
     'No favorite songs yet. Click the heart next to a song in the Music tab.',
-  'songCustomization.excluded.title': 'Excluded songs',
-  'songCustomization.excluded.empty':
+  'filters.excluded.title': 'Excluded songs',
+  'filters.excluded.empty':
     'No excluded songs. Right-click a song in the Music tab to exclude it.',
-  'songCustomization.remove': 'Remove from favorites',
-  'songCustomization.restore': 'Restore to list',
+  'filters.remove': 'Remove from favorites',
+  'filters.restore': 'Restore to list',
 
   'songInfo.title': 'Song details',
   'songInfo.basics': 'Basic information',
@@ -261,8 +261,8 @@ const en = {
   'keyboard.tabs.keyboardDesc': 'Switch to the Shortcuts tab (this one)',
   'keyboard.tabs.setting': 'Settings tab',
   'keyboard.tabs.settingDesc': 'Switch to the Settings tab',
-  'keyboard.tabs.songCustomization': 'Song customization tab',
-  'keyboard.tabs.songCustomizationDesc': 'Switch to the Song customization tab',
+  'keyboard.tabs.filters': 'Filters tab',
+  'keyboard.tabs.filtersDesc': 'Switch to the Filters tab',
   'keyboard.window': 'App window',
   'keyboard.window.close': 'Close the app',
   'keyboard.window.closeDesc': 'Quit Nericx completely',
@@ -323,7 +323,7 @@ const vi: Record<MessageKey, string> = {
   'app.tab.music': 'Nghe nhạc',
   'app.tab.keyboard': 'Phím tắt',
   'app.tab.setting': 'Cài đặt',
-  'app.tab.songCustomization': 'Tuỳ chỉnh bài hát',
+  'app.tab.filters': 'Chọn lọc',
 
   'settings.title': 'Cài đặt',
   'settings.language': 'Ngôn ngữ',
@@ -468,14 +468,14 @@ const vi: Record<MessageKey, string> = {
   'music.playback.cancelled': 'Đã huỷ phát',
   'music.playback.errorPlay': 'Lỗi khi phát nhạc: {message}',
 
-  'songCustomization.favorites.title': 'Bài hát yêu thích',
-  'songCustomization.favorites.empty':
+  'filters.favorites.title': 'Bài hát yêu thích',
+  'filters.favorites.empty':
     'Chưa có bài hát yêu thích nào. Nhấn vào trái tim cạnh bài hát trong tab Nghe nhạc.',
-  'songCustomization.excluded.title': 'Bài hát lược bỏ',
-  'songCustomization.excluded.empty':
+  'filters.excluded.title': 'Bài hát lược bỏ',
+  'filters.excluded.empty':
     'Chưa có bài hát nào bị lược bỏ. Chuột phải vào bài hát trong tab Nghe nhạc để lược bỏ.',
-  'songCustomization.remove': 'Bỏ yêu thích',
-  'songCustomization.restore': 'Khôi phục vào danh sách',
+  'filters.remove': 'Bỏ yêu thích',
+  'filters.restore': 'Khôi phục vào danh sách',
 
   'songInfo.title': 'Thông tin chi tiết',
   'songInfo.basics': 'Thông tin cơ bản',
@@ -543,8 +543,8 @@ const vi: Record<MessageKey, string> = {
   'keyboard.tabs.keyboardDesc': 'Chuyển đến tab Phím tắt (hiện tại)',
   'keyboard.tabs.setting': 'Tab Cài đặt',
   'keyboard.tabs.settingDesc': 'Chuyển đến tab Cài đặt',
-  'keyboard.tabs.songCustomization': 'Tab Tuỳ chỉnh bài hát',
-  'keyboard.tabs.songCustomizationDesc': 'Chuyển đến tab Tuỳ chỉnh bài hát',
+  'keyboard.tabs.filters': 'Tab Chọn lọc',
+  'keyboard.tabs.filtersDesc': 'Chuyển đến tab Chọn lọc',
   'keyboard.window': 'Cửa sổ ứng dụng',
   'keyboard.window.close': 'Đóng ứng dụng',
   'keyboard.window.closeDesc': 'Thoát hoàn toàn khỏi Nericx',
@@ -603,7 +603,7 @@ const ja: Record<MessageKey, string> = {
   'app.tab.music': '音楽',
   'app.tab.keyboard': 'ショートカット',
   'app.tab.setting': '設定',
-  'app.tab.songCustomization': '曲のカスタマイズ',
+  'app.tab.filters': '絞り込み',
 
   'settings.title': '設定',
   'settings.language': '言語',
@@ -747,14 +747,14 @@ const ja: Record<MessageKey, string> = {
   'music.playback.cancelled': '再生を中止しました',
   'music.playback.errorPlay': '再生エラー: {message}',
 
-  'songCustomization.favorites.title': 'お気に入りの曲',
-  'songCustomization.favorites.empty':
+  'filters.favorites.title': 'お気に入りの曲',
+  'filters.favorites.empty':
     'お気に入りの曲はまだありません。音楽タブで曲の横のハートをクリックしてください。',
-  'songCustomization.excluded.title': '除外した曲',
-  'songCustomization.excluded.empty':
+  'filters.excluded.title': '除外した曲',
+  'filters.excluded.empty':
     '除外した曲はまだありません。音楽タブで曲を右クリックすると除外できます。',
-  'songCustomization.remove': 'お気に入りから削除',
-  'songCustomization.restore': 'リストに戻す',
+  'filters.remove': 'お気に入りから削除',
+  'filters.restore': 'リストに戻す',
 
   'songInfo.title': '曲の詳細',
   'songInfo.basics': '基本情報',
@@ -822,8 +822,8 @@ const ja: Record<MessageKey, string> = {
   'keyboard.tabs.keyboardDesc': 'ショートカットタブ（この画面）に切り替えます',
   'keyboard.tabs.setting': '設定タブ',
   'keyboard.tabs.settingDesc': '設定タブに切り替えます',
-  'keyboard.tabs.songCustomization': '曲のカスタマイズタブ',
-  'keyboard.tabs.songCustomizationDesc': '曲のカスタマイズタブに切り替えます',
+  'keyboard.tabs.filters': '絞り込みタブ',
+  'keyboard.tabs.filtersDesc': '絞り込みタブに切り替えます',
   'keyboard.window': 'アプリのウィンドウ',
   'keyboard.window.close': 'アプリを閉じる',
   'keyboard.window.closeDesc': 'Nericx を完全に終了します',
