@@ -353,7 +353,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, watch } from 'vue'
 import type { Song } from '../../electron/type.js'
-import { playbackWindow } from '../presence.js'
+import { livePlaybackWindow } from '../presence.js'
 import { videoUrlFor } from '../videoSource.js'
 import { createAudioGraph, type AudioGraph, type AudioGraphContext } from '../audioGraph.js'
 import { fileUrlForPath } from '../fileUrl.js'
@@ -1090,6 +1090,20 @@ const optimizedFilterSongs = debounce(async (_?: Event) => {
     return
   }
 
+  if (query.toLowerCase() === ':love') {
+    const result = songsCache.value.filter(song => isFavorite(song.path))
+    filteredSongs.value = result
+    searchCache.set(query, result)
+    return
+  }
+
+  if (query.toLowerCase() === ':exclude') {
+    const result = songsCache.value.filter(song => isExcluded(song.path))
+    filteredSongs.value = result
+    searchCache.set(query, result)
+    return
+  }
+
   const searchTerms = query.toLowerCase().split(' ')
   const localFiltered: Song[] = []
 
@@ -1325,6 +1339,11 @@ const playSong = async (song: Song) => {
       currentSong.value = song
       selectedSong.value = song
       isPlaying.value = true
+      // The ticker has not run yet, so the cached numbers still belong to the
+      // track that just ended; resetting them keeps the progress bar from
+      // starting at the previous track's end.
+      currentTime.value = audioPlayer.getCurrentTime()
+      duration.value = audioPlayer.getDuration() || song.duration || 0
       progressTicker.start()
       updateDiscordStatus()
 
@@ -1493,16 +1512,14 @@ const updateDiscordStatus = async () => {
   try {
     // The presence derives artist and title itself; sending a pre-joined
     // "Unknown - ..." string would lose that information.
-    // Metadata duration is known immediately; the audio element reports it a
-    // frame later, so Discord gets the bar on the very first update.
-    const songDuration = duration.value || currentSong.value.duration || 0
-
+    // Timing is read from the element: the cached refs only refresh every
+    // 250 ms, so they still hold the ended track right after a song change.
     await window.electronAPI.discordUpdateStatus({
       name: currentSong.value.name,
       beatmapsetId: currentSong.value.beatmapsetId,
       beatmapButton: discordSettings.beatmapButton,
       githubButton: discordSettings.githubButton,
-      ...playbackWindow(isPlaying.value, currentTime.value, songDuration)
+      ...livePlaybackWindow(isPlaying.value, audioPlayer, currentSong.value.duration || 0)
     })
   } catch (error) {
     console.error('Failed to update Discord status:', error)
@@ -2255,7 +2272,7 @@ const showFullVideo = () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 20px 20px 20px 0;
   color: var(--text-primary);
   background: var(--bg-primary);
   outline: none;
