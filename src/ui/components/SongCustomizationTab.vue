@@ -116,7 +116,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 20px;
+  padding: 20px 20px 20px 0;
   color: var(--text-primary);
   background: var(--bg-primary);
   user-select: none;

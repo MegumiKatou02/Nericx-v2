@@ -14,7 +14,7 @@
           <i class="fas fa-music"></i>
           <h2>{{ t('keyboard.musicSection') }}</h2>
         </div>
-        
+
         <div class="shortcuts-grid">
           <div class="shortcut-category">
             <h3>{{ t('keyboard.playback') }}</h3>
@@ -26,7 +26,7 @@
                   <span class="desc">{{ t('keyboard.playback.toggleDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key">I</span>
                 <div class="shortcut-info">
@@ -34,7 +34,7 @@
                   <span class="desc">{{ t('keyboard.playback.stopDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key">X</span>
                 <div class="shortcut-info">
@@ -63,7 +63,7 @@
                   <span class="desc">{{ t('keyboard.navigation.changeSongDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key">↑ ↓</span>
                 <div class="shortcut-info">
@@ -71,7 +71,7 @@
                   <span class="desc">{{ t('keyboard.navigation.selectSongDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key">Enter</span>
                 <div class="shortcut-info">
@@ -100,7 +100,7 @@
                   <span class="desc">{{ t('keyboard.search.focusDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key">O</span>
                 <div class="shortcut-info">
@@ -108,7 +108,7 @@
                   <span class="desc">{{ t('keyboard.search.discordDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key">Esc</span>
                 <div class="shortcut-info">
@@ -126,7 +126,7 @@
           <i class="fas fa-cog"></i>
           <h2>{{ t('keyboard.generalSection') }}</h2>
         </div>
-        
+
         <div class="shortcuts-grid">
           <div class="shortcut-category">
             <h3>{{ t('keyboard.tabs') }}</h3>
@@ -138,7 +138,7 @@
                   <span class="desc">{{ t('keyboard.tabs.generalDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 2</span>
                 <div class="shortcut-info">
@@ -146,7 +146,7 @@
                   <span class="desc">{{ t('keyboard.tabs.backupDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 3</span>
                 <div class="shortcut-info">
@@ -154,7 +154,7 @@
                   <span class="desc">{{ t('keyboard.tabs.musicDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 4</span>
                 <div class="shortcut-info">
@@ -162,7 +162,7 @@
                   <span class="desc">{{ t('keyboard.tabs.keyboardDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key combo">Ctrl + 5</span>
                 <div class="shortcut-info">
@@ -191,7 +191,7 @@
                   <span class="desc">{{ t('keyboard.window.closeDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key">F11</span>
                 <div class="shortcut-info">
@@ -199,7 +199,7 @@
                   <span class="desc">{{ t('keyboard.window.fullscreenDesc') }}</span>
                 </div>
               </div>
-              
+
               <div class="shortcut-item">
                 <span class="key">Ctrl + Shift + I</span>
                 <div class="shortcut-info">
@@ -217,7 +217,7 @@
           <i class="fas fa-lightbulb"></i>
           <h2>{{ t('keyboard.tipsSection') }}</h2>
         </div>
-        
+
         <div class="tips-grid">
           <div class="tip-item">
             <i class="fas fa-info-circle"></i>
@@ -228,7 +228,7 @@
               </p>
             </div>
           </div>
-          
+
           <div class="tip-item">
             <i class="fas fa-keyboard"></i>
             <div class="tip-content">
@@ -238,7 +238,7 @@
               </p>
             </div>
           </div>
-          
+
           <div class="tip-item">
             <i class="fas fa-music"></i>
             <div class="tip-content">
@@ -246,7 +246,7 @@
               <p>{{ t('keyboard.tips.controlsDesc') }}</p>
             </div>
           </div>
-          
+
           <div class="tip-item">
             <i class="fas fa-search"></i>
             <div class="tip-content">
@@ -269,7 +269,7 @@ import { t } from '../i18n.js'
 <style scoped>
 .keyboard-tab {
   height: 100%;
-  padding: 20px;
+  padding: 20px 20px 20px 0;
   color: var(--text-primary);
   background: var(--bg-primary);
   overflow-y: auto;
@@ -497,19 +497,19 @@ import { t } from '../i18n.js'
   .keyboard-tab {
     padding: 15px;
   }
-  
+
   .shortcuts-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .tips-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .header h1 {
     font-size: 1.7em;
     flex-direction: column;
     gap: 8px;
   }
 }
-</style> 
+</style>

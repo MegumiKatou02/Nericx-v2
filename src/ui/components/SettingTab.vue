@@ -29,38 +29,38 @@
       <div class="setting-option">
         <label>{{ t('settings.theme') }}</label>
         <div class="theme-selector">
-          <button 
-            :class="{ active: theme === 'light' }" 
+          <button
+            :class="{ active: theme === 'light' }"
             @click="setTheme('light')"
           >
             {{ t('settings.theme.light') }}
           </button>
-          <button 
-            :class="{ active: theme === 'dark' }" 
+          <button
+            :class="{ active: theme === 'dark' }"
             @click="setTheme('dark')"
           >
             {{ t('settings.theme.dark') }}
           </button>
-          <button 
-            :class="{ active: theme === 'ash' }" 
+          <button
+            :class="{ active: theme === 'ash' }"
             @click="setTheme('ash')"
           >
             {{ t('settings.theme.ash') }}
           </button>
-          <button 
-            :class="{ active: theme === 'pitch-black' }" 
+          <button
+            :class="{ active: theme === 'pitch-black' }"
             @click="setTheme('pitch-black')"
           >
             {{ t('settings.theme.pitchBlack') }}
           </button>
-          <button 
-            :class="{ active: theme === 'midnight' }" 
+          <button
+            :class="{ active: theme === 'midnight' }"
             @click="setTheme('midnight')"
           >
             {{ t('settings.theme.midnight') }}
           </button>
-          <button 
-            :class="{ active: theme === 'warm' }" 
+          <button
+            :class="{ active: theme === 'warm' }"
             @click="setTheme('warm')"
           >
             {{ t('settings.theme.warm') }}
@@ -72,8 +72,8 @@
         <label>{{ t('settings.accentColor') }}</label>
         <div class="accent-color-section">
           <div class="preset-colors">
-            <div 
-              v-for="color in presetColors" 
+            <div
+              v-for="color in presetColors"
               :key="color.name"
               class="color-preset"
               :class="{ active: accentColor === color.value }"
@@ -83,16 +83,16 @@
             ></div>
           </div>
           <div class="custom-color-section">
-            <input 
-              type="color" 
-              :value="accentColor" 
+            <input
+              type="color"
+              :value="accentColor"
               @input="setAccentColor(($event.target as HTMLInputElement).value)"
               class="color-picker"
               :title="t('settings.customColor')"
             >
-            <input 
-              type="text" 
-              :value="accentColor" 
+            <input
+              type="text"
+              :value="accentColor"
               @input="setAccentColor(($event.target as HTMLInputElement).value)"
               @blur="validateHexColor"
               class="color-input"
@@ -107,8 +107,8 @@
         <label>{{ t('settings.transparency') }}</label>
         <div class="transparency-section">
           <div class="transparency-toggle">
-            <button 
-              :class="{ active: transparencyEnabled }" 
+            <button
+              :class="{ active: transparencyEnabled }"
               @click="toggleTransparency"
             >
               {{ transparencyEnabled ? t('common.on') : t('common.off') }}
@@ -120,12 +120,12 @@
       <div class="setting-option" v-if="transparencyEnabled">
         <label>{{ t('settings.opacity') }}</label>
         <div class="opacity-section">
-          <input 
-            type="range" 
-            min="0.6" 
-            max="1" 
-            step="0.01" 
-            :value="opacity" 
+          <input
+            type="range"
+            min="0.6"
+            max="1"
+            step="0.01"
+            :value="opacity"
             @input="setOpacity(parseFloat(($event.target as HTMLInputElement).value))"
             class="opacity-slider"
           >
@@ -140,8 +140,8 @@
         <label>{{ t('settings.normalization') }}</label>
         <div class="normalization-section">
           <div class="normalization-toggle">
-            <button 
-              :class="{ active: normalizationEnabled }" 
+            <button
+              :class="{ active: normalizationEnabled }"
               @click="toggleNormalization"
             >
               {{ normalizationEnabled ? t('common.on') : t('common.off') }}
@@ -161,8 +161,8 @@
         <label>{{ t('settings.video') }}</label>
         <div class="video-section">
           <div class="video-toggle">
-            <button 
-              :class="{ active: videoEnabled }" 
+            <button
+              :class="{ active: videoEnabled }"
               @click="toggleVideo"
             >
               {{ videoEnabled ? t('common.on') : t('common.off') }}
@@ -178,8 +178,8 @@
         <label>{{ t('settings.miniPlayer') }}</label>
         <div class="video-section">
           <div class="video-toggle">
-            <button 
-              :class="{ active: miniPlayerEnabled }" 
+            <button
+              :class="{ active: miniPlayerEnabled }"
               @click="toggleMiniPlayer"
             >
               {{ miniPlayerEnabled ? t('common.on') : t('common.off') }}
@@ -351,11 +351,11 @@ const setAccentColor = async (color: string) => {
 const validateHexColor = (event: Event) => {
   const input = event.target as HTMLInputElement
   let value = input.value.trim()
-  
+
   if (!value.startsWith('#')) {
     value = '#' + value
   }
-  
+
   const hexPattern = /^#([0-9A-F]{3}){1,2}$/i
   if (hexPattern.test(value)) {
     setAccentColor(value)
@@ -367,13 +367,13 @@ const validateHexColor = (event: Event) => {
 const updateAppTransparency = async () => {
   const root = document.documentElement
   const body = document.body
-  
+
   if (transparencyEnabled.value) {
     body.style.setProperty('--app-opacity', opacity.value.toString())
     root.style.setProperty('--app-background-opacity', (opacity.value * 0.9).toString())
-    
+
     body.classList.add('app-transparent')
-    
+
     try {
       await window.electronAPI.setWindowTransparency(true, opacity.value)
     } catch (error) {
@@ -383,7 +383,7 @@ const updateAppTransparency = async () => {
     body.style.setProperty('--app-opacity', '1')
     root.style.setProperty('--app-background-opacity', '1')
     body.classList.remove('app-transparent')
-    
+
     try {
       await window.electronAPI.setWindowTransparency(false, 1.0)
     } catch (error) {
@@ -451,7 +451,7 @@ const clearCache = async () => {
   try {
     await window.electronAPI.musicClearCache()
     console.log('Cache đã được xóa')
-    
+
     await updateCacheStats()
   } catch (error) {
     console.error('Lỗi khi xóa cache:', error)
@@ -462,7 +462,7 @@ const forceSaveCache = async () => {
   try {
     await window.electronAPI.musicForceSaveCache()
     console.log('Cache đã được lưu')
-    
+
     await updateCacheStats()
   } catch (error) {
     console.error('Lỗi khi lưu cache:', error)
@@ -475,7 +475,7 @@ onMounted(async () => {
     if (savedTheme) {
       theme.value = savedTheme
     }
-    
+
     const savedAccentColor = await window.electronAPI.getConfig('accentColor')
     if (savedAccentColor) {
       accentColor.value = savedAccentColor
@@ -538,7 +538,7 @@ defineExpose({
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 20px 20px 20px 0;
   user-select: none;
   overflow-y: auto;
 }
@@ -1755,16 +1755,16 @@ h3 {
 }
 
 .dark .cache-songs,
-.dark .cache-size, 
-.dark .cache-memory, 
+.dark .cache-size,
+.dark .cache-memory,
 .dark .cache-hit-rate {
   background: rgba(0, 0, 0, 0.15);
   color: #ffffff;
 }
 
 .light .cache-songs,
-.light .cache-size, 
-.light .cache-memory, 
+.light .cache-size,
+.light .cache-memory,
 .light .cache-hit-rate {
   background: rgba(255, 255, 255, 0.6);
   color: #2c3e50;
@@ -1944,4 +1944,4 @@ h3 {
 .warm .cache-description {
   color: #5c5c5c;
 }
-</style> 
+</style>

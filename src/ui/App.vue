@@ -51,40 +51,40 @@ const initializeMiniPlayerPosition = () => {
 
 const startDrag = (event: MouseEvent | TouchEvent) => {
   event.preventDefault()
-  
+
   const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX
   const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY
-  
+
   isDragging.value = true
   dragStarted.value = false
-  
+
   dragOffset.value = {
     x: clientX - position.value.x,
     y: clientY - position.value.y
   }
-  
+
   document.addEventListener('mousemove', onDrag, { passive: false })
   document.addEventListener('mouseup', stopDrag, { passive: true })
   document.addEventListener('touchmove', onDrag, { passive: false })
   document.addEventListener('touchend', stopDrag, { passive: true })
-  
+
   document.body.style.userSelect = 'none'
   document.body.style.webkitUserSelect = 'none'
 }
 
 const onDrag = (event: MouseEvent | TouchEvent) => {
   if (!isDragging.value) return
-  
+
   event.preventDefault()
   dragStarted.value = true
-  
+
   const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX
   const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY
-  
+
   if (animationId.value) {
     cancelAnimationFrame(animationId.value)
   }
-  
+
   animationId.value = requestAnimationFrame(() => {
     position.value = {
       x: clientX - dragOffset.value.x,
@@ -95,22 +95,22 @@ const onDrag = (event: MouseEvent | TouchEvent) => {
 
 const stopDrag = () => {
   if (!isDragging.value) return
-  
+
   isDragging.value = false
-  
+
   if (animationId.value) {
     cancelAnimationFrame(animationId.value)
     animationId.value = null
   }
-  
+
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
   document.removeEventListener('touchmove', onDrag)
   document.removeEventListener('touchend', stopDrag)
-  
+
   document.body.style.userSelect = ''
   document.body.style.webkitUserSelect = ''
-  
+
   if (dragStarted.value) {
     snapToCorner()
   }
@@ -120,53 +120,53 @@ const snapToCorner = () => {
   const margin = 20
   const playerWidth = miniPlayerCollapsed.value ? 60 : 320
   const playerHeight = miniPlayerCollapsed.value ? 60 : 80
-  
+
   const windowWidth = window.innerWidth
   const windowHeight = window.innerHeight
-  
+
   const centerX = position.value.x + playerWidth / 2
   const centerY = position.value.y + playerHeight / 2
-  
+
   let targetX: number
   let targetY: number
-  
+
   if (centerX < windowWidth / 2) {
     targetX = margin
   } else {
     targetX = windowWidth - playerWidth - margin
   }
-  
+
   if (centerY < windowHeight / 2) {
     targetY = margin + 32
   } else {
     targetY = windowHeight - playerHeight - margin
   }
-  
+
   animateToPosition(targetX, targetY)
 }
 
 const animateToPosition = (targetX: number, targetY: number) => {
   const startX = position.value.x
   const startY = position.value.y
-  const duration = 300 
+  const duration = 300
   const startTime = performance.now()
-  
+
   const animate = (currentTime: number) => {
     const elapsed = currentTime - startTime
     const progress = Math.min(elapsed / duration, 1)
-    
+
     const easeOut = 1 - Math.pow(1 - progress, 3)
-    
+
     position.value = {
       x: startX + (targetX - startX) * easeOut,
       y: startY + (targetY - startY) * easeOut
     }
-    
+
     if (progress < 1) {
       requestAnimationFrame(animate)
     }
   }
-  
+
   requestAnimationFrame(animate)
 }
 
@@ -180,10 +180,10 @@ const handleResize = () => {
   const margin = 20
   const playerWidth = miniPlayerCollapsed.value ? 60 : 320
   const playerHeight = miniPlayerCollapsed.value ? 60 : 80
-  
+
   const maxX = window.innerWidth - playerWidth - margin
   const maxY = window.innerHeight - playerHeight - margin
-  
+
   position.value = {
     x: Math.min(Math.max(margin, position.value.x), maxX),
     y: Math.min(Math.max(margin + 32, position.value.y), maxY)
@@ -192,17 +192,17 @@ const handleResize = () => {
 
 const updateCSSVariables = (color: string) => {
   const root = document.documentElement
-  
+
   const hex = color.replace('#', '')
   const r = parseInt(hex.substr(0, 2), 16)
   const g = parseInt(hex.substr(2, 2), 16)
   const b = parseInt(hex.substr(4, 2), 16)
-  
+
   root.style.setProperty('--accent-color', color)
   root.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`)
   root.style.setProperty('--accent-color-transparent', `rgba(${r}, ${g}, ${b}, 0.2)`)
   root.style.setProperty('--accent-hover-transparent', `rgba(${r}, ${g}, ${b}, 0.1)`)
-  
+
   const darkerColor = `rgb(${Math.max(0, r - 20)}, ${Math.max(0, g - 20)}, ${Math.max(0, b - 20)})`
   root.style.setProperty('--accent-hover', darkerColor)
 }
@@ -230,23 +230,23 @@ const switchToMusicTab = () => {
 const toggleMiniPlayerCollapse = () => {
   const wasCollapsed = miniPlayerCollapsed.value
   miniPlayerCollapsed.value = !miniPlayerCollapsed.value
-  
+
   nextTick(() => {
     const margin = 20
     const newPlayerWidth = miniPlayerCollapsed.value ? 60 : 320
     const newPlayerHeight = miniPlayerCollapsed.value ? 60 : 80
-    
+
     const maxX = window.innerWidth - newPlayerWidth - margin
     const maxY = window.innerHeight - newPlayerHeight - margin
-    
+
     if (!miniPlayerCollapsed.value && wasCollapsed) {
       const currentX = position.value.x
       const currentY = position.value.y
-      
+
       if (currentX + newPlayerWidth + margin > window.innerWidth) {
         position.value.x = maxX
       }
-      
+
       if (currentY + newPlayerHeight + margin > window.innerHeight) {
         position.value.y = maxY
       }
@@ -262,7 +262,7 @@ const toggleMiniPlayerCollapse = () => {
 const toggleMiniPlayerEnabled = async (enabled: boolean) => {
   miniPlayerEnabled.value = enabled
   await window.electronAPI.setConfig('miniPlayerEnabled', enabled.toString())
-  
+
   if (!enabled) {
     miniPlayerVisible.value = false
   } else {
@@ -301,7 +301,7 @@ const getArtist = () => {
 
 const formatTime = (seconds: number) => {
   if (!seconds || isNaN(seconds)) return '0:00'
-  
+
   const minutes = Math.floor(seconds / 60)
   const remainingSeconds = Math.floor(seconds % 60)
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
@@ -330,7 +330,7 @@ onMounted(async () => {
     if (savedTheme) {
       updateTheme(savedTheme)
     }
-    
+
     const savedAccentColor = await window.electronAPI.getConfig('accentColor')
     if (savedAccentColor) {
       updateCSSVariables(savedAccentColor)
@@ -355,18 +355,18 @@ onMounted(async () => {
     if (now - lastDevToolsCheck < DEVTOOLS_CHECK_INTERVAL) {
       return
     }
-    
+
     lastDevToolsCheck = now
-    
+
     let devtools = {
       open: false,
       orientation: null as string | null
     }
-    
+
     const threshold = 160
-    
+
     setInterval(() => {
-      if (window.outerHeight - window.innerHeight > threshold || 
+      if (window.outerHeight - window.innerHeight > threshold ||
           window.outerWidth - window.innerWidth > threshold) {
         devtools.open = true
         devtools.orientation = window.outerHeight - window.innerHeight > threshold ? 'vertical' : 'horizontal'
@@ -375,24 +375,24 @@ onMounted(async () => {
         devtools.orientation = null
       }
     }, 1000)
-    
+
     if (devtools.open) {
       const originalLog = console.log
       const originalWarn = console.warn
       const originalError = console.error
-      
+
       console.log = function(...args) {
         if (import.meta.env.DEV) {
           originalLog.apply(console, args)
         }
       }
-      
+
       console.warn = function(...args) {
         if (import.meta.env.NODE_ENV === 'development') {
           originalWarn.apply(console, args)
         }
       }
-      
+
       console.error = function(...args) {
         if (import.meta.env.NODE_ENV === 'development') {
           originalError.apply(console, args)
@@ -473,17 +473,17 @@ onUnmounted(() => {
   if (keyHandler.value) {
     document.removeEventListener('keydown', keyHandler.value)
   }
-  
+
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
   document.removeEventListener('touchmove', onDrag)
   document.removeEventListener('touchend', stopDrag)
   window.removeEventListener('resize', handleResize)
-  
+
   if (animationId.value) {
     cancelAnimationFrame(animationId.value)
   }
-  
+
   document.body.style.userSelect = ''
   document.body.style.webkitUserSelect = ''
 })
@@ -515,16 +515,16 @@ onUnmounted(() => {
           <i class="fas fa-bars"></i>
         </div>
         <div class="menu-items">
-          <div 
-            class="menu-item" 
+          <div
+            class="menu-item"
             :class="{ active: currentTab === 'general' }"
             @click="currentTab = 'general'"
           >
             <i class="fas fa-home"></i>
             <span v-show="isMenuOpen">{{ t('app.tab.general') }}</span>
           </div>
-          <div 
-            class="menu-item" 
+          <div
+            class="menu-item"
             :class="{ active: currentTab === 'backup' }"
             @click="currentTab = 'backup'"
           >
@@ -547,23 +547,23 @@ onUnmounted(() => {
             <i class="fas fa-sliders-h"></i>
             <span v-show="isMenuOpen">{{ t('app.tab.songCustomization') }}</span>
           </div>
-          <div 
-            class="menu-item" 
+          <div
+            class="menu-item"
             :class="{ active: currentTab === 'keyboard' }"
             @click="currentTab = 'keyboard'"
           >
             <i class="fas fa-keyboard"></i>
             <span v-show="isMenuOpen">{{ t('app.tab.keyboard') }}</span>
           </div>
-          <div 
-            class="menu-item" 
+          <div
+            class="menu-item"
             :class="{ active: currentTab === 'setting' }"
             @click="currentTab = 'setting'"
           >
             <i class="fas fa-cog"></i>
             <span v-show="isMenuOpen">{{ t('app.tab.setting') }}</span>
           </div>
-          
+
         </div>
       </nav>
 
@@ -577,9 +577,9 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div 
-      v-if="miniPlayerVisible && miniPlayerEnabled" 
-      class="mini-player" 
+    <div
+      v-if="miniPlayerVisible && miniPlayerEnabled"
+      class="mini-player"
       :class="{ collapsed: miniPlayerCollapsed, dragging: isDragging }"
       :style="{ transform: `translate(${position.x}px, ${position.y}px)` }"
       @mousedown="startDrag"
@@ -592,7 +592,7 @@ onUnmounted(() => {
         <div class="song-cover placeholder" v-else>
           <i class="fas fa-music"></i>
         </div>
-        
+
         <div class="song-info" v-if="!miniPlayerCollapsed">
           <div class="song-title">{{ getTitle() }}</div>
           <div class="song-artist">{{ getArtist() }}</div>
@@ -600,21 +600,21 @@ onUnmounted(() => {
             {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
           </div>
         </div>
-        
+
         <div class="progress-bar" v-if="!miniPlayerCollapsed">
-          <div 
-            class="progress-fill" 
+          <div
+            class="progress-fill"
             :style="{ width: (currentTime / duration) * 100 + '%' }"
           ></div>
         </div>
-        
+
         <div class="playing-indicator" v-if="isPlaying">
           <div class="wave-bar"></div>
           <div class="wave-bar"></div>
           <div class="wave-bar"></div>
         </div>
       </div>
-      
+
       <button class="collapse-btn" @click.stop="toggleMiniPlayerCollapse" :title="miniPlayerCollapsed ? t('common.expand') : t('common.collapse')">
         <i :class="miniPlayerCollapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
       </button>
@@ -1015,21 +1015,21 @@ onUnmounted(() => {
   .mini-player {
     width: 280px;
   }
-  
+
   .mini-player.collapsed {
     width: 50px;
     height: 50px;
   }
-  
+
   .song-cover {
     width: 40px;
     height: 40px;
   }
-  
+
   .song-title {
     font-size: 13px;
   }
-  
+
   .song-artist {
     font-size: 11px;
   }

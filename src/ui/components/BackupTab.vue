@@ -10,8 +10,8 @@
       <div class="backup-options">
         <div class="option" v-for="(option, key) in backupOptions" :key="key">
           <label>
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               v-model="option.selected"
             >
             {{ option.label }}
@@ -19,8 +19,8 @@
         </div>
       </div>
 
-      <button 
-        @click="startBackup" 
+      <button
+        @click="startBackup"
         class="btn-backup"
         :disabled="!canBackup"
       >
@@ -90,7 +90,7 @@ onMounted(async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 20px 20px 20px 0;
   color: var(--text-primary);
   background: var(--bg-primary);
   user-select: none;
@@ -166,4 +166,4 @@ h2 {
   color: var(--text-primary);
   margin-bottom: 20px;
 }
-</style> 
+</style>
