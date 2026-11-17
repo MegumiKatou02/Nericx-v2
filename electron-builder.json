@@ -1,7 +1,24 @@
 {
     "appId": "com.nericx.nericx",
     "productName": "Nericx",
-    "files": ["dist-electron", "dist-vue"],
+    "files": [
+        "dist-electron",
+        "dist-vue",
+        "!node_modules/sqlite3/deps/**",
+        "!node_modules/sqlite3/src/**",
+        "!node_modules/sqlite3/node_modules/**",
+        "!node_modules/sqlite3/binding.gyp",
+        "!node_modules/sqlite3/build/Release/obj/**",
+        "!node_modules/sqlite3/build/Release/*.iobj",
+        "!node_modules/sqlite3/build/Release/*.ipdb",
+        "!node_modules/sqlite3/build/Release/*.pdb",
+        "!node_modules/sqlite3/build/Release/*.lib",
+        "!node_modules/sqlite3/build/Release/*.exp",
+        "!node_modules/sqlite3/build/deps/**",
+        "!node_modules/sqlite3/build/*.vcxproj*",
+        "!node_modules/register-scheme/**"
+    ],
+    "electronLanguages": ["en-US", "vi", "ja"],
     "asarUnpack": ["dist-electron/preload.cjs"],
     "icon": "./iconhe.ico",
     "directories": {

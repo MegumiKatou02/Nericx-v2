@@ -97,6 +97,14 @@ export class MusicPlayer extends EventEmitter {
   
   private lastHitRate: number = 0
 
+  /**
+   * Resolves once the metadata cache has been loaded from disk. `loadSongs`
+   * awaits this because the constructor fires `initializeCache` without
+   * awaiting — otherwise the scan would run against an empty cache and every
+   * lookup would miss (0% hit rate) even on a warm cache.
+   */
+  private readonly cacheReady: Promise<void>
+
   constructor() {
     super()
     this.cacheFilePath = join(tmpdir(), 'music-player-cache.json')
@@ -148,7 +156,9 @@ export class MusicPlayer extends EventEmitter {
       }
     )
     
-    this.initializeCache()
+    this.cacheReady = this.initializeCache().catch(err => {
+      console.error('Failed to initialize music cache:', err)
+    })
     this.startCleanupInterval()
   }
 
@@ -317,12 +327,12 @@ export class MusicPlayer extends EventEmitter {
   private isCacheValid(filePath: string, stats: any): boolean {
     const cached = this.metadataCache.get(filePath)
     if (!cached) return false
-    
+
     this.updateCacheAccess(filePath)
-    
-    const currentHash = this.generateFileHash(filePath, stats)
-    return cached.hash === currentHash && 
-           cached.lastModified === stats.mtime.getTime() && 
+
+    // mtime + size is sufficient for change detection; skip md5 hash to avoid
+    // a crypto operation per file on every scan cycle
+    return cached.lastModified === stats.mtime.getTime() &&
            cached.fileSize === stats.size
   }
 
@@ -495,10 +505,11 @@ export class MusicPlayer extends EventEmitter {
   /**
    * Tìm file audio tốt nhất dựa trên dung lượng và thời lượng
    */
-  private async findBestAudioFile(folderPath: string, audioFiles: string[]): Promise<{ 
-    bestFile: string; 
-    fileSize: number; 
-    duration: number 
+  private async findBestAudioFile(folderPath: string, audioFiles: string[]): Promise<{
+    bestFile: string;
+    fileSize: number;
+    duration: number;
+    metadata: CachedMetadata | null
   } | null> {
     if (audioFiles.length === 0) return null
     if (audioFiles.length === 1) {
@@ -509,10 +520,11 @@ export class MusicPlayer extends EventEmitter {
         return {
           bestFile: audioFiles[0],
           fileSize: stats.size,
-          duration: metadata?.duration || 0
+          duration: metadata?.duration || 0,
+          metadata
         }
       } catch {
-        return { bestFile: audioFiles[0], fileSize: 0, duration: 0 }
+        return { bestFile: audioFiles[0], fileSize: 0, duration: 0, metadata: null }
       }
     }
 
@@ -520,15 +532,15 @@ export class MusicPlayer extends EventEmitter {
       const filePath = join(folderPath, fileName)
       try {
         const stats = this.getFileStatCached(filePath)
-        
-        const isPreview = fileName.toLowerCase().includes('preview') || 
+
+        const isPreview = fileName.toLowerCase().includes('preview') ||
                          fileName.toLowerCase().includes('short')
-        
+
         let metadata: CachedMetadata | null = null
         if (!isPreview || audioFiles.length <= 2) {
           metadata = await this.getMetadataWithCache(filePath)
         }
-        
+
         return {
           fileName,
           filePath,
@@ -536,7 +548,8 @@ export class MusicPlayer extends EventEmitter {
           duration: metadata?.duration || 0,
           isPreview,
           isOgg: fileName.toLowerCase().endsWith('.ogg'),
-          isMp3: fileName.toLowerCase().endsWith('.mp3')
+          isMp3: fileName.toLowerCase().endsWith('.mp3'),
+          metadata
         }
       } catch (error) {
         return {
@@ -546,35 +559,36 @@ export class MusicPlayer extends EventEmitter {
           duration: 0,
           isPreview: true,
           isOgg: false,
-          isMp3: false
+          isMp3: false,
+          metadata: null
         }
       }
     })
 
     const fileInfos = await Promise.all(fileInfoPromises)
-    
+
     let bestFile = fileInfos[0]
     let bestScore = -1
 
     for (const info of fileInfos) {
       if (info.fileSize === 0) continue
-      
+
       let score = 0
-      
+
       const sizeScore = info.fileSize / (1024 * 1024) // MB
       score += sizeScore * 0.4
-      
+
       const durationScore = info.duration || 0
       score += durationScore * 0.4
-      
+
       if (!info.isPreview) {
         score += 15
       }
-      
+
       if (info.isMp3) {
         score += 5
       }
-      
+
       if (info.isPreview) {
         score *= 0.3
       }
@@ -588,13 +602,19 @@ export class MusicPlayer extends EventEmitter {
     return {
       bestFile: bestFile.fileName,
       fileSize: bestFile.fileSize,
-      duration: bestFile.duration
+      duration: bestFile.duration,
+      metadata: bestFile.metadata ?? null
     }
   }
 
   async loadSongs(osuPath: string): Promise<{ success: boolean; message: string; songs?: Song[] }> {
     const songsPath = join(osuPath, 'Songs')
-    
+
+    // Wait for the metadata cache to finish loading from disk. Without this
+    // the first scan runs against an empty cache (constructor fires
+    // initializeCache without awaiting), so every lookup misses.
+    await this.cacheReady
+
     this.songsData.forEach(song => this.songPool.release(song))
     this.songsData = []
 
@@ -614,7 +634,17 @@ export class MusicPlayer extends EventEmitter {
         startTime: Date.now()
       }
 
-      const audioFiles: { songPath: string; folderInfo: any; fileStats: any }[] = []
+      const audioFiles: {
+        songPath: string
+        folderInfo: {
+          songFolder: string
+          beatmapsetId: string | undefined
+          imagePath: string | undefined
+          videoPath: string | undefined
+        }
+        fileStats: { fileSize: number; duration: number; totalAudioFiles: number }
+        preloadedMetadata: CachedMetadata | null
+      }[] = []
       
       const directoryBatchSize = Math.max(50, Math.min(200, cpus().length * 25))
       
@@ -630,15 +660,15 @@ export class MusicPlayer extends EventEmitter {
 
             const beatmapsetId = parseBeatmapsetId(songFolder)
 
-            const [imageFiles, videoFiles, audioFilesInFolder] = await Promise.all([
-              Promise.resolve(readdirSync(folderPath).filter(f => /\.(png|jpg|jpeg)$/i.test(f))),
-              Promise.resolve(readdirSync(folderPath).filter(f => f.toLowerCase().endsWith('.mp4'))),
-              Promise.resolve(readdirSync(folderPath).filter(f => 
-                f.toLowerCase().endsWith('.mp3') || 
-                f.toLowerCase().endsWith('.ogg')
-              ))
-            ])
-            
+            // Single readdir per folder instead of three
+            const allEntries = readdirSync(folderPath)
+            const imageFiles = allEntries.filter(f => /\.(png|jpg|jpeg)$/i.test(f))
+            const videoFiles = allEntries.filter(f => f.toLowerCase().endsWith('.mp4'))
+            const audioFilesInFolder = allEntries.filter(f =>
+              f.toLowerCase().endsWith('.mp3') ||
+              f.toLowerCase().endsWith('.ogg')
+            )
+
             if (audioFilesInFolder.length === 0) return
 
             const bestAudioInfo = await this.findBestAudioFile(folderPath, audioFilesInFolder)
@@ -668,7 +698,8 @@ export class MusicPlayer extends EventEmitter {
                 fileSize: bestAudioInfo.fileSize,
                 duration: bestAudioInfo.duration,
                 totalAudioFiles: audioFilesInFolder.length
-              }
+              },
+              preloadedMetadata: bestAudioInfo.metadata
             })
           } catch (error) {
             console.warn(`Lỗi khi xử lý folder ${songFolder}:`, error)
@@ -684,13 +715,14 @@ export class MusicPlayer extends EventEmitter {
       console.log(`Tìm thấy ${audioFiles.length} file audio tốt nhất để xử lý`)
 
       await this.processBatchStreaming(audioFiles, async (fileInfo) => {
-        const { songPath, folderInfo, fileStats } = fileInfo
+        const { songPath, folderInfo, fileStats, preloadedMetadata } = fileInfo
         const { songFolder, beatmapsetId, imagePath, videoPath } = folderInfo
-        
+
         const namePart = songFolder.split(' ').slice(1).join(' ')
         let artist = '', title = ''
-        
-        const metadata = await this.getMetadataWithCache(songPath)
+
+        // Reuse metadata already fetched during findBestAudioFile
+        const metadata = preloadedMetadata ?? await this.getMetadataWithCache(songPath)
         
         if (metadata) {
           artist = metadata.artist || (namePart.includes(' - ') ? namePart.split(' - ')[0] : '')

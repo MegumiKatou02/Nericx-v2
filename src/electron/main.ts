@@ -12,6 +12,11 @@ import { copyFileSync, existsSync, readdirSync } from 'fs'
 let MusicPlayer: any = null
 let setupDiscordHandlers: any = null
 
+// The GPU process otherwise keeps accelerated compositor surfaces for the whole
+// window, which this 1000x660 music player does not need; compositing it in
+// software keeps GPU rasterization while cutting the GPU process roughly in half.
+app.commandLine.appendSwitch('disable-gpu-compositing')
+
 // Scheme privileges are read before the app is ready, so this cannot wait for
 // the `whenReady` block below.
 registerMediaScheme()
@@ -105,9 +110,15 @@ const getIconPath = () => {
   return cachedIconPath
 }
 
-function createWindow() {
+async function createWindow() {
   const iconPath = getIconPath()
-  
+
+  // `transparent` is a constructor-only option: it cannot be turned on later, and
+  // an always-transparent window costs GPU memory for alpha compositing even when
+  // the user never asked to see through it. The setting is read before the window
+  // exists for that reason.
+  const transparencyEnabled = (await getConfig('transparencyEnabled')) === 'true'
+
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 660,
@@ -115,7 +126,10 @@ function createWindow() {
     minHeight: 660,
     icon: iconPath,
     frame: false,
-    transparent: true,
+    transparent: transparencyEnabled,
+    // Painted before the window is shown, so removing the always-on transparent
+    // window does not flash an unstyled background first.
+    show: false,
     webPreferences: {
       preload: getPreloadPath(),
       devTools: true,
@@ -132,6 +146,10 @@ function createWindow() {
       ? new URL(url).origin === 'http://localhost:5123'
       : url === pathToFileURL(path.join(app.getAppPath(), 'dist-vue', 'index.html')).href
     if (!staysInApp) event.preventDefault()
+  })
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show()
   })
 
   if (process.platform === 'win32' && existsSync(iconPath)) {
@@ -341,11 +359,10 @@ ipcMain.on('close-window', () => {
 
 ipcMain.handle('set-window-transparency', createIPCHandler(async (_: any, enabled: boolean, opacity: number) => {
   if (mainWindow) {
-    if (enabled) {
-      mainWindow.setOpacity(opacity)
-    } else {
-      mainWindow.setOpacity(1.0)
-    }
+    // Opacity works on an opaque window too, so the setting stays live while the
+    // `transparent` constructor flag (which only affects alpha compositing) is
+    // read at startup.
+    mainWindow.setOpacity(enabled ? opacity : 1.0)
     return true
   }
   return false
@@ -462,17 +479,17 @@ app.whenReady().then(async () => {
   // and before the window can request a song file.
   handleMediaRequests()
 
-  createWindow()
-  
+  await createWindow()
+
   startMemoryMonitoring()
-  
+
   setImmediate(() => {
     initDiscordHandlers().catch(console.error)
   })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      void createWindow()
     }
   })
 })
@@ -481,11 +498,11 @@ app.on('window-all-closed', () => {
   if (musicPlayerInstance) {
     musicPlayerInstance.destroy()
   }
-  
+
   ipcBatcher.destroy()
 
   void closeConfigStore()
-  
+
   if (process.platform !== 'darwin') {
     app.quit()
   }
