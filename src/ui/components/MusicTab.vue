@@ -489,19 +489,9 @@ class EnhancedCache<K, V> {
 }
 
 const loadFonts = () => {
-  if ('fonts' in document) {
-    const fontAwesome = new FontFace('Font Awesome 5 Free', 'url(/path/to/fa-solid-900.woff2)', {
-      weight: '900',
-      style: 'normal',
-      display: 'swap'
-    })
-
-    fontAwesome.load().then(() => {
-      document.fonts.add(fontAwesome)
-    }).catch(err => {
-      console.warn('Font loading failed:', err)
-    })
-  }
+  // Font Awesome 5 is already loaded via <link> in index.html.
+  // The old FontFace here pointed to a placeholder path (/path/to/...) that
+  // always 404'd and did nothing useful, so it is intentionally removed.
 }
 
 class AudioPlayer {
