@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage, shell, Tray, Menu } from 'electron'
 import path from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig, closeConfigStore, setAppLocale, getAppLocale, t } from './util.js'
@@ -6,6 +6,8 @@ import { getPreloadPath } from './pathResolver.js'
 import { validateBackupSections } from './backupPaths.js'
 import { handleMediaRequests, registerMediaScheme } from './mediaProtocol.js'
 import { LOCALE_CONFIG_KEY, resolveLocale } from './i18n.js'
+import { parseStoredBoolean } from './storedBoolean.js'
+import { CLOSE_TO_TRAY_KEY, DISCORD_ENABLED_KEY } from './configKeys.js'
 import { summarizeAppMetrics } from './appMetrics.js'
 import { copyFileSync, existsSync, readdirSync } from 'fs'
 
@@ -26,6 +28,13 @@ const __dirname = path.dirname(__filename)
 
 let mainWindow: BrowserWindow | null = null
 let musicPlayerInstance: any = null
+let tray: Tray | null = null
+// Distinguishes "the user hid the window" from "the app is really ending":
+// the close button hides, it does not destroy.
+let isQuitting = false
+// Close-to-tray is the default because the player keeps running in the tray,
+// but it is stored so a user can make the X button quit like any other app.
+let closeToTray = true
 
 /**
  * A second instance would share this profile's `userData`: Chromium then fails
@@ -47,6 +56,125 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow.show()
     mainWindow.focus()
   })
+}
+
+/** Snapshot of what the renderer is playing, kept for the tray menu. */
+interface TrayPlaybackState {
+  song: string | null
+  playing: boolean
+}
+
+let trayPlayback: TrayPlaybackState = { song: null, playing: false }
+let trayMenuBuilding: Promise<void> | null = null
+
+const showMainWindow = () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    // Closing to the tray keeps the window alive, so this only runs on the
+    // macOS re-activate path or if the window was destroyed by an error.
+    void createWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+const quitApp = () => {
+  isQuitting = true
+  app.quit()
+}
+
+const toggleDiscordFromTray = async () => {
+  // The renderer owns the RPC client, so the tray only writes the same row and
+  // lets the renderer's watcher connect or disconnect.
+  const current = parseStoredBoolean(await getConfig(DISCORD_ENABLED_KEY), true)
+  await setConfig(DISCORD_ENABLED_KEY, (!current).toString())
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.webContents.isDestroyed()) continue
+    win.webContents.send('config:changed', DISCORD_ENABLED_KEY, (!current).toString())
+  }
+  await rebuildTrayMenu()
+}
+
+const buildTrayMenu = async () => {
+  if (!tray) return
+
+  const [open, playback, play, pause, next, previous, discordLabel, quit] = await Promise.all([
+    t('tray.open'),
+    t('tray.playback'),
+    t('tray.play'),
+    t('tray.pause'),
+    t('tray.next'),
+    t('tray.previous'),
+    t('tray.discord'),
+    t('tray.quit')
+  ])
+  const nowPlaying = trayPlayback.song
+    ? await t('tray.nowPlaying', { song: trayPlayback.song })
+    : await t('tray.nothingPlaying')
+  const discordEnabled = parseStoredBoolean(await getConfig(DISCORD_ENABLED_KEY), true)
+  const hasSong = trayPlayback.song !== null
+
+  const menu = Menu.buildFromTemplate([
+    // Context, not an action: greyed out so a click does not look ignored.
+    { label: nowPlaying, enabled: false },
+    { type: 'separator' },
+    { label: open, click: showMainWindow },
+    { type: 'separator' },
+    { label: playback, enabled: false },
+    {
+      label: trayPlayback.playing ? pause : play,
+      enabled: hasSong,
+      click: () => sendToRenderer('tray:command', 'toggle-play')
+    },
+    {
+      label: previous,
+      enabled: hasSong,
+      click: () => sendToRenderer('tray:command', 'previous')
+    },
+    {
+      label: next,
+      enabled: hasSong,
+      click: () => sendToRenderer('tray:command', 'next')
+    },
+    { type: 'separator' },
+    { label: discordLabel, type: 'checkbox', checked: discordEnabled, click: () => void toggleDiscordFromTray() },
+    { type: 'separator' },
+    { label: quit, click: quitApp }
+  ])
+
+  tray.setContextMenu(menu)
+  tray.setToolTip(trayPlayback.song ?? 'Nericx')
+}
+
+const sendToRenderer = (channel: string, payload?: unknown) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.webContents.isDestroyed()) return
+  mainWindow.webContents.send(channel, payload)
+}
+
+/** Coalesced so a burst of state updates builds the menu once. */
+const rebuildTrayMenu = (): Promise<void> => {
+  if (!trayMenuBuilding) {
+    trayMenuBuilding = buildTrayMenu().finally(() => {
+      trayMenuBuilding = null
+    })
+  }
+  return trayMenuBuilding
+}
+
+const createTray = () => {
+  if (tray) return
+  const iconPath = getIconPath()
+  if (!existsSync(iconPath)) return
+
+  // A 16px-ish tray icon: Electron scales the .ico, and an oversized image is
+  // rendered blurry by the Windows notification area.
+  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
+  tray = new Tray(icon)
+  tray.setToolTip('Nericx')
+  tray.on('click', showMainWindow)
+  void rebuildTrayMenu()
 }
 
 const performanceMetrics = {
@@ -160,6 +288,14 @@ async function createWindow() {
       spellcheck: false,
       backgroundThrottling: false
     }
+  })
+
+  // Close-to-tray: destroying the window would kill the renderer that owns the
+  // audio graph and the Discord client, so the close button only hides it.
+  mainWindow.on('close', (event) => {
+    if (isQuitting || !closeToTray) return
+    event.preventDefault()
+    mainWindow?.hide()
   })
 
   // `backgroundThrottling: false` below pins the Page Visibility API to
@@ -291,7 +427,12 @@ ipcMain.handle('get-config', createIPCHandler(async (_: any, key: string) => {
 ipcMain.handle('set-config', createIPCHandler(async (_: any, key: string, value: string) => {
   // The main process answers IPC calls with localized text, so it mirrors the
   // renderer's language choice instead of reading the database again per reply.
-  if (key === LOCALE_CONFIG_KEY) setAppLocale(resolveLocale(value))
+  if (key === LOCALE_CONFIG_KEY) {
+    setAppLocale(resolveLocale(value))
+    // The tray menu is built from the catalogue, so it would keep the previous
+    // language until the next restart without this.
+    void rebuildTrayMenu()
+  }
   const saved = await setConfig(key, value)
   // The renderer keeps a few settings in local state; a broadcast keeps them in
   // sync without each tab polling the database on a timer.
@@ -390,8 +531,19 @@ ipcMain.on('maximize-window', () => {
 })
 
 ipcMain.on('close-window', () => {
+  // The `close` handler decides between hiding and quitting.
   if (mainWindow) mainWindow.close()
 })
+
+ipcMain.on('tray:playback-state', (_: unknown, state: TrayPlaybackState) => {
+  trayPlayback = { song: state.song ?? null, playing: Boolean(state.playing) }
+  void rebuildTrayMenu()
+})
+
+ipcMain.handle('set-close-to-tray', createIPCHandler(async (_: any, enabled: boolean) => {
+  closeToTray = enabled
+  return await setConfig(CLOSE_TO_TRAY_KEY, enabled.toString())
+}))
 
 ipcMain.handle('set-window-transparency', createIPCHandler(async (_: any, enabled: boolean, opacity: number) => {
   if (mainWindow) {
@@ -515,7 +667,10 @@ app.whenReady().then(async () => {
   // and before the window can request a song file.
   handleMediaRequests()
 
+  closeToTray = parseStoredBoolean(await getConfig(CLOSE_TO_TRAY_KEY), true)
+
   await createWindow()
+  createTray()
 
   startMemoryMonitoring()
 
@@ -531,24 +686,20 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  if (musicPlayerInstance) {
-    musicPlayerInstance.destroy()
-  }
-
-  ipcBatcher.destroy()
-
-  void closeConfigStore()
-
+  // With close-to-tray the window is hidden rather than destroyed, so this
+  // fires only for a real quit (or when the user disabled the tray behaviour).
   if (process.platform !== 'darwin') {
-    app.quit()
+    quitApp()
   }
 })
 
 app.on('before-quit', () => {
+  isQuitting = true
+
   if (musicPlayerInstance) {
     musicPlayerInstance.destroy()
   }
-  
+
   ipcBatcher.destroy()
 
   void closeConfigStore()

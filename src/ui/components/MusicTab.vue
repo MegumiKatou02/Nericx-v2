@@ -827,6 +827,34 @@ const handleVisibilityChange = () => {
   applyInlineVideoState()
 }
 
+/**
+ * The tray menu shows the current track and offers play/pause/skip, but the
+ * audio element and its Web Audio graph live here. Reporting state and handling
+ * the menu's commands keeps that ownership in one place.
+ */
+let trayCommandUnsubscribe: (() => void) | null = null
+
+const reportTrayPlayback = () => {
+  window.electronAPI.reportTrayPlayback({
+    song: currentSong.value?.name ?? null,
+    playing: isPlaying.value
+  })
+}
+
+watch(
+  () => [currentSong.value?.name ?? null, isPlaying.value],
+  reportTrayPlayback,
+  { flush: 'post' }
+)
+
+const handleTrayCommand = (command: string) => {
+  // A hidden window still runs these: the element plays audio regardless of
+  // where the window is, so no visibility check belongs here.
+  if (command === 'toggle-play') void togglePlay()
+  else if (command === 'next') void nextSong()
+  else if (command === 'previous') void previousSong()
+}
+
 const handleWindowVisibility = (visible: boolean) => {
   windowVisible = visible
   applyInlineVideoState()
@@ -2134,6 +2162,8 @@ onMounted(async () => {
   applyDiscordState(discordEnabled.value)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   windowVisibilityUnsubscribe = window.electronAPI.onWindowVisibilityChanged(handleWindowVisibility)
+  trayCommandUnsubscribe = window.electronAPI.onTrayCommand(handleTrayCommand)
+  reportTrayPlayback()
   // The tab may already be hidden on mount; this seeds the flag before any
   // audio/video element exists.
   applyInlineVideoState()
@@ -2211,6 +2241,8 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   windowVisibilityUnsubscribe?.()
   windowVisibilityUnsubscribe = null
+  trayCommandUnsubscribe?.()
+  trayCommandUnsubscribe = null
 
   progressTicker.stop()
 

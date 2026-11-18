@@ -48,6 +48,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('window:visibility', listener)
     return () => ipcRenderer.removeListener('window:visibility', listener)
   },
+  reportTrayPlayback: (state: { song: string | null; playing: boolean }) => {
+    ipcRenderer.send('tray:playback-state', state)
+  },
+  onTrayCommand: (callback: (command: string) => void) => {
+    const listener = (_: unknown, command: string) => callback(command)
+    ipcRenderer.on('tray:command', listener)
+    return () => ipcRenderer.removeListener('tray:command', listener)
+  },
+  setCloseToTray: (enabled: boolean) => ipcRenderer.invoke('set-close-to-tray', enabled),
   removeMusicScanProgressListener: () => {
     ipcRenderer.removeAllListeners('music:scanProgress')
   },

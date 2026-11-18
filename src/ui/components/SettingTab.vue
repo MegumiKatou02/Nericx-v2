@@ -117,6 +117,21 @@
         </div>
       </div>
 
+      <div class="setting-option">
+        <label>{{ t('settings.closeToTray') }}</label>
+        <div class="transparency-section">
+          <div class="transparency-toggle">
+            <button
+              :class="{ active: closeToTrayEnabled }"
+              @click="toggleCloseToTray"
+            >
+              {{ closeToTrayEnabled ? t('common.on') : t('common.off') }}
+            </button>
+          </div>
+        </div>
+        <span class="video-description">{{ t('settings.closeToTray.description') }}</span>
+      </div>
+
       <div class="setting-option" v-if="transparencyEnabled">
         <label>{{ t('settings.opacity') }}</label>
         <div class="opacity-section">
@@ -307,6 +322,7 @@ const opacity = ref(1.0)
 const normalizationEnabled = ref(false)
 const videoEnabled = ref(false)
 const miniPlayerEnabled = ref(true)
+const closeToTrayEnabled = ref(true)
 
 const cacheStats = ref({
   size: 0,
@@ -415,6 +431,11 @@ const toggleMiniPlayer = async () => {
   toggleMiniPlayerEnabled(miniPlayerEnabled.value)
 }
 
+const toggleCloseToTray = async () => {
+  closeToTrayEnabled.value = !closeToTrayEnabled.value
+  await window.electronAPI.setCloseToTray(closeToTrayEnabled.value)
+}
+
 const toggleTransparency = async () => {
   transparencyEnabled.value = !transparencyEnabled.value
   await window.electronAPI.setConfig('transparencyEnabled', transparencyEnabled.value.toString())
@@ -485,6 +506,11 @@ onMounted(async () => {
     const savedTransparency = await window.electronAPI.getConfig('transparencyEnabled')
     if (savedTransparency !== null) {
       transparencyEnabled.value = savedTransparency === 'true'
+    }
+
+    const savedCloseToTray = await window.electronAPI.getConfig('closeToTray')
+    if (savedCloseToTray !== null) {
+      closeToTrayEnabled.value = savedCloseToTray !== 'false'
     }
 
     const savedOpacity = await window.electronAPI.getConfig('opacity')

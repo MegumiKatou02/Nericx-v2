@@ -13,6 +13,9 @@ declare global {
     getConfig(key: string): Promise<string | null>
     onConfigChanged(callback: (key: string, value: string) => void): () => void
     onWindowVisibilityChanged(callback: (visible: boolean) => void): () => void
+    reportTrayPlayback(state: { song: string | null; playing: boolean }): void
+    onTrayCommand(callback: (command: string) => void): () => void
+    setCloseToTray(enabled: boolean): Promise<boolean>
     
     saveFile(sourcePath: string, fileName: string): Promise<{ success: boolean; message: string }>
     copyFile(filePath: string): Promise<{ success: boolean; message: string }>

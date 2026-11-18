@@ -107,7 +107,8 @@ test('ensure loads the stored settings only once for both tabs', async () => {
       setConfig: async (key, value) => {
         writes.push([key, value])
         return true
-      }
+      },
+      onConfigChanged: () => () => {}
     }
   }
   await ensureDiscordSettingsLoaded()

@@ -1,6 +1,10 @@
 import { reactive } from 'vue'
+import { DISCORD_ENABLED_KEY } from '../electron/configKeys.ts'
+// Defined once for both processes: the tray menu reads these same rows to show
+// the current state, and it must interpret them exactly as the renderer does.
+import { parseStoredBoolean } from '../electron/storedBoolean.ts'
 
-export const DISCORD_ENABLED_KEY = 'discordEnabled'
+export { DISCORD_ENABLED_KEY, parseStoredBoolean }
 export const DISCORD_BEATMAP_BUTTON_KEY = 'discordBeatmapButton'
 export const DISCORD_GITHUB_BUTTON_KEY = 'discordGithubButton'
 
@@ -19,22 +23,6 @@ export const DEFAULT_DISCORD_SETTINGS: DiscordSettings = Object.freeze({
   beatmapButton: true,
   githubButton: true
 })
-
-/**
- * `config` stores everything as TEXT and a missing key comes back as `null`, so
- * only an explicit `false`/`0` may turn a setting off — anything unparsable keeps
- * the default.
- */
-export function parseStoredBoolean(
-  raw: string | null | undefined,
-  fallback: boolean
-): boolean {
-  if (raw == null) return fallback
-  const value = raw.trim().toLowerCase()
-  if (value === 'true' || value === '1') return true
-  if (value === 'false' || value === '0') return false
-  return fallback
-}
 
 /**
  * One instance shared by the music tab (which owns the RPC client) and the
@@ -74,10 +62,33 @@ let loaded: Promise<void> | null = null
 /**
  * Both tabs mount at startup and share one store, so the rows are read once.
  * A second read could also overwrite a value the other tab just changed.
+ *
+ * The tray menu toggles Discord presence as well, and it writes the row from the
+ * main process. Without listening to `config:changed` here the store would keep
+ * the old value, the watcher would never fire, and the RPC client would stay in
+ * its previous state until the next restart.
  */
 export function ensureDiscordSettingsLoaded(): Promise<void> {
   if (!loaded) {
-    loaded = loadDiscordSettings()
+    loaded = loadDiscordSettings().then(() => {
+      // Every other consumer guards the bridge; a renderer loaded against an
+      // older preload must not fail here and take the whole tab down with it.
+      window.electronAPI.onConfigChanged?.((key, value) => {
+        if (key === DISCORD_ENABLED_KEY) {
+          discordSettings.enabled = parseStoredBoolean(value, DEFAULT_DISCORD_SETTINGS.enabled)
+        } else if (key === DISCORD_BEATMAP_BUTTON_KEY) {
+          discordSettings.beatmapButton = parseStoredBoolean(
+            value,
+            DEFAULT_DISCORD_SETTINGS.beatmapButton
+          )
+        } else if (key === DISCORD_GITHUB_BUTTON_KEY) {
+          discordSettings.githubButton = parseStoredBoolean(
+            value,
+            DEFAULT_DISCORD_SETTINGS.githubButton
+          )
+        }
+      })
+    })
   }
   return loaded
 }
