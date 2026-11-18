@@ -1,8 +1,17 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
   getOsuPath: () => ipcRenderer.invoke('get-osu-path'),
+  // The renderer only gets a `File` for a dropped item, and a `File` carries no
+  // path; `webUtils` is the preload-side bridge that can resolve one.
+  getPathForFile: (file: File) => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
+  },
   createBackup: (selectedOptions: string[]) => ipcRenderer.invoke('create-backup', selectedOptions),
   getConfig: (key: string) => ipcRenderer.invoke('get-config', key),
   setConfig: (key: string, value: string) => ipcRenderer.invoke('set-config', key, value),
@@ -27,6 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   musicClearCache: () => ipcRenderer.invoke('music:clear-cache'),
   musicForceSaveCache: () => ipcRenderer.invoke('music:force-save-cache'),
   musicCleanup: () => ipcRenderer.invoke('music:cleanup'),
+  importOsz: (filePaths: string[]) => ipcRenderer.invoke('beatmap:import-osz', filePaths),
 
   onMusicMetadataUpdated: (callback: () => void) => {
     ipcRenderer.on('music:metadataUpdated', () => callback())

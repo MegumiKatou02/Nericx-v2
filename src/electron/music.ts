@@ -607,7 +607,139 @@ export class MusicPlayer extends EventEmitter {
     }
   }
 
+  private async scanSongFolder(
+    songsPath: string,
+    songFolder: string
+  ): Promise<{
+    songPath: string
+    folderInfo: {
+      songFolder: string
+      beatmapsetId: string | undefined
+      imagePath: string | undefined
+      videoPath: string | undefined
+    }
+    fileStats: { fileSize: number; duration: number; totalAudioFiles: number }
+    preloadedMetadata: CachedMetadata | null
+  } | null> {
+    const folderPath = join(songsPath, songFolder)
+
+    try {
+      const stats = this.getFileStatCached(folderPath)
+      if (!stats.isDirectory()) return null
+
+      const beatmapsetId = parseBeatmapsetId(songFolder)
+
+      // Single readdir per folder instead of three
+      const allEntries = readdirSync(folderPath)
+      const imageFiles = allEntries.filter(f => /\.(png|jpg|jpeg)$/i.test(f))
+      const videoFiles = allEntries.filter(f => f.toLowerCase().endsWith('.mp4'))
+      const audioFilesInFolder = allEntries.filter(f =>
+        f.toLowerCase().endsWith('.mp3') ||
+        f.toLowerCase().endsWith('.ogg')
+      )
+
+      if (audioFilesInFolder.length === 0) return null
+
+      const bestAudioInfo = await this.findBestAudioFile(folderPath, audioFilesInFolder)
+      if (!bestAudioInfo) return null
+
+      const backgroundImages = imageFiles.filter(f => /bg|background/i.test(f))
+      const imagePath = backgroundImages.length > 0
+        ? join(folderPath, backgroundImages[0])
+        : imageFiles.length > 0
+          ? join(folderPath, imageFiles[0])
+          : undefined
+
+      const videoPath = videoFiles.length > 0
+        ? join(folderPath, videoFiles[0])
+        : undefined
+
+      const songPath = join(folderPath, bestAudioInfo.bestFile)
+      return {
+        songPath,
+        folderInfo: {
+          songFolder,
+          beatmapsetId,
+          imagePath,
+          videoPath
+        },
+        fileStats: {
+          fileSize: bestAudioInfo.fileSize,
+          duration: bestAudioInfo.duration,
+          totalAudioFiles: audioFilesInFolder.length
+        },
+        preloadedMetadata: bestAudioInfo.metadata
+      }
+    } catch (error) {
+      console.warn(`Lỗi khi xử lý folder ${songFolder}:`, error)
+      return null
+    }
+  }
+
+  private async buildSong(fileInfo: {
+    songPath: string
+    folderInfo: {
+      songFolder: string
+      beatmapsetId: string | undefined
+      imagePath: string | undefined
+      videoPath: string | undefined
+    }
+    fileStats: { fileSize: number; duration: number; totalAudioFiles: number }
+    preloadedMetadata: CachedMetadata | null
+  }): Promise<Song> {
+    const { songPath, folderInfo, fileStats, preloadedMetadata } = fileInfo
+    const { songFolder, beatmapsetId, imagePath, videoPath } = folderInfo
+
+    const namePart = songFolder.split(' ').slice(1).join(' ')
+    let artist = '', title = ''
+
+    // Reuse metadata already fetched during findBestAudioFile
+    const metadata = preloadedMetadata ?? await this.getMetadataWithCache(songPath)
+
+    if (metadata) {
+      artist = metadata.artist || (namePart.includes(' - ') ? namePart.split(' - ')[0] : '')
+      title = metadata.title || (namePart.includes(' - ') ? namePart.split(' - ').slice(1).join(' - ') : namePart)
+    } else {
+      if (namePart.includes(' - ')) {
+        [artist, title] = namePart.split(' - ', 2)
+      } else {
+        title = namePart
+      }
+    }
+
+    const song = this.songPool.acquire()
+    Object.assign(song, {
+      name: namePart,
+      path: songPath,
+      beatmapsetId,
+      image: imagePath,
+      artist: artist.trim(),
+      title: title.trim(),
+      duration: metadata?.duration || fileStats.duration || 0,
+      video: videoPath,
+      fileSize: fileStats.fileSize,
+      totalAudioFiles: fileStats.totalAudioFiles
+    })
+    return song
+  }
+
+  /**
+   * The scan is tracked so an `.osz` dropped while the library is still being
+   * read is appended after the scan finishes instead of being wiped by it.
+   */
+  private scanInFlight: Promise<{ success: boolean; message: string; songs?: Song[] }> | null = null
+
   async loadSongs(osuPath: string): Promise<{ success: boolean; message: string; songs?: Song[] }> {
+    const scan = this.runSongScan(osuPath)
+    this.scanInFlight = scan
+    try {
+      return await scan
+    } finally {
+      if (this.scanInFlight === scan) this.scanInFlight = null
+    }
+  }
+
+  private async runSongScan(osuPath: string): Promise<{ success: boolean; message: string; songs?: Song[] }> {
     const songsPath = join(osuPath, 'Songs')
 
     // Wait for the metadata cache to finish loading from disk. Without this
@@ -624,7 +756,9 @@ export class MusicPlayer extends EventEmitter {
 
     try {
       console.log('Bắt đầu quét thư mục nhạc với tối ưu CPU (phân tích file tốt nhất)...')
-      const songFolders = readdirSync(songsPath)
+      // A drop stages its archive in a dot-folder inside Songs; scanning it
+      // would index a half-extracted beatmap that is about to be renamed.
+      const songFolders = readdirSync(songsPath).filter(name => !name.startsWith('.'))
       
       this.processingStats = {
         total: 0,
@@ -652,58 +786,8 @@ export class MusicPlayer extends EventEmitter {
         const batch = songFolders.slice(i, i + directoryBatchSize)
         
         await Promise.all(batch.map(async (songFolder) => {
-          const folderPath = join(songsPath, songFolder)
-
-          try {
-            const stats = this.getFileStatCached(folderPath)
-            if (!stats.isDirectory()) return
-
-            const beatmapsetId = parseBeatmapsetId(songFolder)
-
-            // Single readdir per folder instead of three
-            const allEntries = readdirSync(folderPath)
-            const imageFiles = allEntries.filter(f => /\.(png|jpg|jpeg)$/i.test(f))
-            const videoFiles = allEntries.filter(f => f.toLowerCase().endsWith('.mp4'))
-            const audioFilesInFolder = allEntries.filter(f =>
-              f.toLowerCase().endsWith('.mp3') ||
-              f.toLowerCase().endsWith('.ogg')
-            )
-
-            if (audioFilesInFolder.length === 0) return
-
-            const bestAudioInfo = await this.findBestAudioFile(folderPath, audioFilesInFolder)
-            if (!bestAudioInfo) return
-
-            const backgroundImages = imageFiles.filter(f => /bg|background/i.test(f))
-            const imagePath = backgroundImages.length > 0 
-              ? join(folderPath, backgroundImages[0])
-              : imageFiles.length > 0 
-                ? join(folderPath, imageFiles[0]) 
-                : undefined
-            
-            const videoPath = videoFiles.length > 0 
-              ? join(folderPath, videoFiles[0])
-              : undefined
-
-            const songPath = join(folderPath, bestAudioInfo.bestFile)
-            audioFiles.push({
-              songPath,
-              folderInfo: {
-                songFolder,
-                beatmapsetId,
-                imagePath,
-                videoPath
-              },
-              fileStats: {
-                fileSize: bestAudioInfo.fileSize,
-                duration: bestAudioInfo.duration,
-                totalAudioFiles: audioFilesInFolder.length
-              },
-              preloadedMetadata: bestAudioInfo.metadata
-            })
-          } catch (error) {
-            console.warn(`Lỗi khi xử lý folder ${songFolder}:`, error)
-          }
+          const fileInfo = await this.scanSongFolder(songsPath, songFolder)
+          if (fileInfo) audioFiles.push(fileInfo)
         }))
         
         if (i % (directoryBatchSize * 2) === 0) {
@@ -715,41 +799,7 @@ export class MusicPlayer extends EventEmitter {
       console.log(`Tìm thấy ${audioFiles.length} file audio tốt nhất để xử lý`)
 
       await this.processBatchStreaming(audioFiles, async (fileInfo) => {
-        const { songPath, folderInfo, fileStats, preloadedMetadata } = fileInfo
-        const { songFolder, beatmapsetId, imagePath, videoPath } = folderInfo
-
-        const namePart = songFolder.split(' ').slice(1).join(' ')
-        let artist = '', title = ''
-
-        // Reuse metadata already fetched during findBestAudioFile
-        const metadata = preloadedMetadata ?? await this.getMetadataWithCache(songPath)
-        
-        if (metadata) {
-          artist = metadata.artist || (namePart.includes(' - ') ? namePart.split(' - ')[0] : '')
-          title = metadata.title || (namePart.includes(' - ') ? namePart.split(' - ').slice(1).join(' - ') : namePart)
-        } else {
-          if (namePart.includes(' - ')) {
-            [artist, title] = namePart.split(' - ', 2)
-          } else {
-            title = namePart
-          }
-        }
-
-        const song = this.songPool.acquire()
-        Object.assign(song, {
-          name: namePart,
-          path: songPath,
-          beatmapsetId,
-          image: imagePath,
-          artist: artist.trim(),
-          title: title.trim(),
-          duration: metadata?.duration || fileStats.duration || 0,
-          video: videoPath,
-          fileSize: fileStats.fileSize,
-          totalAudioFiles: fileStats.totalAudioFiles
-        })
-
-        this.songsData.push(song)
+        this.songsData.push(await this.buildSong(fileInfo))
       })
 
       this.songsData.sort((a, b) => {
@@ -816,6 +866,47 @@ export class MusicPlayer extends EventEmitter {
         })
       }
     }
+  }
+
+  /**
+   * Adds one freshly installed beatmap folder to the in-memory library without
+   * rescanning every song. A newly installed `.osz` is usually the reason the
+   * user opened the app, so waiting for a full scan (seconds on a large Songs
+   * folder) would hide the result of the drop.
+   */
+  async addSongFolder(
+    osuPath: string,
+    folderName: string
+  ): Promise<{ success: boolean; song?: Song; message: string }> {
+    await this.cacheReady
+    // The scan clears `songsData` before it rebuilds it; appending during that
+    // window would either lose this folder or leave it duplicated.
+    if (this.scanInFlight) await this.scanInFlight.catch(() => undefined)
+
+    const songsPath = join(osuPath, 'Songs')
+    const folderPath = join(songsPath, folderName)
+    // The stat cache can hold the "does not exist" answer from the scan that
+    // preceded the drop, so the new folder must be measured again.
+    this.fileStatCache.delete(folderPath)
+
+    const fileInfo = await this.scanSongFolder(songsPath, folderName)
+    if (!fileInfo) {
+      return { success: false, message: await t('music.loadFailed', { message: folderName }) }
+    }
+
+    const song = await this.buildSong(fileInfo)
+    const existingIndex = this.songsData.findIndex(entry => entry.path === song.path)
+    if (existingIndex >= 0) {
+      this.songPool.release(this.songsData[existingIndex])
+      this.songsData[existingIndex] = song
+    } else {
+      this.songsData.push(song)
+    }
+
+    this.songsData.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+    this.filteredSongs = [...this.songsData]
+
+    return { success: true, song, message: await t('music.loadedCount', { count: this.songsData.length }) }
   }
 
   /**

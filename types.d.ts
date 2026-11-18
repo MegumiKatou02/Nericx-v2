@@ -4,6 +4,7 @@ declare global {
   interface ElectronAPI {
     selectDirectory(): Promise<string | null>
     getOsuPath(): Promise<string | null>
+    getPathForFile(file: File): string
     createBackup(selectedOptions: string[]): Promise<{
       success: boolean
       message: string
@@ -45,6 +46,14 @@ declare global {
     musicClearCache(): Promise<void>
     musicForceSaveCache(): Promise<void>
     musicCleanup(): Promise<void>
+    importOsz(filePaths: string[]): Promise<{
+      success: boolean
+      message: string
+      installed?: number
+      total?: number
+      folderNames?: string[]
+      missingPath?: boolean
+    }>
     onMusicScanProgress(callback: (progress: any) => void): void
     removeMusicScanProgressListener(): void
   }

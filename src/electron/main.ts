@@ -9,6 +9,8 @@ import { LOCALE_CONFIG_KEY, resolveLocale } from './i18n.js'
 import { parseStoredBoolean } from './storedBoolean.js'
 import { CLOSE_TO_TRAY_KEY } from './configKeys.js'
 import { summarizeAppMetrics } from './appMetrics.js'
+import { installOszFile, type BeatmapImportCode, type BeatmapImportResult } from './beatmapImport.js'
+import type { MessageKey } from './i18n.js'
 import { copyFileSync, existsSync, readdirSync } from 'fs'
 
 let MusicPlayer: any = null
@@ -632,6 +634,100 @@ ipcMain.handle('music:cleanup', createIPCHandler(async () => {
   if (musicPlayerInstance) {
     musicPlayerInstance.destroy()
     musicPlayerInstance = null
+  }
+}))
+
+const BEATMAP_IMPORT_MESSAGES: Record<BeatmapImportCode, MessageKey> = {
+  installed: 'beatmapImport.installed',
+  duplicate: 'beatmapImport.duplicate',
+  notOsz: 'beatmapImport.notOsz',
+  missingFile: 'beatmapImport.missingFile',
+  songsMissing: 'beatmapImport.songsMissing',
+  noBeatmap: 'beatmapImport.noBeatmap',
+  invalidArchive: 'beatmapImport.invalidArchive',
+  unsafeEntry: 'beatmapImport.unsafeEntry',
+  failed: 'beatmapImport.failed'
+}
+
+const describeBeatmapImport = async (
+  result: BeatmapImportResult,
+  fallbackName: string
+): Promise<{ success: boolean; message: string; folderName?: string }> => {
+  const name = result.folderName ?? fallbackName
+  if (result.code === 'installed') {
+    return { success: true, message: await t('beatmapImport.installed', { name }), folderName: name }
+  }
+  if (result.code === 'duplicate') {
+    return { success: false, message: await t('beatmapImport.duplicate', { name }), folderName: name }
+  }
+  if (result.code === 'failed') {
+    return {
+      success: false,
+      message: await t('beatmapImport.failed', { message: result.detail ?? '' })
+    }
+  }
+  return { success: false, message: await t(BEATMAP_IMPORT_MESSAGES[result.code]) }
+}
+
+/**
+ * Installs dropped `.osz` files. The renderer sends paths rather than file
+ * contents so a large beatmap never travels through IPC; the import also
+ * requires the configured osu! folder, which makes this the single place that
+ * reports the "not configured" case.
+ */
+ipcMain.handle('beatmap:import-osz', createIPCHandler(async (_: any, filePaths: unknown) => {
+  const paths = Array.isArray(filePaths)
+    ? filePaths.filter((value): value is string => typeof value === 'string' && value.length > 0)
+    : []
+  if (paths.length === 0) {
+    return { success: false, message: await t('beatmapImport.notOsz') }
+  }
+
+  const osuPath = await getOsuPath()
+  if (!osuPath) {
+    return { success: false, message: await t('music.noPath'), missingPath: true }
+  }
+
+  const results: Array<{ success: boolean; message: string; folderName?: string }> = []
+  for (const filePath of paths) {
+    const result = await installOszFile(filePath, osuPath)
+    results.push(await describeBeatmapImport(result, path.basename(filePath, path.extname(filePath))))
+  }
+
+  // A scan of the whole Songs folder would stall the drop on a large library;
+  // the player can index just the folders that were just installed. When it has
+  // no library loaded at all (the osu! path was only just configured), the scan
+  // is the only way to get a complete list.
+  const installedFolders = results.filter(result => result.success && result.folderName)
+  if (musicPlayerInstance && installedFolders.length > 0) {
+    if (musicPlayerInstance.getFilteredSongs().length === 0) {
+      await musicPlayerInstance.loadSongs(osuPath)
+    } else {
+      for (const result of installedFolders) {
+        await musicPlayerInstance.addSongFolder(osuPath, result.folderName)
+      }
+    }
+    ipcBatcher.add('music:metadataUpdated', {})
+  }
+
+  // One message keeps the toast readable for a multi-file drop: a single file
+  // names the beatmap, several files report the count.
+  const installed = results.filter(result => result.success).length
+  let message: string
+  if (paths.length === 1) {
+    message = results[0].message
+  } else if (installed > 0) {
+    message = await t('beatmapImport.droppedMultiple', { count: installed })
+  } else {
+    message = results[0].message
+  }
+
+  return {
+    success: installed > 0,
+    installed,
+    total: paths.length,
+    folderNames: results.map(result => result.folderName).filter(Boolean),
+    message
   }
 }))
 

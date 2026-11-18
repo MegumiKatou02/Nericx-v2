@@ -6,6 +6,7 @@ import MusicTab from './components/MusicTab.vue'
 import FiltersTab from './components/FiltersTab.vue'
 import SettingTab from './components/SettingTab.vue'
 import KeyboardTab from './components/KeyboardTab.vue'
+import BeatmapDropOverlay from './components/BeatmapDropOverlay.vue'
 import { initLocale, t } from './i18n.js'
 import { fileUrlForPath } from './fileUrl.js'
 import './styles/theme.css'
@@ -581,6 +582,9 @@ onUnmounted(() => {
         <SettingTab v-show="currentTab === 'setting'" ref="settingTabRef" />
       </div>
     </div>
+
+    <!-- App-wide: an .osz dropped anywhere in the window installs into osu!. -->
+    <BeatmapDropOverlay />
 
     <div
       v-if="miniPlayerVisible && miniPlayerEnabled"
