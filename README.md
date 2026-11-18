@@ -49,7 +49,24 @@
    npm install
    ```
 
-3. **Start development server**
+3. **Provide the bundled ffmpeg** (needed to play/convert `.avi` and `.mkv`
+   beatmap videos; ~24 MB, not committed to the repo)
+   ```bash
+   npm run build:ffmpeg     # Windows: builds the slim binary (see below)
+
+   npm run fetch:ffmpeg     # checks it is in place, and says what is missing
+   ```
+
+   The app ships a custom ffmpeg built only for this job: it demuxes the
+   containers beatmaps use, muxes mp4, and encodes libx264/aac when a stream
+   cannot be copied verbatim. That is ~24 MB instead of ~100 MB for a
+   general-purpose build, which carries dozens of codecs and protocols the app
+   never calls. `npm run build:ffmpeg` needs MSYS2 (UCRT64) with x264; the
+   script documents every component it enables and how to get the toolchain.
+   If you have no toolchain, `npm run fetch:ffmpeg:fallback` downloads a
+   prebuilt general-purpose build instead.
+
+4. **Start development server**
    ```bash
    npm run dev
    ```
@@ -73,13 +90,13 @@ npm run dev:electron
 # Build Vue app
 npm run build
 
-# Build for Windows
+# Build for Windows (also checks the bundled ffmpeg is present)
 npm run dist:win
 
-# Build for macOS
+# Build for macOS (place the ffmpeg binary in resources/ffmpeg/darwin-arm64/ first)
 npm run dist:mac
 
-# Build for Linux
+# Build for Linux (place the ffmpeg binary in resources/ffmpeg/linux-x64/ first)
 npm run dist:linux
 ```
 

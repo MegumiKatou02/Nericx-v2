@@ -20,6 +20,13 @@
     ],
     "electronLanguages": ["en-US", "vi", "ja"],
     "asarUnpack": ["dist-electron/preload.cjs"],
+    "extraResources": [
+        {
+            "from": "resources/ffmpeg",
+            "to": "ffmpeg",
+            "filter": ["**/ffmpeg", "**/ffmpeg.exe"]
+        }
+    ],
     "icon": "./icon.ico",
     "directories": {
         "output": "dist"

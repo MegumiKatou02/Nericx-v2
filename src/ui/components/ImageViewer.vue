@@ -29,20 +29,26 @@
       </div>
 
       <div class="image-container">
-        <video
-          v-if="isVideo"
-          ref="viewerVideoEl"
-          :src="imageUrl"
-          controls
-          autoplay
-          class="viewer-video"
-          @error="handleVideoError"
-          @loadedmetadata="handleViewerVideoLoaded"
-        >
-          {{ t('imageViewer.videoUnsupported') }}
-        </video>
-        
-        <img 
+        <template v-if="isVideo">
+          <video
+            ref="viewerVideoEl"
+            :src="imageUrl"
+            controls
+            autoplay
+            class="viewer-video"
+            @error="handleVideoError"
+            @loadedmetadata="handleViewerVideoLoaded"
+          >
+            {{ t('imageViewer.videoUnsupported') }}
+          </video>
+
+          <div v-if="videoError" class="viewer-video-error">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>{{ videoError }}</span>
+          </div>
+        </template>
+
+        <img
           v-else
           :src="imageUrl" 
           :alt="imageName"
@@ -91,16 +97,13 @@ const emit = defineEmits<{
 
 const isVideo = computed(() => {
   const url = props.imageUrl.toLowerCase()
-  const isVideoFile = url.includes('.mp4') || 
-                     url.includes('.webm') ||
-                     url.includes('.mov') ||
-                     url.includes('.avi')
-
-  // console.log('ImageViewer - URL:', props.imageUrl)
-  // console.log('ImageViewer - Name:', props.imageName)
-  // console.log('ImageViewer - IsVideo:', isVideoFile)
-  
-  return isVideoFile
+  return url.includes('.mp4') ||
+         url.includes('.m4v') ||
+         url.includes('.webm') ||
+         url.includes('.ogv') ||
+         url.includes('.mov') ||
+         url.includes('.avi') ||
+         url.includes('.mkv')
 })
 
 const zoomLevel = ref(1)
@@ -113,6 +116,12 @@ const lastTranslateX = ref(0)
 const lastTranslateY = ref(0)
 const imageSize = ref('')
 const viewerVideoEl = ref<HTMLVideoElement | null>(null)
+const videoError = ref<string>('')
+
+// A new source gets a clean slate: the previous file's failure must not block it.
+watch(() => props.imageUrl, () => {
+  videoError.value = ''
+})
 
 let windowVisibilityUnsubscribe: (() => void) | null = null
 let appWindowVisible = true
@@ -149,8 +158,11 @@ const applyWindowVisibility = (visible: boolean) => {
 const handleDomVisibility = () => applyWindowVisibility(!document.hidden)
 
 const handleViewerVideoLoaded = () => {
+  videoError.value = ''
+  const video = viewerVideoEl.value
+  if (video) video.style.visibility = ''
   // A source change loads with `autoplay`; a hidden viewer must not decode it.
-  if (!playbackAllowed()) viewerVideoEl.value?.pause()
+  if (!playbackAllowed()) video?.pause()
 }
 
 watch(() => props.isActive, applyPlaybackGate)
@@ -258,6 +270,14 @@ const handleEscape = (event: KeyboardEvent) => {
 
 const handleVideoError = (event: Event) => {
   console.error('Error loading video:', event)
+  const video = event.target as HTMLVideoElement | null
+  const code = video?.error?.code
+  // Chromium has no AVI demuxer, and MKV only works for some codecs. Tell the
+  // user what to do rather than leaving a black frame behind the controls.
+  videoError.value = code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
+    ? t('music.video.errorUnsupported')
+    : t('music.video.errorDecode')
+  if (video) video.style.visibility = 'hidden'
 }
 
 onMounted(() => {
@@ -440,5 +460,25 @@ onUnmounted(() => {
   max-height: 80vh;
   border-radius: 8px;
   background: #000;
+}
+
+.viewer-video-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+  padding: 24px 28px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--warning-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.95em;
+  text-align: left;
+}
+
+.viewer-video-error i {
+  color: var(--warning-color);
+  font-size: 1.2em;
+  flex-shrink: 0;
 }
 </style> 

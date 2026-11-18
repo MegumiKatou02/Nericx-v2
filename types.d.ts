@@ -54,8 +54,22 @@ declare global {
       folderNames?: string[]
       missingPath?: boolean
     }>
+    deleteBeatmap(songPath: string, name: string): Promise<{
+      success: boolean
+      message: string
+      folderName?: string
+      missingPath?: boolean
+    }>
     onMusicScanProgress(callback: (progress: any) => void): void
     removeMusicScanProgressListener(): void
+    ensureVideoPlayable(sourcePath: string): Promise<{
+      success: boolean
+      code?: string
+      path?: string
+      message?: string
+    }>
+    cancelVideoTranscode(sourcePath: string): Promise<{ success: boolean }>
+    onVideoTranscodeProgress(callback: (progress: { sourcePath: string; percent: number }) => void): () => void
   }
 
   interface Window {

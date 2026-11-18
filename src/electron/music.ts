@@ -1,8 +1,9 @@
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { readdirSync, statSync, existsSync } from 'fs'
 import { readFile, writeFile, mkdir } from 'fs/promises'
 import type { Song } from './type.js'
 import { parseBeatmapsetId } from './beatmapsetId.js'
+import { findVideoFile } from './videoFile.js'
 import * as mm from 'music-metadata'
 import { EventEmitter } from 'events'
 import { createHash } from 'crypto'
@@ -632,7 +633,7 @@ export class MusicPlayer extends EventEmitter {
       // Single readdir per folder instead of three
       const allEntries = readdirSync(folderPath)
       const imageFiles = allEntries.filter(f => /\.(png|jpg|jpeg)$/i.test(f))
-      const videoFiles = allEntries.filter(f => f.toLowerCase().endsWith('.mp4'))
+      const videoFile = findVideoFile(allEntries)
       const audioFilesInFolder = allEntries.filter(f =>
         f.toLowerCase().endsWith('.mp3') ||
         f.toLowerCase().endsWith('.ogg')
@@ -650,8 +651,8 @@ export class MusicPlayer extends EventEmitter {
           ? join(folderPath, imageFiles[0])
           : undefined
 
-      const videoPath = videoFiles.length > 0
-        ? join(folderPath, videoFiles[0])
+      const videoPath = videoFile
+        ? join(folderPath, videoFile)
         : undefined
 
       const songPath = join(folderPath, bestAudioInfo.bestFile)
@@ -907,6 +908,39 @@ export class MusicPlayer extends EventEmitter {
     this.filteredSongs = [...this.songsData]
 
     return { success: true, song, message: await t('music.loadedCount', { count: this.songsData.length }) }
+  }
+
+  /**
+   * Drops every song that lived in `folderPath` from the in-memory library and
+   * its caches, after the folder was deleted from disk. Without this the UI
+   * would keep the row — and its cover/audio lookups — until the next full scan.
+   */
+  async removeSongFolder(folderPath: string): Promise<{ success: boolean; removed: number }> {
+    await this.cacheReady
+    if (this.scanInFlight) await this.scanInFlight.catch(() => undefined)
+
+    // Windows paths are case-insensitive, and realpath hands back the on-disk
+    // casing, which can differ from the string the renderer sent.
+    const normalize = (value: string): string =>
+      process.platform === 'win32' ? value.toLowerCase() : value
+    const target = normalize(folderPath)
+
+    const matches = (song: Song): boolean => normalize(dirname(song.path)) === target
+    const removed = this.songsData.filter(matches)
+    if (removed.length === 0) return { success: true, removed: 0 }
+
+    for (const song of removed) {
+      this.metadataCache.delete(song.path)
+      this.cacheAccessOrder.delete(song.path)
+      this.fileStatCache.delete(song.path)
+      this.songPool.release(song)
+    }
+    this.fileStatCache.delete(folderPath)
+    this.cacheDirty = true
+
+    this.songsData = this.songsData.filter(song => !matches(song))
+    this.filteredSongs = this.filteredSongs.filter(song => !matches(song))
+    return { success: true, removed: removed.length }
   }
 
   /**

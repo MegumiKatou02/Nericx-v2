@@ -206,3 +206,24 @@ export const toggleExcluded = async (song: SongPreference): Promise<void> => {
   await persistLists(writes)
 }
 
+/**
+ * Forgets a song that no longer exists on disk, so a deleted beatmap cannot
+ * linger in the favourites or excluded lists.
+ */
+export const forgetSongPreferences = async (path: string): Promise<void> => {
+  const writes: PendingWrite[] = []
+
+  if (isFavorite(path)) {
+    const next = favoriteSongs.value.filter(item => item.path !== path)
+    favoriteSongs.value = next
+    writes.push({ key: FAVORITES_CONFIG_KEY, snapshot: next })
+  }
+  if (isExcluded(path)) {
+    const next = excludedSongs.value.filter(item => item.path !== path)
+    excludedSongs.value = next
+    writes.push({ key: EXCLUDED_CONFIG_KEY, snapshot: next })
+  }
+
+  if (writes.length > 0) await persistLists(writes)
+}
+

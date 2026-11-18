@@ -37,6 +37,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   musicForceSaveCache: () => ipcRenderer.invoke('music:force-save-cache'),
   musicCleanup: () => ipcRenderer.invoke('music:cleanup'),
   importOsz: (filePaths: string[]) => ipcRenderer.invoke('beatmap:import-osz', filePaths),
+  deleteBeatmap: (songPath: string, name: string) => ipcRenderer.invoke('beatmap:delete', songPath, name),
+  ensureVideoPlayable: (sourcePath: string) => ipcRenderer.invoke('video:ensure-playable', sourcePath),
+  cancelVideoTranscode: (sourcePath: string) => ipcRenderer.invoke('video:cancel-transcode', sourcePath),
+  onVideoTranscodeProgress: (callback: (progress: { sourcePath: string; percent: number }) => void) => {
+    const listener = (_: unknown, progress: { sourcePath: string; percent: number }) => callback(progress)
+    ipcRenderer.on('video:transcode-progress', listener)
+    return () => ipcRenderer.removeListener('video:transcode-progress', listener)
+  },
 
   onMusicMetadataUpdated: (callback: () => void) => {
     ipcRenderer.on('music:metadataUpdated', () => callback())

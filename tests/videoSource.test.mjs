@@ -54,6 +54,19 @@ test('an empty video path has no url', () => {
   assert.equal(videoUrlFor({ videoEnabled: true, current: empty, selected: empty, isPlaying: true }), null)
 })
 
+test('an avi video has no url: Chromium cannot demux it', () => {
+  const avi = { path: 'f.mp3', video: 'C:/songs/background.avi' }
+  assert.equal(videoUrlFor({ videoEnabled: true, current: avi, selected: null, isPlaying: true }), null)
+})
+
+test('an mkv video is attempted and left to the media element', () => {
+  const mkv = { path: 'g.mp3', video: 'C:/songs/video.mkv' }
+  assert.equal(
+    videoUrlFor({ videoEnabled: true, current: mkv, selected: null, isPlaying: true }),
+    'nericx-media://local/C%3A/songs/video.mkv'
+  )
+})
+
 test('a path with a hash, a space and a percent sign is encoded', () => {
   const tricky = { path: 'e.mp3', video: 'C:/osu!/Songs/a#1 100%/video.mp4' }
   assert.equal(

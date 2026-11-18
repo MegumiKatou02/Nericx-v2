@@ -113,8 +113,13 @@
                 <div class="song-info">
                   <div class="song-title-row">
                     <span class="title">{{ getCachedSongDetails(song.name).title }}</span>
-                    <div v-if="song.video" class="video-indicator">
-                      <i class="fas fa-play-circle"></i>
+                    <div
+                      v-if="song.video"
+                      class="video-indicator"
+                      :class="{ 'video-unplayable': !videoBadgeFor(song.video).playable }"
+                      :title="videoBadgeFor(song.video).title"
+                    >
+                      <i :class="videoBadgeFor(song.video).playable ? 'fas fa-play-circle' : 'fas fa-exclamation-triangle'"></i>
                       <span>{{ t('music.video.suffix') }}</span>
                     </div>
                     <div v-if="isFavorite(song.path)" class="video-indicator favorite-indicator">
@@ -164,6 +169,10 @@
 
         <div v-else-if="currentCoverImage" class="cover-image" @click="showFullImage">
           <img :src="currentCoverImage" :alt="currentSongName">
+          <div v-if="currentVideoNotice" class="video-fallback-note" :title="currentVideoNotice">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>{{ currentVideoNotice }}</span>
+          </div>
         </div>
 
         <div class="controls">
@@ -326,16 +335,62 @@
         <i class="fas fa-info-circle"></i>
         <span>{{ t('music.context.details') }}</span>
       </div>
+      <div class="context-menu-divider"></div>
+      <div class="context-menu-item danger" @click="requestDeleteSong">
+        <i class="fas fa-trash-alt"></i>
+        <span>{{ t('music.context.delete') }}</span>
+      </div>
     </div>
 
 
     <div
       v-if="copyNotification.visible"
       class="copy-notification"
+      :class="{ danger: copyNotification.danger }"
     >
-      <i class="fas fa-check"></i>
+      <i :class="copyNotification.icon"></i>
       <span>{{ copyNotification.message }}</span>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="deleteDialog.visible"
+        class="delete-modal-overlay"
+        @click="closeDeleteDialog"
+      >
+        <div class="delete-modal" role="dialog" aria-modal="true" @click.stop>
+          <h3 class="delete-modal-title">
+            <i class="fas fa-exclamation-triangle"></i>
+            {{ t('music.delete.title') }}
+          </h3>
+          <p class="delete-modal-message">
+            {{
+              deleteDialog.busy
+                ? t('music.delete.deleting', { name: deleteDialog.song?.name ?? '' })
+                : t('music.delete.message', { name: deleteDialog.song?.name ?? '' })
+            }}
+          </p>
+          <div class="delete-modal-actions">
+            <button
+              class="delete-modal-btn cancel"
+              :disabled="deleteDialog.busy"
+              @click="closeDeleteDialog"
+            >
+              {{ t('music.delete.cancel') }}
+            </button>
+            <button
+              class="delete-modal-btn danger"
+              :disabled="deleteDialog.busy"
+              @click="confirmDeleteSong"
+            >
+              <i v-if="deleteDialog.busy" class="fas fa-spinner fa-spin"></i>
+              <i v-else class="fas fa-trash-alt"></i>
+              <span>{{ t('music.delete.confirm') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <ImageViewer
       :is-visible="showImageViewer"
@@ -360,6 +415,7 @@ import { ref, onMounted, onUnmounted, computed, nextTick, inject, shallowRef, wa
 import type { Song } from '../../electron/type.js'
 import { livePlaybackWindow } from '../presence.js'
 import { videoUrlFor } from '../videoSource.js'
+import { isVideoPlayable, isTranscodableVideo, videoContainerExtension } from '../videoPlayability.js'
 import { createAudioGraph, type AudioGraph, type AudioGraphContext } from '../audioGraph.js'
 import { fileUrlForPath } from '../fileUrl.js'
 import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
@@ -371,6 +427,7 @@ import {
   ensureSongPreferencesLoaded,
   excludedPathSet,
   favoritePathSet,
+  forgetSongPreferences,
   isExcluded,
   isFavorite,
   toggleExcluded,
@@ -795,8 +852,43 @@ const statsIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
 const cleanupIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
 const videoError = ref<string>('')
 const inlineVideoEl = ref<HTMLVideoElement | null>(null)
+/**
+ * Videos the media stack rejected during this session, keyed by path. The
+ * scanner indexes `.mkv`/`.avi` because beatmaps ship them, but Chromium
+ * usually cannot decode what is inside; remembering the failure keeps a broken
+ * file from replacing the cover with an error box on every replay.
+ */
+const unplayableVideos = ref<Set<string>>(new Set())
+
+interface TranscodeEntry {
+  status: 'pending' | 'ready' | 'failed'
+  percent: number
+  /** Cached `.mp4` the media element should render instead of the source. */
+  path?: string
+  message?: string
+}
+
+/**
+ * Conversion state per source video. A `.avi` (or an `.mkv` the decoder
+ * rejected) is turned into a cached mp4 by the bundled ffmpeg in the main
+ * process; the renderer only points the element at the result.
+ */
+const transcodeStates = ref<Record<string, TranscodeEntry>>({})
+
+const transcodedPathFor = (videoPath: string | undefined): string | null =>
+  videoPath ? transcodeStates.value[videoPath]?.path ?? null : null
+
+/** Shown next to the song title; conversion makes these playable, so no warning. */
+const videoBadgeFor = (videoPath: string): { playable: boolean; title?: string } => {
+  if (isVideoPlayable(videoPath)) return { playable: true }
+  if (isTranscodableVideo(videoPath)) {
+    return { playable: true, title: t('music.video.transcodesOnPlay') }
+  }
+  return { playable: false, title: t('music.video.errorUnsupported') }
+}
 
 let windowVisibilityUnsubscribe: (() => void) | null = null
+let videoProgressUnsubscribe: (() => void) | null = null
 // The player can advance to a track with a video while the window is hidden
 // or another tab is open; that element loads with `autoplay`, so it has to be
 // stopped on load too.
@@ -913,7 +1005,19 @@ const contextMenu = ref({
 
 const copyNotification = ref({
   visible: false,
-  message: ''
+  message: '',
+  icon: 'fas fa-check',
+  danger: false
+})
+
+/**
+ * Confirmation for deleting a beatmap. `busy` is set while the folder is being
+ * removed, which disables both buttons so the request cannot be sent twice.
+ */
+const deleteDialog = ref({
+  visible: false,
+  busy: false,
+  song: null as Song | null
 })
 
 const songInfoModal = ref({
@@ -1052,12 +1156,142 @@ const currentSongName = computed(() => {
   return song?.name || ''
 })
 
-const currentVideoUrl = computed(() => videoUrlFor({
+/**
+ * The track the video belongs to, with its source swapped for the cached mp4
+ * once a conversion has finished. Everything downstream (URL building,
+ * playability) sees an ordinary mp4 and needs no special case.
+ */
+const videoSourceSong = computed(() => {
+  const song = currentSong.value
+  if (!song) return null
+  const cached = transcodedPathFor(song.video)
+  return cached ? { ...song, video: cached } : song
+})
+
+const videoSourceUrl = computed(() => videoUrlFor({
   videoEnabled: videoEnabled.value,
-  current: currentSong.value,
+  current: videoSourceSong.value,
   selected: selectedSong.value,
   isPlaying: isPlaying.value
 }))
+
+const currentVideoUrl = computed(() => {
+  const url = videoSourceUrl.value
+  if (!url) return null
+  // `.mkv` is indexed as playable-on-a-gamble (Chromium can demux it when the
+  // codec is H.264/VP9). Once the element has rejected it, stop retrying the
+  // *source* for the rest of the session; the converted mp4 is a different file
+  // and gets its own chance.
+  const videoPath = currentSong.value?.video
+  if (videoPath && !transcodedPathFor(videoPath) && unplayableVideos.value.has(videoPath)) return null
+  return url
+})
+
+// The fallback note belongs to one file; starting another track clears it.
+watch(() => currentSong.value?.path, () => {
+  videoError.value = ''
+})
+
+/**
+ * Why the cover is showing instead of a video, if a video exists but cannot be
+ * played. A conversion in progress reports its percentage; a finished one
+ * removes the note entirely because the video itself takes over.
+ */
+const currentVideoNotice = computed(() => {
+  if (videoError.value) return videoError.value
+  if (!videoEnabled.value) return ''
+
+  const song = selectedSong.value || currentSong.value
+  const videoPath = song?.video
+  if (!videoPath) return ''
+
+  const entry = transcodeStates.value[videoPath]
+  if (entry?.status === 'pending') {
+    return t('music.video.transcoding', { percent: entry.percent })
+  }
+  if (entry?.status === 'failed' && entry.message) return entry.message
+  if (entry?.status === 'ready') return ''
+
+  // Chromium plays this container itself; nothing to explain.
+  if (isVideoPlayable(videoPath)) return ''
+  // A known-bad container is converted the first time it is actually played.
+  if (isTranscodableVideo(videoPath)) return t('music.video.transcodesOnPlay')
+
+  return t('music.video.fallback', { format: videoContainerExtension(videoPath) })
+})
+
+/** Set while a conversion is in flight so a second request joins it. */
+const pendingTranscodes = new Set<string>()
+
+/**
+ * Asks the main process for a cached mp4 of `sourcePath`, converting it when
+ * needed. The bundled ffmpeg runs one job at a time and cancels the previous
+ * one, so switching tracks does not pile up CPU work.
+ */
+const requestTranscode = async (sourcePath: string | undefined) => {
+  if (!sourcePath || !isTranscodableVideo(sourcePath)) return
+  if (pendingTranscodes.has(sourcePath)) return
+  if (transcodeStates.value[sourcePath]?.status === 'ready') return
+
+  const setState = (entry: TranscodeEntry | null) => {
+    const states = { ...transcodeStates.value }
+    if (entry) states[sourcePath] = entry
+    else delete states[sourcePath]
+    transcodeStates.value = states
+  }
+
+  pendingTranscodes.add(sourcePath)
+  setState({ status: 'pending', percent: 0 })
+
+  try {
+    const result = await window.electronAPI.ensureVideoPlayable(sourcePath)
+
+    if (result.success && result.path) {
+      setState({ status: 'ready', percent: 100, path: result.path })
+      // A container the decoder rejected earlier plays fine as the cached mp4.
+      if (unplayableVideos.value.has(sourcePath)) {
+        const remaining = new Set(unplayableVideos.value)
+        remaining.delete(sourcePath)
+        unplayableVideos.value = remaining
+      }
+      return
+    }
+
+    // Cancelled because another track started converting: forget it so a later
+    // replay can ask again.
+    if (result.code === 'cancelled') {
+      setState(null)
+      return
+    }
+
+    const message = result.message || t('music.video.errorUnknown')
+    setState({ status: 'failed', percent: 0, message })
+    if (result.code !== 'not-video' && result.code !== 'missing') {
+      showToast(message, { icon: 'fas fa-exclamation-triangle', danger: true })
+    }
+  } catch (error) {
+    setState({ status: 'failed', percent: 0, message: String(error) })
+  } finally {
+    pendingTranscodes.delete(sourcePath)
+  }
+}
+
+// The playing track decides: browsing the list must not start a conversion.
+// Turning videos off stops one already running, since nothing will show it.
+watch(
+  () => [currentSong.value?.path, currentSong.value?.video, isPlaying.value, videoEnabled.value] as const,
+  () => {
+    const videoPath = currentSong.value?.video
+    if (!videoEnabled.value) {
+      if (videoPath) void window.electronAPI.cancelVideoTranscode(videoPath)
+      return
+    }
+    if (!isPlaying.value || !videoPath) return
+    if (isVideoPlayable(videoPath)) return
+    void requestTranscode(videoPath)
+  },
+  { immediate: true }
+)
 
 const sortedSongs = computed(() => {
   // The favourite and excluded filters are applied on top of the search
@@ -2136,15 +2370,92 @@ const openFileLocation = async () => {
   }
 }
 
-const showCopyNotification = () => {
+let notificationTimer: ReturnType<typeof setTimeout> | null = null
+const showToast = (message: string, options: { icon?: string; danger?: boolean } = {}) => {
+  if (notificationTimer) clearTimeout(notificationTimer)
   copyNotification.value = {
     visible: true,
-    message: t('music.copied')
+    message,
+    icon: options.icon ?? 'fas fa-check',
+    danger: options.danger ?? false
   }
-
-  setTimeout(() => {
+  notificationTimer = setTimeout(() => {
     copyNotification.value.visible = false
-  }, 2000)
+    notificationTimer = null
+  }, options.danger ? 4000 : 2500)
+}
+
+const showCopyNotification = () => showToast(t('music.copied'), { icon: 'fas fa-check' })
+
+const requestDeleteSong = () => {
+  const song = contextMenu.value.song
+  if (!song) return
+  hideContextMenu()
+  deleteDialog.value = { visible: true, busy: false, song }
+}
+
+const closeDeleteDialog = () => {
+  if (deleteDialog.value.busy) return
+  deleteDialog.value = { visible: false, busy: false, song: null }
+}
+
+/**
+ * The dialog is teleported to `<body>`, so its keydown never passes through the
+ * tab's own handler; Escape is watched on the window while it is open.
+ */
+const handleDeleteDialogKey = (event: KeyboardEvent) => {
+  if (event.key !== 'Escape') return
+  event.preventDefault()
+  event.stopPropagation()
+  closeDeleteDialog()
+}
+
+watch(() => deleteDialog.value.visible, visible => {
+  if (visible) window.addEventListener('keydown', handleDeleteDialogKey, true)
+  else window.removeEventListener('keydown', handleDeleteDialogKey, true)
+})
+
+/**
+ * Drops the deleted song from every renderer-side list immediately: the
+ * `metadataUpdated` broadcast from the main process refreshes the cache after
+ * the folder is gone, but the row should not linger in the meantime.
+ */
+const removeSongFromLibrary = (path: string) => {
+  if (currentSong.value?.path === path) stopMusic()
+  if (selectedSong.value?.path === path) selectedSong.value = null
+
+  songsCache.value = songsCache.value.filter(song => song.path !== path)
+  filteredSongs.value = filteredSongs.value.filter(song => song.path !== path)
+  searchCache.clear()
+  updateVisibleSongs()
+  void forgetSongPreferences(path)
+}
+
+const confirmDeleteSong = async () => {
+  const song = deleteDialog.value.song
+  if (!song || deleteDialog.value.busy) return
+
+  deleteDialog.value.busy = true
+  // Let go of the audio/video handles first: Windows refuses to remove a file
+  // the media element still has open. The main process also retries, but
+  // stopping here avoids the wait.
+  if (currentSong.value?.path === song.path) stopMusic()
+  try {
+    const result = await window.electronAPI.deleteBeatmap(song.path, song.name)
+    deleteDialog.value = { visible: false, busy: false, song: null }
+    showToast(result.message, {
+      icon: result.success ? 'fas fa-trash-alt' : 'fas fa-exclamation-triangle',
+      danger: !result.success
+    })
+    if (result.success) removeSongFromLibrary(song.path)
+  } catch (error) {
+    deleteDialog.value = { visible: false, busy: false, song: null }
+    console.error('Error deleting beatmap:', error)
+    showToast(t('music.delete.failed', { message: String(error) }), {
+      icon: 'fas fa-exclamation-triangle',
+      danger: true
+    })
+  }
 }
 
 const copyFilePath = async () => {
@@ -2211,6 +2522,13 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
   windowVisibilityUnsubscribe = window.electronAPI.onWindowVisibilityChanged(handleWindowVisibility)
   trayCommandUnsubscribe = window.electronAPI.onTrayCommand(handleTrayCommand)
+  // ffmpeg reports whole percentages; each one only updates the note on the
+  // cover, so the listener does no work while its file is not converting.
+  videoProgressUnsubscribe = window.electronAPI.onVideoTranscodeProgress(({ sourcePath, percent }) => {
+    const entry = transcodeStates.value[sourcePath]
+    if (!entry || entry.status !== 'pending' || entry.percent === percent) return
+    transcodeStates.value = { ...transcodeStates.value, [sourcePath]: { ...entry, percent } }
+  })
   reportTrayPlayback()
   // The tab may already be hidden on mount; this seeds the flag before any
   // audio/video element exists and starts the polling timers.
@@ -2268,6 +2586,13 @@ onMounted(async () => {
 onUnmounted(() => {
   stopCacheTimers()
 
+  window.removeEventListener('keydown', handleDeleteDialogKey, true)
+
+  if (notificationTimer) {
+    clearTimeout(notificationTimer)
+    notificationTimer = null
+  }
+
   configUnsubscribe?.()
   configUnsubscribe = null
 
@@ -2276,6 +2601,8 @@ onUnmounted(() => {
   windowVisibilityUnsubscribe = null
   trayCommandUnsubscribe?.()
   trayCommandUnsubscribe = null
+  videoProgressUnsubscribe?.()
+  videoProgressUnsubscribe = null
 
   progressTicker.stop()
 
@@ -2331,6 +2658,8 @@ const closeSongInfo = () => {
 const handleVideoError = (event: Event) => {
   console.error('Video load error:', event)
   const video = event.target as HTMLVideoElement
+  const failedPath = currentSong.value?.video
+
   if (video && video.error) {
     let errorMessage = t('music.video.errorUnknown')
 
@@ -2352,6 +2681,35 @@ const handleVideoError = (event: Event) => {
     }
 
     videoError.value = errorMessage
+
+    // A file the element could not decode will fail the same way every time.
+    // Remember it so `currentVideoUrl` returns null and the cover art stays on
+    // screen, then convert it: the cached mp4 plays where the source did not.
+    if (failedPath && (
+      video.error.code === MediaError.MEDIA_ERR_DECODE ||
+      video.error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
+    )) {
+      const alreadyKnown = unplayableVideos.value.has(failedPath)
+      const usingCache = Boolean(transcodedPathFor(failedPath))
+      unplayableVideos.value = new Set(unplayableVideos.value).add(failedPath)
+
+      if (usingCache) {
+        // The converted copy failed too. Drop it so the cover returns and the
+        // element is unmounted instead of reloading a broken file forever.
+        transcodeStates.value = {
+          ...transcodeStates.value,
+          [failedPath]: { status: 'failed', percent: 0, message: errorMessage }
+        }
+        showToast(errorMessage, { icon: 'fas fa-exclamation-triangle', danger: true })
+      } else if (isTranscodableVideo(failedPath)) {
+        // The cover now explains the conversion instead of the decoder error.
+        videoError.value = ''
+        void requestTranscode(failedPath)
+      } else if (!alreadyKnown) {
+        showToast(errorMessage, { icon: 'fas fa-exclamation-triangle', danger: true })
+      }
+    }
+
     video.style.display = 'none'
 
     console.error('Video error details:', {
@@ -2369,6 +2727,8 @@ const handleVideoError = (event: Event) => {
 
 const handleVideoLoaded = () => {
   videoError.value = ''
+  // A previous failure hid the element; the new source must be visible again.
+  if (inlineVideoEl.value) inlineVideoEl.value.style.display = ''
   if (inlineVideoSuppressed) {
     inlineVideoEl.value?.pause()
   }
@@ -2377,12 +2737,31 @@ const handleVideoLoaded = () => {
 
 const showFullVideo = () => {
   const song = selectedSong.value || currentSong.value
-  if (song?.video && videoEnabled.value) {
-    currentImageUrl.value = fileUrlForPath(song.video)
-    currentImagePath.value = song.video
-    currentImageName.value = song.name + ' - ' + t('music.video.suffix')
-    showImageViewer.value = true
+  if (!song?.video || !videoEnabled.value) return
+
+  const cached = transcodedPathFor(song.video)
+  const direct = isVideoPlayable(song.video) && !unplayableVideos.value.has(song.video)
+
+  // Opening the overlay on a file Chromium cannot decode would only show the
+  // same error, so the conversion is started (or its progress explained) here.
+  if (!cached && !direct) {
+    if (isTranscodableVideo(song.video)) {
+      void requestTranscode(song.video)
+      showToast(t('music.video.transcodePending'), { icon: 'fas fa-sync' })
+    } else {
+      showToast(t('music.video.errorUnsupported'), {
+        icon: 'fas fa-exclamation-triangle',
+        danger: true
+      })
+    }
+    return
   }
+
+  const playablePath = cached ?? song.video
+  currentImageUrl.value = fileUrlForPath(playablePath)
+  currentImagePath.value = playablePath
+  currentImageName.value = song.name + ' - ' + t('music.video.suffix')
+  showImageViewer.value = true
 }
 
 </script>
@@ -3202,6 +3581,14 @@ label {
   border-left-color: var(--bg-primary);
 }
 
+/* Indexed but not decodable (e.g. .avi): shown so the file is still discoverable,
+   but marked as a warning instead of pretending it will play. */
+.video-indicator.video-unplayable,
+.video-indicator.video-unplayable i {
+  color: var(--warning-color);
+  border-color: var(--warning-color);
+}
+
 .loading-overlay {
   position: absolute;
   top: 0;
@@ -3617,6 +4004,131 @@ label {
   color: white;
 }
 
+.context-menu-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--bg-tertiary);
+}
+
+.context-menu-item.danger {
+  color: var(--warning-color);
+}
+
+.context-menu-item.danger i {
+  color: var(--warning-color);
+}
+
+.context-menu-item.danger:hover {
+  background: var(--warning-color);
+  color: white;
+}
+
+.context-menu-item.danger:hover i {
+  color: white;
+}
+
+.delete-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: deleteModalFadeIn 0.2s ease-out;
+}
+
+.delete-modal {
+  width: 90%;
+  max-width: 420px;
+  padding: 24px;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-color-transparent);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  animation: deleteModalPopIn 0.2s ease-out;
+}
+
+.delete-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 1.15em;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.delete-modal-title i {
+  color: var(--warning-color);
+}
+
+.delete-modal-message {
+  margin: 0;
+  font-size: 0.92em;
+  line-height: 1.55;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.delete-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.delete-modal-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-color-transparent);
+  font-size: 0.9em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.delete-modal-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.delete-modal-btn.cancel {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.delete-modal-btn.cancel:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  border-color: var(--text-muted);
+}
+
+.delete-modal-btn.danger {
+  background: var(--warning-color);
+  border-color: var(--warning-color);
+  color: white;
+}
+
+.delete-modal-btn.danger:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+@keyframes deleteModalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes deleteModalPopIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
 .context-menu-item span {
   flex: 1;
   white-space: nowrap;
@@ -3656,6 +4168,14 @@ label {
   font-size: 1.1em;
   color: var(--accent-color);
   min-width: 16px;
+}
+
+.copy-notification.danger {
+  border-color: var(--warning-color);
+}
+
+.copy-notification.danger i {
+  color: var(--warning-color);
 }
 
 .copy-notification span {
@@ -3798,5 +4318,29 @@ label {
 .video-error i {
   margin-right: 8px;
   font-size: 1.1em;
+}
+
+/* Explains why the cover is showing instead of a video. */
+.video-fallback-note {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 16px);
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 0.75em;
+  line-height: 1.3;
+  /* Above the zoom-icon overlay drawn by `.cover-image::before`. */
+  z-index: 11;
+}
+
+.video-fallback-note i {
+  color: var(--warning-color);
+  flex-shrink: 0;
 }
 </style>

@@ -10,6 +10,8 @@ import { parseStoredBoolean } from './storedBoolean.js'
 import { CLOSE_TO_TRAY_KEY } from './configKeys.js'
 import { summarizeAppMetrics } from './appMetrics.js'
 import { installOszFile, type BeatmapImportCode, type BeatmapImportResult } from './beatmapImport.js'
+import { deleteBeatmapFolder, type BeatmapDeleteCode } from './beatmapDelete.js'
+import { cancelVideoTranscode, ensurePlayableVideo } from './videoTranscode.js'
 import type { MessageKey } from './i18n.js'
 import { copyFileSync, existsSync, readdirSync } from 'fs'
 
@@ -361,16 +363,21 @@ async function createWindow() {
   })
 }
 
-const createIPCHandler = (handler: Function) => {
+/**
+ * `longRunning` marks calls whose duration is the work itself (a video
+ * conversion takes seconds by design), so they do not trip the slow-call
+ * warning that exists to catch handlers blocking the main process.
+ */
+const createIPCHandler = (handler: Function, options: { longRunning?: boolean } = {}) => {
   return async (...args: any[]) => {
     performanceMetrics.ipcCalls++
     const startTime = Date.now()
-    
+
     try {
       const result = await handler(...args)
       const duration = Date.now() - startTime
-      
-      if (duration > 100) {
+
+      if (duration > 100 && !options.longRunning) {
         console.warn(`Slow IPC call detected: ${duration}ms`)
       }
       
@@ -729,6 +736,87 @@ ipcMain.handle('beatmap:import-osz', createIPCHandler(async (_: any, filePaths: 
     folderNames: results.map(result => result.folderName).filter(Boolean),
     message
   }
+}))
+
+const BEATMAP_DELETE_MESSAGES: Record<BeatmapDeleteCode, MessageKey> = {
+  deleted: 'music.delete.done',
+  notFound: 'music.delete.notFound',
+  outsideSongs: 'music.delete.outsideSongs',
+  failed: 'music.delete.failed'
+}
+
+/**
+ * Deletes one beatmap folder from the osu! Songs folder.
+ *
+ * The renderer sends the song's audio path; `deleteBeatmapFolder` re-derives and
+ * validates the folder on the main side, so a renderer bug cannot delete an
+ * arbitrary directory. The reply is a localized toast message either way.
+ */
+ipcMain.handle('beatmap:delete', createIPCHandler(async (_: any, songPath: unknown, name: unknown) => {
+  const osuPath = await getOsuPath()
+  if (!osuPath) {
+    return { success: false, message: await t('music.noPath'), missingPath: true }
+  }
+
+  const result = await deleteBeatmapFolder(songPath, osuPath)
+  const displayName = typeof name === 'string' && name.length > 0
+    ? name
+    : result.folderName ?? ''
+
+  if (!result.success) {
+    const key = BEATMAP_DELETE_MESSAGES[result.code]
+    const message = result.code === 'failed'
+      ? await t(key, { message: result.detail ?? '' })
+      : await t(key)
+    return { success: false, message }
+  }
+
+  // Drop the row from the in-memory library before the renderer re-renders, so
+  // it does not briefly keep a song whose files are already gone.
+  if (musicPlayerInstance && typeof songPath === 'string') {
+    await musicPlayerInstance.removeSongFolder(path.dirname(songPath))
+    ipcBatcher.add('music:metadataUpdated', {})
+  }
+
+  return {
+    success: true,
+    folderName: result.folderName,
+    message: await t('music.delete.done', { name: displayName })
+  }
+}))
+
+/**
+ * Asks the main process for a Chromium-playable copy of a beatmap video,
+ * converting it with the bundled ffmpeg when the container is one the media
+ * stack cannot demux (`.avi`, most `.mkv`). Progress arrives on
+ * `video:transcode-progress`; `cancelled` means another track took over.
+ */
+ipcMain.handle('video:ensure-playable', createIPCHandler(async (_: any, sourcePath: unknown) => {
+  const result = await ensurePlayableVideo(sourcePath, (percent) => {
+    mainWindow?.webContents.send('video:transcode-progress', { sourcePath, percent })
+  })
+
+  if (result.success) return { success: true, path: result.path, code: result.code }
+
+  const messages: Partial<Record<typeof result.code, MessageKey>> = {
+    unavailable: 'music.video.transcodeUnavailable',
+    missing: 'music.video.fileMissing',
+    failed: 'music.video.transcodeFailed',
+    'not-video': 'music.video.errorUnsupported'
+  }
+  const key = messages[result.code]
+  if (!key) return { success: false, code: result.code }
+
+  const message = result.code === 'failed'
+    ? await t(key, { message: result.detail ?? '' })
+    : await t(key)
+  return { success: false, code: result.code, message }
+}, { longRunning: true }))
+
+/** The renderer changed track: the previous conversion is no longer wanted. */
+ipcMain.handle('video:cancel-transcode', createIPCHandler(async (_: any, sourcePath: unknown) => {
+  cancelVideoTranscode(sourcePath)
+  return { success: true }
 }))
 
 ipcMain.handle('get-performance-stats', createIPCHandler(async () => {

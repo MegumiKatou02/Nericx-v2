@@ -13,10 +13,13 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "test": "node --test tests/*.test.mjs",
+    "build:ffmpeg": "bash scripts/build-ffmpeg-slim.sh",
+    "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
+    "fetch:ffmpeg:fallback": "node scripts/fetch-ffmpeg.mjs --fallback",
     "transpile:electron": "tsc --project src/electron/tsconfig.json",
-    "dist:mac": "npm run transpile:electron && npm run build && electron-builder --mac --arm64",
-    "dist:linux": "npm run transpile:electron && npm run build && electron-builder --linux --x64",
-    "dist:win": "npm run transpile:electron && npm run build && electron-builder --win --x64"
+    "dist:mac": "node scripts/fetch-ffmpeg.mjs --platform darwin --arch arm64 --optional && npm run transpile:electron && npm run build && electron-builder --mac --arm64",
+    "dist:linux": "node scripts/fetch-ffmpeg.mjs --platform linux --arch x64 --optional && npm run transpile:electron && npm run build && electron-builder --linux --x64",
+    "dist:win": "node scripts/fetch-ffmpeg.mjs --platform win32 --arch x64 && npm run transpile:electron && npm run build && electron-builder --win --x64"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",

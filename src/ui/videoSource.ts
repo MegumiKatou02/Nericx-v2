@@ -6,6 +6,7 @@
  */
 
 import { fileUrlForPath } from './fileUrl.ts'
+import { isVideoPlayable } from './videoPlayability.ts'
 
 export interface VideoSourceSong {
   path: string
@@ -28,6 +29,10 @@ export function videoUrlFor({ videoEnabled, current, selected, isPlaying }: Vide
   if (!videoEnabled) return null
   if (!isPlaying) return null
   if (!current?.video) return null
+  // The folder is indexed even when the container is one Chromium cannot
+  // demux (`.avi`); the caller passes the converted mp4 once it exists, and
+  // until then the cover art is shown instead of a permanent error box.
+  if (!isVideoPlayable(current.video)) return null
   // Nothing selected means the player is following the playing track.
   if (selected !== null && selected.path !== current.path) return null
   return fileUrlForPath(current.video)

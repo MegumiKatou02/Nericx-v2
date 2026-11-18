@@ -4,6 +4,7 @@ import { realpath, stat } from 'fs/promises'
 import { extname, isAbsolute, relative, sep } from 'path'
 import { Readable } from 'stream'
 import { getOsuPath } from './util.js'
+import { getVideoCacheDir } from './videoTranscode.js'
 import { MEDIA_SCHEME, mediaPathFromUrl } from './mediaUrl.js'
 import { parseByteRange } from './mediaRange.js'
 
@@ -83,10 +84,32 @@ const streamRange = (filePath: string, start: number, end: number): ReadableStre
   Readable.toWeb(createReadStream(filePath, { start, end })) as unknown as ReadableStream
 
 /**
- * Serves only files inside the configured osu! folder. The renderer is the
- * only caller, but folder names come from disk and end up in the URL, so the
- * handler resolves both paths and checks containment instead of trusting the
- * decoded path.
+ * True when `target` (already canonical) sits inside `root`. A direct child or
+ * anything below it counts; the root itself, `..` escapes and absolute paths
+ * do not.
+ */
+const isInside = (root: string, target: string): boolean => {
+  const relativePath = relative(root, target)
+  return Boolean(relativePath) &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${sep}`) &&
+    !isAbsolute(relativePath)
+}
+
+const canonicalRoot = async (root: string): Promise<string | null> => {
+  try {
+    return await realpath(root)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Serves only files inside the configured osu! folder, plus the converted
+ * videos in the app's own cache (those are mp4 copies of files that were in
+ * the osu! folder). The renderer is the only caller, but folder names come
+ * from disk and end up in the URL, so the handler resolves both paths and
+ * checks containment instead of trusting the decoded path.
  *
  * Responses are built here rather than forwarded from `net.fetch(file:)`:
  * that path returns `200 OK` with the range's bytes but without
@@ -110,19 +133,19 @@ export const handleMediaRequests = () => {
 
     try {
       const osuPath = await getOsuPath()
-      if (!osuPath) return notFound()
+      const roots = [osuPath, getVideoCacheDir()].filter((root): root is string => Boolean(root))
+      if (roots.length === 0) return notFound()
 
-      const canonicalOsuPath = await realpath(osuPath)
       const canonicalPath = await realpath(requestedPath)
-      const relativePath = relative(canonicalOsuPath, canonicalPath)
-      if (
-        !relativePath ||
-        relativePath === '..' ||
-        relativePath.startsWith(`..${sep}`) ||
-        isAbsolute(relativePath)
-      ) {
-        return forbidden()
+      let allowed = false
+      for (const root of roots) {
+        const canonical = await canonicalRoot(root)
+        if (canonical && isInside(canonical, canonicalPath)) {
+          allowed = true
+          break
+        }
       }
+      if (!allowed) return forbidden()
 
       const file = await stat(canonicalPath)
       if (!file.isFile()) return notFound()

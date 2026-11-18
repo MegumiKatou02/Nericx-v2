@@ -41,3 +41,7 @@ dist-electron/*.map
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Bundled ffmpeg (~24 MB slim build; `npm run build:ffmpeg` builds it)
+resources/ffmpeg/*/ffmpeg
+resources/ffmpeg/*/ffmpeg.exe
