@@ -7,7 +7,7 @@ import { validateBackupSections } from './backupPaths.js'
 import { handleMediaRequests, registerMediaScheme } from './mediaProtocol.js'
 import { LOCALE_CONFIG_KEY, resolveLocale } from './i18n.js'
 import { parseStoredBoolean } from './storedBoolean.js'
-import { CLOSE_TO_TRAY_KEY, DISCORD_ENABLED_KEY } from './configKeys.js'
+import { CLOSE_TO_TRAY_KEY } from './configKeys.js'
 import { summarizeAppMetrics } from './appMetrics.js'
 import { copyFileSync, existsSync, readdirSync } from 'fs'
 
@@ -84,37 +84,26 @@ const quitApp = () => {
   app.quit()
 }
 
-const toggleDiscordFromTray = async () => {
-  // The renderer owns the RPC client, so the tray only writes the same row and
-  // lets the renderer's watcher connect or disconnect.
-  const current = parseStoredBoolean(await getConfig(DISCORD_ENABLED_KEY), true)
-  await setConfig(DISCORD_ENABLED_KEY, (!current).toString())
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (win.webContents.isDestroyed()) continue
-    win.webContents.send('config:changed', DISCORD_ENABLED_KEY, (!current).toString())
-  }
-  await rebuildTrayMenu()
-}
-
 const buildTrayMenu = async () => {
   if (!tray) return
 
-  const [open, playback, play, pause, next, previous, discordLabel, quit] = await Promise.all([
+  const [open, playback, play, pause, next, previous, quit] = await Promise.all([
     t('tray.open'),
     t('tray.playback'),
     t('tray.play'),
     t('tray.pause'),
     t('tray.next'),
     t('tray.previous'),
-    t('tray.discord'),
     t('tray.quit')
   ])
   const nowPlaying = trayPlayback.song
     ? await t('tray.nowPlaying', { song: trayPlayback.song })
     : await t('tray.nothingPlaying')
-  const discordEnabled = parseStoredBoolean(await getConfig(DISCORD_ENABLED_KEY), true)
   const hasSong = trayPlayback.song !== null
 
+  // Discord presence is not a tray action: the stored setting only seeds the
+  // next launch, and the running presence belongs to the music tab's button.
+  // A tray checkbox could only show one of the two, so it is not offered here.
   const menu = Menu.buildFromTemplate([
     // Context, not an action: greyed out so a click does not look ignored.
     { label: nowPlaying, enabled: false },
@@ -137,8 +126,6 @@ const buildTrayMenu = async () => {
       enabled: hasSong,
       click: () => sendToRenderer('tray:command', 'next')
     },
-    { type: 'separator' },
-    { label: discordLabel, type: 'checkbox', checked: discordEnabled, click: () => void toggleDiscordFromTray() },
     { type: 'separator' },
     { label: quit, click: quitApp }
   ])

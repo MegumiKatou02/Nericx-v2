@@ -1,7 +1,9 @@
 /**
- * Config rows written by both processes. The renderer owns the Discord client,
- * but the tray menu offers the same switch, so the key cannot live only in the
- * renderer module.
+ * Config rows written by both processes.
+ *
+ * `discordEnabled` is only read when the app starts: it seeds whether presence
+ * connects for that launch. The music tab's toggle changes the running presence
+ * without writing this row, so the next launch still follows the Settings tab.
  */
 export const DISCORD_ENABLED_KEY = 'discordEnabled'
 

@@ -42,7 +42,6 @@ const en = {
   'tray.pause': 'Pause',
   'tray.next': 'Next song',
   'tray.previous': 'Previous song',
-  'tray.discord': 'Discord Rich Presence',
   'tray.nowPlaying': 'Now playing: {song}',
   'tray.nothingPlaying': 'Nothing playing',
   'tray.quit': 'Quit Nericx',
@@ -83,7 +82,7 @@ const en = {
     'Show a small player while another tab is open. Turn it off to save CPU and memory',
   'settings.discord.richPresence': 'Rich Presence:',
   'settings.discord.richPresence.description':
-    'Automatically show the song you are listening to on Discord',
+    'Show the song you are listening to on Discord. This decides the state when the app opens; the music tab button can still change it for the current run',
   'settings.discord.beatmapButton': 'Button "View Beatmap":',
   'settings.discord.beatmapButton.description':
     'Button that opens the song beatmapset on osu!. Only songs with a beatmapset get it',
@@ -345,7 +344,6 @@ const vi: Record<MessageKey, string> = {
   'tray.pause': 'Tạm dừng',
   'tray.next': 'Bài tiếp theo',
   'tray.previous': 'Bài trước',
-  'tray.discord': 'Discord Rich Presence',
   'tray.nowPlaying': 'Đang phát: {song}',
   'tray.nothingPlaying': 'Chưa phát bài nào',
   'tray.quit': 'Thoát Nericx',
@@ -386,7 +384,7 @@ const vi: Record<MessageKey, string> = {
     'Hiển thị trình phát nhỏ khi chuyển tab khác. Tắt để tiết kiệm CPU và bộ nhớ',
   'settings.discord.richPresence': 'Rich Presence:',
   'settings.discord.richPresence.description':
-    'Tự động hiển thị bài đang nghe trên Discord mỗi khi mở app',
+    'Hiển thị bài đang nghe trên Discord. Mục này quyết định trạng thái khi mở app; nút trong tab nghe nhạc vẫn có thể bật/tắt riêng cho phiên đang chạy',
   'settings.discord.beatmapButton': 'Nút "Xem Beatmap":',
   'settings.discord.beatmapButton.description':
     'Nút mở beatmapset của bài hát trên osu!. Chỉ áp dụng cho bài có beatmapset',
@@ -646,7 +644,6 @@ const ja: Record<MessageKey, string> = {
   'tray.pause': '一時停止',
   'tray.next': '次の曲',
   'tray.previous': '前の曲',
-  'tray.discord': 'Discord Rich Presence',
   'tray.nowPlaying': '再生中: {song}',
   'tray.nothingPlaying': '再生中の曲はありません',
   'tray.quit': 'Nericx を終了',
@@ -686,7 +683,8 @@ const ja: Record<MessageKey, string> = {
   'settings.miniPlayer.description':
     '別のタブを開いているときに小さなプレイヤーを表示します。オフにすると CPU とメモリを節約できます',
   'settings.discord.richPresence': 'Rich Presence:',
-  'settings.discord.richPresence.description': '聴いている曲を Discord に自動で表示します',
+  'settings.discord.richPresence.description':
+    '聴いている曲を Discord に表示します。アプリ起動時の状態を決める設定で、起動中は音楽タブのボタンで切り替えられます',
   'settings.discord.beatmapButton': '「ビートマップを見る」ボタン:',
   'settings.discord.beatmapButton.description':
     'osu! で曲のビートマップセットを開くボタンです。ビートマップセットがある曲のみ対象です',

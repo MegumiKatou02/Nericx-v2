@@ -291,7 +291,7 @@
               <i class="fab fa-discord"></i>
               <label>{{ t('music.discordStatus') }}</label>
             </div>
-            <span class="status-text disconnected">{{ t('music.discord.notConnected') }}</span>
+            <span class="status-text disconnected">{{ t(discordStatus ?? 'music.discord.notConnected') }}</span>
           </div>
         </div>
       </div>
@@ -366,7 +366,7 @@ import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
 import { createCoalescingWriter } from '../coalesce.js'
 import { createProgressTicker, systemTimers, type ProgressTicker } from '../progressTicker.js'
 import { createStateTransition } from '../discordClient.js'
-import { discordSettings, ensureDiscordSettingsLoaded, parseStoredBoolean, setDiscordEnabled } from '../discordSettings.js'
+import { discordSettings, ensureDiscordSettingsLoaded, parseStoredBoolean } from '../discordSettings.js'
 import {
   ensureSongPreferencesLoaded,
   excludedPathSet,
@@ -758,7 +758,10 @@ const showAdvancedControls = ref(false)
 const volume = ref(0.5)
 const currentTime = ref(0)
 const duration = ref(0)
-const discordEnabled = computed(() => discordSettings.enabled)
+// Presence for *this* run of the app. The stored setting only decides whether it
+// starts on (see `onMounted`); the button here must not rewrite that setting,
+// so the next launch still follows the Settings tab's choice.
+const discordEnabled = ref(false)
 const discordStatus = ref<MessageKey | null>(null)
 const isDiscordLoading = ref(false)
 const discordCooldownActive = ref(false)
@@ -1687,10 +1690,10 @@ const disconnectDiscord = async () => {
 }
 
 /**
- * Requests arrive from the music tab button and from the settings switch, and a
- * toggle during startup's slow RPC login must not be lost. Serialising here
- * means an `init` can never interleave with a `destroy`, and the newest request
- * wins over anything queued behind it.
+ * Requests arrive from the music tab button, and a toggle during startup's slow
+ * RPC login must not be lost. Serialising here means an `init` can never
+ * interleave with a `destroy`, and the newest request wins over anything queued
+ * behind it.
  */
 const requestDiscordState = createStateTransition<boolean | null>(async (enabled) => {
   if (enabled) {
@@ -1721,15 +1724,6 @@ const applyDiscordState = async (enabled: boolean) => {
   }
 }
 
-// Both the music tab button and the settings switch write the same stored
-// setting; this watcher is the single place that starts or stops the client.
-watch(
-  () => discordSettings.enabled,
-  (enabled) => {
-    applyDiscordState(enabled)
-  }
-)
-
 // Hiding or showing a button only changes the payload, so the current presence
 // is re-sent instead of reconnecting.
 watch(
@@ -1746,15 +1740,10 @@ const toggleDiscord = async () => {
     return
   }
 
-  // The client work happens in the watcher, so guard synchronously: a second
-  // click before the request lands would otherwise flip the setting back.
-  isDiscordLoading.value = true
-  try {
-    await setDiscordEnabled(!discordSettings.enabled)
-  } catch (error) {
-    console.error('Discord toggle error:', error)
-    isDiscordLoading.value = false
-  }
+  // Only this run's presence changes. Writing the stored setting here would
+  // make the next launch follow the toggle instead of the Settings tab.
+  discordEnabled.value = !discordEnabled.value
+  await applyDiscordState(discordEnabled.value)
 }
 
 const toggleAdvancedControls = () => {
@@ -2212,7 +2201,12 @@ onMounted(async () => {
   // The music library must not wait on Discord's RPC handshake, which can stall
   // for seconds: load the setting, start the song path, and let the client
   // connect in the background behind the serialised transition.
+  //
+  // The stored setting is read exactly once, here: it decides whether presence
+  // starts with this launch, and nothing the music tab does afterwards writes it
+  // back (that is the Settings tab's switch alone).
   await ensureDiscordSettingsLoaded()
+  discordEnabled.value = discordSettings.enabled
   applyDiscordState(discordEnabled.value)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   windowVisibilityUnsubscribe = window.electronAPI.onWindowVisibilityChanged(handleWindowVisibility)
