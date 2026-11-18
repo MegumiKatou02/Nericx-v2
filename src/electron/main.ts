@@ -166,7 +166,12 @@ const rebuildTrayMenu = (): Promise<void> => {
 const createTray = () => {
   if (tray) return
   const iconPath = getIconPath()
-  if (!existsSync(iconPath)) return
+  if (!existsSync(iconPath)) {
+    // Silence here used to hide a broken icon path, and the only symptom was
+    // that the close button quietly destroyed the window.
+    console.error('[tray] icon not found, tray disabled:', iconPath)
+    return
+  }
 
   // A 16px-ish tray icon: Electron scales the .ico, and an oversized image is
   // rendered blurry by the Windows notification area.
@@ -243,7 +248,10 @@ const getIconPath = () => {
   if (cachedIconPath) return cachedIconPath
   
   if (isDev()) {
-    cachedIconPath = path.join(__dirname, '../../iconhe.ico')
+    // `__dirname` is `dist-electron`, so `../../iconhe.ico` resolved to a path
+    // outside the repository and the icon silently did not exist — which also
+    // meant the tray was never created in development.
+    cachedIconPath = path.join(app.getAppPath(), 'iconhe.ico')
   } else {
     const assetsDir = path.join(app.getAppPath(), 'dist-vue/assets')
     if (existsSync(assetsDir)) {
@@ -293,7 +301,9 @@ async function createWindow() {
   // Close-to-tray: destroying the window would kill the renderer that owns the
   // audio graph and the Discord client, so the close button only hides it.
   mainWindow.on('close', (event) => {
-    if (isQuitting || !closeToTray) return
+    // Without a tray there is no way back, so the window must not vanish into a
+    // running process the user cannot reach; quitting is the honest fallback.
+    if (isQuitting || !closeToTray || !tray) return
     event.preventDefault()
     mainWindow?.hide()
   })
