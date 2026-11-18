@@ -1450,10 +1450,6 @@ const handleSongEnd = async () => {
     const nextIndex = (currentIndex + 1) % sortedSongs.value.length
     await playSong(sortedSongs.value[nextIndex])
   }
-
-  nextTick(() => {
-    scrollToCurrentSong()
-  })
 }
 
 const playSong = async (song: Song) => {
@@ -1479,15 +1475,12 @@ const playSong = async (song: Song) => {
       syncProgressTicker()
       updateDiscordStatus()
 
+      // Virtual scroll keeps only the visible rows in the DOM, so the new
+      // song's element does not exist yet when it is off screen. Scrolling by
+      // index works for every way of changing song (auto-advance, next/prev
+      // button, arrow keys).
       nextTick(() => {
-        const songElement = document.querySelector('.song-item.playing')
-        if (songElement && songsListRef.value) {
-          songElement.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest',
-            inline: 'nearest'
-          })
-        }
+        scrollToCurrentSong()
       })
 
       audioPlayer.getAudio()?.addEventListener('ended', handleSongEnd)

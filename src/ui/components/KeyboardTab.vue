@@ -118,6 +118,36 @@
               </div>
             </div>
           </div>
+
+          <div class="shortcut-category">
+            <h3>{{ t('keyboard.commands') }}</h3>
+            <p class="category-hint">{{ t('keyboard.commands.hint') }}</p>
+            <div class="shortcut-items">
+              <div class="shortcut-item">
+                <span class="key combo">:video</span>
+                <div class="shortcut-info">
+                  <span class="action">{{ t('keyboard.commands.video') }}</span>
+                  <span class="desc">{{ t('keyboard.commands.videoDesc') }}</span>
+                </div>
+              </div>
+
+              <div class="shortcut-item">
+                <span class="key combo">:love</span>
+                <div class="shortcut-info">
+                  <span class="action">{{ t('keyboard.commands.love') }}</span>
+                  <span class="desc">{{ t('keyboard.commands.loveDesc') }}</span>
+                </div>
+              </div>
+
+              <div class="shortcut-item">
+                <span class="key combo">:exclude</span>
+                <div class="shortcut-info">
+                  <span class="action">{{ t('keyboard.commands.exclude') }}</span>
+                  <span class="desc">{{ t('keyboard.commands.excludeDesc') }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -416,6 +446,14 @@ import { t } from '../i18n.js'
 .key.combo {
   min-width: 70px;
   font-size: 0.75em;
+}
+
+.category-hint {
+  margin: -4px 0 12px 0;
+  font-size: 0.78em;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.35;
 }
 
 .shortcut-info {
