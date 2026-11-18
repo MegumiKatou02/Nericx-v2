@@ -3059,6 +3059,19 @@ label {
   color: var(--accent-color);
 }
 
+/* Keep indicators legible on the accent-colored background of the playing row,
+   including while hovered (the hover rule above would otherwise blend into it). */
+.song-item.playing .video-indicator,
+.song-item.playing:hover .video-indicator {
+  background: var(--bg-primary);
+  color: var(--accent-color);
+  border-color: var(--bg-primary);
+}
+
+.song-item.playing.has-video {
+  border-left-color: var(--bg-primary);
+}
+
 .loading-overlay {
   position: absolute;
   top: 0;
