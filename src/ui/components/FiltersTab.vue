@@ -29,9 +29,16 @@
       </div>
 
       <ul v-else class="song-list">
-        <li v-for="song in favoriteSongs" :key="song.path" class="song-row">
+        <li
+          v-for="song in favoriteSongs"
+          :key="song.path"
+          class="song-row"
+          @mouseenter="showPreview(song, $event)"
+          @mousemove="popupX = $event.clientX; popupY = $event.clientY"
+          @mouseleave="hidePreview"
+        >
           <div class="song-text">
-            <span class="song-title" :title="song.name">{{ songTitle(song) }}</span>
+            <span class="song-title">{{ songTitle(song) }}</span>
             <span class="song-artist">{{ songArtist(song) }}</span>
           </div>
           <span v-if="song.duration" class="song-duration">{{ formatTime(song.duration) }}</span>
@@ -53,9 +60,16 @@
       </div>
 
       <ul v-else class="song-list">
-        <li v-for="song in excludedSongs" :key="song.path" class="song-row">
+        <li
+          v-for="song in excludedSongs"
+          :key="song.path"
+          class="song-row"
+          @mouseenter="showPreview(song, $event)"
+          @mousemove="popupX = $event.clientX; popupY = $event.clientY"
+          @mouseleave="hidePreview"
+        >
           <div class="song-text">
-            <span class="song-title" :title="song.name">{{ songTitle(song) }}</span>
+            <span class="song-title">{{ songTitle(song) }}</span>
             <span class="song-artist">{{ songArtist(song) }}</span>
           </div>
           <span v-if="song.duration" class="song-duration">{{ formatTime(song.duration) }}</span>
@@ -69,12 +83,36 @@
         </li>
       </ul>
     </section>
+
+    <Teleport to="body">
+      <div
+        v-if="hoveredSong"
+        class="song-preview-popup"
+        :style="popupStyle"
+      >
+        <img
+          v-if="hoverImageSrc && !hoverImageFailed"
+          :src="hoverImageSrc"
+          :alt="hoveredSong.name"
+          class="song-preview-image"
+          @error="onHoverImageError"
+        >
+        <div v-else class="song-preview-placeholder">
+          <i class="fas fa-music"></i>
+        </div>
+        <div class="song-preview-text">
+          <div class="song-preview-title">{{ songTitle(hoveredSong) }}</div>
+          <div class="song-preview-artist">{{ songArtist(hoveredSong) }}</div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onBeforeUnmount, ref, computed } from 'vue'
 import { t } from '../i18n.js'
+import { fileUrlForPath } from '../fileUrl.js'
 import {
   ensureSongPreferencesLoaded,
   excludedSongs,
@@ -85,6 +123,11 @@ import {
 } from '../songPreferences.js'
 
 const activeSection = ref<'favorites' | 'excluded'>('favorites')
+
+// Map from a song's path to its cover-image path, filled once from the full
+// song library. `SongPreference` (what the favourites/excluded lists store)
+// doesn't carry the cover, so we look it up here when the user hovers a row.
+const imagePathBySong = ref<Map<string, string>>(new Map())
 
 const songTitle = (song: SongPreference) => {
   if (song.title) return song.title
@@ -105,8 +148,90 @@ const formatTime = (seconds: number) => {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
+// --- Hover preview (cover art + title) -------------------------------------
+
+const hoveredSong = ref<SongPreference | null>(null)
+const hoverImageSrc = ref<string | null>(null)
+const hoverImageFailed = ref(false)
+const popupX = ref(0)
+const popupY = ref(0)
+
+// Keep the popup inside the viewport: flip it left/up when it would overflow
+// the right/bottom edge (popup is ~280px wide and ~96px tall).
+const POPUP_WIDTH = 280
+const POPUP_HEIGHT = 96
+const VIEWPORT_MARGIN = 12
+
+const popupStyle = computed(() => {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+
+  let x = popupX.value + 16
+  let y = popupY.value + 16
+
+  if (x + POPUP_WIDTH + VIEWPORT_MARGIN > vw) {
+    x = popupX.value - POPUP_WIDTH - 16
+  }
+  if (y + POPUP_HEIGHT + VIEWPORT_MARGIN > vh) {
+    y = popupY.value - POPUP_HEIGHT - 16
+  }
+
+  x = Math.max(VIEWPORT_MARGIN, x)
+  y = Math.max(VIEWPORT_MARGIN, y)
+
+  return { left: `${x}px`, top: `${y}px` }
+})
+
+let hoverTimer: ReturnType<typeof setTimeout> | null = null
+
+const showPreview = (song: SongPreference, event: MouseEvent) => {
+  // Remember where the cursor is so the popup can be placed on the delayed show.
+  popupX.value = event.clientX
+  popupY.value = event.clientY
+
+  if (hoverTimer) clearTimeout(hoverTimer)
+  hoverTimer = setTimeout(() => {
+    hoveredSong.value = song
+    hoverImageFailed.value = false
+    const imagePath = imagePathBySong.value.get(song.path)
+    hoverImageSrc.value = imagePath ? fileUrlForPath(imagePath) : null
+  }, 200)
+}
+
+const hidePreview = () => {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer)
+    hoverTimer = null
+  }
+  hoveredSong.value = null
+  hoverImageSrc.value = null
+}
+
+const onHoverImageError = () => {
+  hoverImageFailed.value = true
+}
+
+const loadSongImages = async () => {
+  try {
+    const result = await window.electronAPI.musicGetSongs()
+    const songs = result?.songs ?? []
+    const map = new Map<string, string>()
+    for (const song of songs) {
+      if (song.path && song.image) map.set(song.path, song.image)
+    }
+    imagePathBySong.value = map
+  } catch (error) {
+    console.warn('Could not load song cover images:', error)
+  }
+}
+
 onMounted(() => {
   void ensureSongPreferencesLoaded()
+  void loadSongImages()
+})
+
+onBeforeUnmount(() => {
+  if (hoverTimer) clearTimeout(hoverTimer)
 })
 </script>
 
@@ -193,6 +318,71 @@ onMounted(() => {
   padding: 12px;
 }
 
+.song-preview-popup {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 280px;
+  padding: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: song-preview-fade 0.15s ease;
+}
+
+@keyframes song-preview-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.song-preview-image {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.song-preview-placeholder {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 24px;
+}
+
+.song-preview-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.song-preview-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-preview-artist {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .song-list {
   flex: 1;
   min-height: 0;
@@ -201,7 +391,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-right: 4px;
+  padding: 0 4px;
+  margin: 0;
   scrollbar-width: thin;
   scrollbar-color: var(--accent-color) var(--bg-tertiary);
 }

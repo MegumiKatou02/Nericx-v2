@@ -328,6 +328,7 @@ const presetColors = [
   { name: 'Orange', value: '#ffa502' },
   { name: 'Purple', value: '#a55eea' },
   { name: 'Pink', value: '#ff6b9d' },
+  { name: 'Sakura Pink', value: '#f599b8' },
   { name: 'Cyan', value: '#00d2d3' },
   { name: 'Yellow', value: '#ffdd59' },
   { name: 'Indigo', value: '#6c5ce7' },
