@@ -29,13 +29,15 @@
       </div>
 
       <div class="image-container">
-        <video 
+        <video
           v-if="isVideo"
-          :src="imageUrl" 
+          ref="viewerVideoEl"
+          :src="imageUrl"
           controls
           autoplay
           class="viewer-video"
           @error="handleVideoError"
+          @loadedmetadata="handleViewerVideoLoaded"
         >
           {{ t('imageViewer.videoUnsupported') }}
         </video>
@@ -108,6 +110,39 @@ const dragStartY = ref(0)
 const lastTranslateX = ref(0)
 const lastTranslateY = ref(0)
 const imageSize = ref('')
+const viewerVideoEl = ref<HTMLVideoElement | null>(null)
+
+let windowVisibilityUnsubscribe: (() => void) | null = null
+let viewerWindowVisible = true
+// Restoring the window must not start a video the user had paused themselves.
+let resumeOnRestore = false
+
+/**
+ * The overlay video decodes for as long as it is playing, even with the window
+ * minimized: `backgroundThrottling: false` also pins the Page Visibility API to
+ * "visible", so the main process reports hide/show instead.
+ */
+const applyWindowVisibility = (visible: boolean) => {
+  viewerWindowVisible = visible
+  const video = viewerVideoEl.value
+  if (!video) return
+
+  if (!visible) {
+    resumeOnRestore = !video.paused
+    video.pause()
+  } else if (resumeOnRestore) {
+    resumeOnRestore = false
+    // Autoplay can be refused; the controls remain for the user to resume.
+    void video.play().catch(() => undefined)
+  }
+}
+
+const handleDomVisibility = () => applyWindowVisibility(!document.hidden)
+
+const handleViewerVideoLoaded = () => {
+  // A source change loads with `autoplay`; a hidden window must not decode it.
+  if (!viewerWindowVisible) viewerVideoEl.value?.pause()
+}
 
 const closeViewer = () => {
   emit('close')
@@ -216,11 +251,16 @@ const handleVideoError = (event: Event) => {
 
 onMounted(() => {
   document.addEventListener('keydown', handleEscape)
+  document.addEventListener('visibilitychange', handleDomVisibility)
+  windowVisibilityUnsubscribe = window.electronAPI.onWindowVisibilityChanged(applyWindowVisibility)
   getImageSize()
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleEscape)
+  document.removeEventListener('visibilitychange', handleDomVisibility)
+  windowVisibilityUnsubscribe?.()
+  windowVisibilityUnsubscribe = null
 })
 </script>
 

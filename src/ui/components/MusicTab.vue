@@ -139,8 +139,12 @@
       </div>
 
       <div class="player-container">
-        <div v-if="currentVideoUrl" class="video-container" @click="showFullVideo">
+        <!-- The fullscreen viewer renders the same file. Leaving this element
+             mounted behind it gives the track two decoders and two GPU
+             surfaces, so it is dropped while the overlay is open. -->
+        <div v-if="currentVideoUrl && !showImageViewer" class="video-container" @click="showFullVideo">
           <video
+            ref="inlineVideoEl"
             :src="currentVideoUrl"
             :alt="currentSongName"
             autoplay
@@ -782,6 +786,36 @@ let playRequestId = 0
 const statsIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
 const cleanupIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
 const videoError = ref<string>('')
+const inlineVideoEl = ref<HTMLVideoElement | null>(null)
+
+let windowVisibilityUnsubscribe: (() => void) | null = null
+// The player can advance to a track with a video while the window is hidden;
+// that element loads with `autoplay`, so it has to be stopped on load too.
+let inlineVideoSuppressed = false
+
+/**
+ * A hidden window keeps compositing and decoding: the inline video is muted
+ * decoration that loops forever, so minimizing the app otherwise burns a
+ * decoder and a GPU surface until it is restored. Stopping it on hide and
+ * restarting it on return is invisible to the user and gives the memory back.
+ */
+const setInlineVideoActive = (active: boolean) => {
+  inlineVideoSuppressed = !active
+  const video = inlineVideoEl.value
+  if (!video) return
+
+  if (!active) {
+    video.pause()
+  } else if (currentVideoUrl.value) {
+    // Autoplay can be refused; it is decoration, so a rejection is not an error.
+    void video.play().catch(() => undefined)
+  }
+}
+
+// `backgroundThrottling: false` keeps `document.hidden` false even when the
+// window is minimized, so the main process is the signal that actually fires
+// there; the DOM event still covers occlusion and other platforms.
+const handleVisibilityChange = () => setInlineVideoActive(!document.hidden)
 
 const itemHeight = ref(60)
 const visibleCount = ref(20)
@@ -2079,6 +2113,8 @@ onMounted(async () => {
   // connect in the background behind the serialised transition.
   await ensureDiscordSettingsLoaded()
   applyDiscordState(discordEnabled.value)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  windowVisibilityUnsubscribe = window.electronAPI.onWindowVisibilityChanged(setInlineVideoActive)
   await ensureSongPreferencesLoaded()
   loadFonts()
   await loadSongs()
@@ -2149,6 +2185,10 @@ onUnmounted(() => {
 
   configUnsubscribe?.()
   configUnsubscribe = null
+
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  windowVisibilityUnsubscribe?.()
+  windowVisibilityUnsubscribe = null
 
   progressTicker.stop()
 
@@ -2242,6 +2282,9 @@ const handleVideoError = (event: Event) => {
 
 const handleVideoLoaded = () => {
   videoError.value = ''
+  if (inlineVideoSuppressed) {
+    inlineVideoEl.value?.pause()
+  }
   console.log('Video loaded successfully')
 }
 

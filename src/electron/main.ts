@@ -27,6 +27,28 @@ const __dirname = path.dirname(__filename)
 let mainWindow: BrowserWindow | null = null
 let musicPlayerInstance: any = null
 
+/**
+ * A second instance would share this profile's `userData`: Chromium then fails
+ * to open its disk cache ("Unable to move the cache: Access is denied") and the
+ * user silently pays for a second GPU, renderer and utility process. The second
+ * launch becomes a focus request for the window already running.
+ *
+ * `app.quit()` only *asks* to quit: `whenReady` still fires and opens the config
+ * database while the process is tearing down, which ends in a napi fatal error
+ * from sqlite3. Exiting outright is what this path needs — nothing has been
+ * created at this point that would need unwinding.
+ */
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0)
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  })
+}
+
 const performanceMetrics = {
   startTime: Date.now(),
   ipcCalls: 0
@@ -139,6 +161,20 @@ async function createWindow() {
       backgroundThrottling: false
     }
   })
+
+  // `backgroundThrottling: false` below pins the Page Visibility API to
+  // "visible", so the renderer cannot tell on its own that the window was
+  // minimized and keeps decoding its looping video. These are the only
+  // reliable hide/show signals it gets.
+  const sendVisibility = (visible: boolean) => {
+    if (mainWindow && !mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.send('window:visibility', visible)
+    }
+  }
+  mainWindow.on('minimize', () => sendVisibility(false))
+  mainWindow.on('hide', () => sendVisibility(false))
+  mainWindow.on('restore', () => sendVisibility(true))
+  mainWindow.on('show', () => sendVisibility(true))
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   mainWindow.webContents.on('will-navigate', (event, url) => {

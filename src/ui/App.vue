@@ -937,8 +937,10 @@ onUnmounted(() => {
 
 .wave-bar {
   width: 3px;
+  height: 16px;
   background: var(--accent-color);
   border-radius: 2px;
+  transform-origin: bottom;
   animation: wave 1.2s ease-in-out infinite;
 }
 
@@ -951,8 +953,8 @@ onUnmounted(() => {
 }
 
 @keyframes wave {
-  0%, 100% { height: 8px; }
-  50% { height: 16px; }
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1); }
 }
 
 .collapse-btn {

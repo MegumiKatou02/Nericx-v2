@@ -43,6 +43,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('config:changed', listener)
     return () => ipcRenderer.removeListener('config:changed', listener)
   },
+  onWindowVisibilityChanged: (callback: (visible: boolean) => void) => {
+    const listener = (_: unknown, visible: boolean) => callback(visible)
+    ipcRenderer.on('window:visibility', listener)
+    return () => ipcRenderer.removeListener('window:visibility', listener)
+  },
   removeMusicScanProgressListener: () => {
     ipcRenderer.removeAllListeners('music:scanProgress')
   },
