@@ -9,7 +9,7 @@ import KeyboardTab from './components/KeyboardTab.vue'
 import { initLocale, t } from './i18n.js'
 import { fileUrlForPath } from './fileUrl.js'
 import './styles/theme.css'
-import appIconUrl from '/iconhe.ico'
+import appIconUrl from '/icon.ico'
 
 const fontAwesome = document.createElement('link')
 fontAwesome.rel = 'stylesheet'
@@ -17,7 +17,7 @@ fontAwesome.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/c
 document.head.appendChild(fontAwesome)
 
 // Imported through Vite so it resolves to a hashed asset in both dev and
-// production (plain '/iconhe.ico' would 404 under file:// in the packaged app).
+// production (plain '/icon.ico' would 404 under file:// in the packaged app).
 
 const currentTab = ref('general')
 const isMenuOpen = ref(true)

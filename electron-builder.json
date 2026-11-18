@@ -20,7 +20,7 @@
     ],
     "electronLanguages": ["en-US", "vi", "ja"],
     "asarUnpack": ["dist-electron/preload.cjs"],
-    "icon": "./iconhe.ico",
+    "icon": "./icon.ico",
     "directories": {
         "output": "dist"
     },

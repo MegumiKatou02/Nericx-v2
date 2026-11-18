@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage, shell, Tray, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage, screen, shell, Tray, Menu } from 'electron'
 import path from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 import { isDev, getOsuPath, createBackup, initDatabase, getConfig, setConfig, closeConfigStore, setAppLocale, getAppLocale, t } from './util.js'
@@ -173,9 +173,12 @@ const createTray = () => {
     return
   }
 
-  // A 16px-ish tray icon: Electron scales the .ico, and an oversized image is
-  // rendered blurry by the Windows notification area.
-  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
+  // The notification area draws at 16 DIPs, which is 20/24/32 physical pixels on
+  // a 125/150/200% display. Handing it a fixed 16px bitmap makes Windows
+  // upscale it there, so pick the .ico frame at the current scale instead.
+  const scaleFactor = screen.getPrimaryDisplay().scaleFactor || 1
+  const traySize = Math.round(16 * scaleFactor)
+  const icon = nativeImage.createFromPath(iconPath).resize({ width: traySize, height: traySize })
   tray = new Tray(icon)
   tray.setToolTip('Nericx')
   tray.on('click', showMainWindow)
@@ -248,21 +251,21 @@ const getIconPath = () => {
   if (cachedIconPath) return cachedIconPath
   
   if (isDev()) {
-    // `__dirname` is `dist-electron`, so `../../iconhe.ico` resolved to a path
+    // `__dirname` is `dist-electron`, so `../../icon.ico` resolved to a path
     // outside the repository and the icon silently did not exist — which also
     // meant the tray was never created in development.
-    cachedIconPath = path.join(app.getAppPath(), 'iconhe.ico')
+    cachedIconPath = path.join(app.getAppPath(), 'icon.ico')
   } else {
     const assetsDir = path.join(app.getAppPath(), 'dist-vue/assets')
     if (existsSync(assetsDir)) {
       const files = readdirSync(assetsDir)
-      const iconFile = files.find(f => /^iconhe.*\.ico$/.test(f))
+      const iconFile = files.find(f => /^icon.*\.ico$/.test(f))
       if (iconFile) {
         cachedIconPath = path.join(assetsDir, iconFile)
         return cachedIconPath
       }
     }
-    return path.join(app.getAppPath(), 'iconhe.ico')
+    return path.join(app.getAppPath(), 'icon.ico')
   }
   
   return cachedIconPath
