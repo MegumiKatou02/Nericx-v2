@@ -339,6 +339,7 @@
 
     <ImageViewer
       :is-visible="showImageViewer"
+      :is-active="isActive"
       :image-url="currentImageUrl"
       :image-path="currentImagePath"
       :image-name="currentImageName"
@@ -379,6 +380,10 @@ import ImageViewer from './ImageViewer.vue'
 import SongInfoModal from './SongInfoModal.vue'
 import { t } from '../i18n.js'
 import type { MessageKey } from '../../electron/i18n.js'
+
+// The tab stays mounted while another one is on screen (`v-show`), so it needs
+// to know when it is actually visible.
+const props = defineProps<{ isActive?: boolean }>()
 
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null
@@ -789,17 +794,19 @@ const videoError = ref<string>('')
 const inlineVideoEl = ref<HTMLVideoElement | null>(null)
 
 let windowVisibilityUnsubscribe: (() => void) | null = null
-// The player can advance to a track with a video while the window is hidden;
-// that element loads with `autoplay`, so it has to be stopped on load too.
+// The player can advance to a track with a video while the window is hidden
+// or another tab is open; that element loads with `autoplay`, so it has to be
+// stopped on load too.
 let inlineVideoSuppressed = false
+let windowVisible = true
 
 /**
- * A hidden window keeps compositing and decoding: the inline video is muted
- * decoration that loops forever, so minimizing the app otherwise burns a
- * decoder and a GPU surface until it is restored. Stopping it on hide and
- * restarting it on return is invisible to the user and gives the memory back.
+ * The video is muted decoration that loops forever: it has nothing to show
+ * when the window is minimized or another tab is on screen, yet Chromium keeps
+ * decoding it. It runs again only once both are visible.
  */
-const setInlineVideoActive = (active: boolean) => {
+const applyInlineVideoState = () => {
+  const active = windowVisible && props.isActive !== false
   inlineVideoSuppressed = !active
   const video = inlineVideoEl.value
   if (!video) return
@@ -815,7 +822,19 @@ const setInlineVideoActive = (active: boolean) => {
 // `backgroundThrottling: false` keeps `document.hidden` false even when the
 // window is minimized, so the main process is the signal that actually fires
 // there; the DOM event still covers occlusion and other platforms.
-const handleVisibilityChange = () => setInlineVideoActive(!document.hidden)
+const handleVisibilityChange = () => {
+  windowVisible = !document.hidden
+  applyInlineVideoState()
+}
+
+const handleWindowVisibility = (visible: boolean) => {
+  windowVisible = visible
+  applyInlineVideoState()
+}
+
+// All tabs stay mounted (`v-show`), so leaving this one has to stop the video
+// explicitly; the audio keeps playing, only the decoration stops.
+watch(() => props.isActive, applyInlineVideoState)
 
 const itemHeight = ref(60)
 const visibleCount = ref(20)
@@ -2114,7 +2133,10 @@ onMounted(async () => {
   await ensureDiscordSettingsLoaded()
   applyDiscordState(discordEnabled.value)
   document.addEventListener('visibilitychange', handleVisibilityChange)
-  windowVisibilityUnsubscribe = window.electronAPI.onWindowVisibilityChanged(setInlineVideoActive)
+  windowVisibilityUnsubscribe = window.electronAPI.onWindowVisibilityChanged(handleWindowVisibility)
+  // The tab may already be hidden on mount; this seeds the flag before any
+  // audio/video element exists.
+  applyInlineVideoState()
   await ensureSongPreferencesLoaded()
   loadFonts()
   await loadSongs()

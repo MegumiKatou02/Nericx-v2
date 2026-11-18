@@ -71,11 +71,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { t } from '../i18n.js'
 
 interface Props {
   isVisible: boolean
+  /** False while another tab covers this one. */
+  isActive?: boolean
   imageUrl: string
   /** Raw filesystem path. `imageUrl` is percent-encoded and cannot be handed to fs. */
   imagePath: string
@@ -113,22 +115,24 @@ const imageSize = ref('')
 const viewerVideoEl = ref<HTMLVideoElement | null>(null)
 
 let windowVisibilityUnsubscribe: (() => void) | null = null
-let viewerWindowVisible = true
+let appWindowVisible = true
 // Restoring the window must not start a video the user had paused themselves.
 let resumeOnRestore = false
 
+const playbackAllowed = () => appWindowVisible && props.isActive !== false
+
 /**
  * The overlay video decodes for as long as it is playing, even with the window
- * minimized: `backgroundThrottling: false` also pins the Page Visibility API to
- * "visible", so the main process reports hide/show instead.
+ * minimized or another tab in front: `backgroundThrottling: false` also pins
+ * the Page Visibility API to "visible", so hide/show comes from the main
+ * process and the tab state from the parent.
  */
-const applyWindowVisibility = (visible: boolean) => {
-  viewerWindowVisible = visible
+const applyPlaybackGate = () => {
   const video = viewerVideoEl.value
   if (!video) return
 
-  if (!visible) {
-    resumeOnRestore = !video.paused
+  if (!playbackAllowed()) {
+    if (!video.paused) resumeOnRestore = true
     video.pause()
   } else if (resumeOnRestore) {
     resumeOnRestore = false
@@ -137,12 +141,19 @@ const applyWindowVisibility = (visible: boolean) => {
   }
 }
 
+const applyWindowVisibility = (visible: boolean) => {
+  appWindowVisible = visible
+  applyPlaybackGate()
+}
+
 const handleDomVisibility = () => applyWindowVisibility(!document.hidden)
 
 const handleViewerVideoLoaded = () => {
-  // A source change loads with `autoplay`; a hidden window must not decode it.
-  if (!viewerWindowVisible) viewerVideoEl.value?.pause()
+  // A source change loads with `autoplay`; a hidden viewer must not decode it.
+  if (!playbackAllowed()) viewerVideoEl.value?.pause()
 }
+
+watch(() => props.isActive, applyPlaybackGate)
 
 const closeViewer = () => {
   emit('close')

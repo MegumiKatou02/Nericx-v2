@@ -571,7 +571,11 @@ onUnmounted(() => {
       <div class="main-content">
         <GeneralTab v-show="currentTab === 'general'" />
         <BackupTab v-show="currentTab === 'backup'" />
-        <MusicTab v-show="currentTab === 'music'" ref="musicTabRef" />
+        <MusicTab
+          v-show="currentTab === 'music'"
+          :is-active="currentTab === 'music'"
+          ref="musicTabRef"
+        />
         <FiltersTab v-show="currentTab === 'filters'" />
         <KeyboardTab v-show="currentTab === 'keyboard'" />
         <SettingTab v-show="currentTab === 'setting'" ref="settingTabRef" />
