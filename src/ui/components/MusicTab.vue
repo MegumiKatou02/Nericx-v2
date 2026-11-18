@@ -819,12 +819,27 @@ const applyInlineVideoState = () => {
   }
 }
 
+/**
+ * The ticker only feeds pixels: the progress bar and the mini player, both
+ * drawn inside this window. A hidden window can show neither, and at 4 Hz the
+ * timer is the largest thing still running while the app sits in the tray.
+ * `isPlaying` alone is not enough — pausing from the tray while hidden would
+ * otherwise start it again.
+ */
+const syncProgressTicker = () => {
+  if (windowVisible && isPlaying.value) {
+    progressTicker.start()
+  } else {
+    progressTicker.stop()
+  }
+}
+
 // `backgroundThrottling: false` keeps `document.hidden` false even when the
 // window is minimized, so the main process is the signal that actually fires
 // there; the DOM event still covers occlusion and other platforms.
 const handleVisibilityChange = () => {
   windowVisible = !document.hidden
-  applyInlineVideoState()
+  applyWindowState()
 }
 
 /**
@@ -857,7 +872,7 @@ const handleTrayCommand = (command: string) => {
 
 const handleWindowVisibility = (visible: boolean) => {
   windowVisible = visible
-  applyInlineVideoState()
+  applyWindowState()
 }
 
 // All tabs stay mounted (`v-show`), so leaving this one has to stop the video
@@ -1241,6 +1256,52 @@ const performMemoryCleanup = () => {
   }
 }
 
+/**
+ * Both of these only produce values for the UI, so they have nothing to do
+ * while the window is hidden. Stopping them costs nothing: `searchCache` cannot
+ * grow without a search, and `globalThis.gc` is not exposed in this build.
+ */
+const startCacheTimers = () => {
+  // Guarded so a second visibility change cannot stack a second pair of timers.
+  if (statsIntervalId.value) return
+  statsIntervalId.value = setInterval(updateCacheStats, 30000)
+  cleanupIntervalId.value = setInterval(performMemoryCleanup, 2 * 60 * 1000)
+}
+
+const stopCacheTimers = () => {
+  if (statsIntervalId.value) {
+    clearInterval(statsIntervalId.value)
+    statsIntervalId.value = null
+  }
+
+  if (cleanupIntervalId.value) {
+    clearInterval(cleanupIntervalId.value)
+    cleanupIntervalId.value = null
+  }
+}
+
+const syncCacheTimers = () => {
+  if (!windowVisible) {
+    stopCacheTimers()
+    return
+  }
+
+  // Whatever is on screen was captured before the window was hidden; refresh it
+  // now instead of leaving it stale for a whole interval.
+  void updateCacheStats()
+  startCacheTimers()
+}
+
+/**
+ * One place decides what may keep running while the window is hidden, so the
+ * video gate, the ticker and the polling timers cannot drift apart.
+ */
+const applyWindowState = () => {
+  applyInlineVideoState()
+  syncProgressTicker()
+  syncCacheTimers()
+}
+
 const loadSongs = async () => {
   try {
     isLoading.value = true
@@ -1415,7 +1476,7 @@ const playSong = async (song: Song) => {
       // starting at the previous track's end.
       currentTime.value = audioPlayer.getCurrentTime()
       duration.value = audioPlayer.getDuration() || song.duration || 0
-      progressTicker.start()
+      syncProgressTicker()
       updateDiscordStatus()
 
       nextTick(() => {
@@ -1503,7 +1564,7 @@ const togglePlay = async () => {
     } else {
       audioPlayer.resume()
       isPlaying.value = true
-      progressTicker.start()
+      syncProgressTicker()
     }
 
     if (updateMiniPlayer) {
@@ -2165,20 +2226,13 @@ onMounted(async () => {
   trayCommandUnsubscribe = window.electronAPI.onTrayCommand(handleTrayCommand)
   reportTrayPlayback()
   // The tab may already be hidden on mount; this seeds the flag before any
-  // audio/video element exists.
-  applyInlineVideoState()
+  // audio/video element exists and starts the polling timers.
+  applyWindowState()
   await ensureSongPreferencesLoaded()
   loadFonts()
   await loadSongs()
 
   updateVisibleSongs()
-
-  const statsInterval = setInterval(updateCacheStats, 30000)
-
-  const cleanupInterval = setInterval(performMemoryCleanup, 2 * 60 * 1000)
-
-  statsIntervalId.value = statsInterval
-  cleanupIntervalId.value = cleanupInterval
 
   try {
     const savedVolume = await window.electronAPI.getConfig(VOLUME_CONFIG_KEY)
@@ -2225,15 +2279,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (statsIntervalId.value) {
-    clearInterval(statsIntervalId.value)
-    statsIntervalId.value = null
-  }
-
-  if (cleanupIntervalId.value) {
-    clearInterval(cleanupIntervalId.value)
-    cleanupIntervalId.value = null
-  }
+  stopCacheTimers()
 
   configUnsubscribe?.()
   configUnsubscribe = null
