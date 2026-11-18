@@ -565,7 +565,7 @@ defineExpose({
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 20px 20px 20px 0;
+  padding: 20px;
   user-select: none;
   overflow-y: auto;
 }

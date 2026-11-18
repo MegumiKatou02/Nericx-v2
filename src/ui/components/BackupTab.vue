@@ -90,7 +90,7 @@ onMounted(async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 20px 20px 20px 0;
+  padding: 20px 20px 20px 20px;
   color: var(--text-primary);
   background: var(--bg-primary);
   user-select: none;

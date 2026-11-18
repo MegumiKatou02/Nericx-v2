@@ -299,7 +299,7 @@ import { t } from '../i18n.js'
 <style scoped>
 .keyboard-tab {
   height: 100%;
-  padding: 20px 20px 20px 0;
+  padding: 20px;
   color: var(--text-primary);
   background: var(--bg-primary);
   overflow-y: auto;
