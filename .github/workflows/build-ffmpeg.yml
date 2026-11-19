@@ -1,0 +1,183 @@
+# Builds the slim ffmpeg the Windows installer bundles.
+#
+# This is separate from the release workflow on purpose: the build needs MSYS2
+# plus an x264 built with the same toolchain, runs `-j1` for close to an hour,
+# and its output only changes when the pinned version changes. Rebuilding it on
+# every release would burn an hour to produce a byte-identical file.
+#
+# Run it by hand when bumping the pin in scripts/pinned-sources.json, then
+# update resources/ffmpeg/win32-x64/ffmpeg.exe.sha256 in the same commit.
+name: Build slim ffmpeg
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_publish:
+        description: 'Publish the result even if it differs from the committed pin'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # app-builder-bin (for rcedit, in the stamp step) comes from here;
+      # fetch-ffmpeg-source.mjs itself only uses node built-ins.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Fetch and verify pinned sources
+        run: node scripts/fetch-ffmpeg-source.mjs --dir "${{ runner.temp }}\nx-source"
+
+      # The build script is bash and expects the MSYS2 UCRT64 layout at
+      # /ucrt64, which is where msys2/setup-msys2 installs it.
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-diffutils
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-make
+
+      # x264 publishes no signatures and stable is a moving branch, so the
+      # tarball that fetch-ffmpeg-source.mjs verified is the one built here.
+      - name: Build x264
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          SRC="$(cygpath -u "${{ runner.temp }}")/nx-source"
+          cd "$SRC"
+          tar -xjf x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2
+          cd x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55
+          export PATH="/ucrt64/bin:$PATH"
+          ./configure --prefix=/ucrt64 --enable-static --enable-shared --disable-cli --disable-opencl
+          make -j1
+          make install
+
+      # Paths are converted with cygpath rather than interpolated: a Windows
+      # `D:\a\_temp` handed to bash depending on the shell is not portable.
+      - name: Build slim ffmpeg
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          TEMP_MSYS="$(cygpath -u "${{ runner.temp }}")"
+          cd "$TEMP_MSYS/nx-source"
+          tar -xJf ffmpeg-7.1.1.tar.xz
+          REPO_MSYS="$(cygpath -u "$GITHUB_WORKSPACE")"
+          export FFMPEG_SRC="$TEMP_MSYS/nx-source/ffmpeg-7.1.1"
+          export WORK="$TEMP_MSYS/nx-build"
+          bash "$REPO_MSYS/scripts/build-ffmpeg-slim.sh"
+
+      - name: Stamp version resource
+        shell: pwsh
+        run: node scripts/stamp-ffmpeg.mjs --platform win32 --arch x64
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $bin = 'resources/ffmpeg/win32-x64/ffmpeg.exe'
+          $version = & $bin -hide_banner -version 2>&1 | Select-Object -First 1
+          if ($version -notmatch '^ffmpeg version 7\.1\.1') { throw "unexpected: $version" }
+          $info = (Get-Item $bin).VersionInfo
+          if (-not $info.FileDescription) { throw 'version resource is empty' }
+          Write-Host "ok: $version / $($info.FileDescription)"
+
+      # Uploaded before the hash comparison: a build that took an hour must not
+      # be thrown away because its toolchain differs from the pin. The compare
+      # step below decides whether it is published, not whether it is kept.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-win32-x64
+          path: |
+            resources/ffmpeg/win32-x64/ffmpeg.exe
+            resources/ffmpeg/win32-x64/ffmpeg.exe.sha256
+          if-no-files-found: error
+
+      # A different hash means a different toolchain or a changed input. That is
+      # not automatically wrong — but shipping it silently would break the one
+      # guarantee the pin exists for, so it needs a deliberate re-run with the
+      # updated pin (or an explicit force).
+      - name: Compare with the pinned hash
+        id: hash
+        shell: pwsh
+        run: |
+          $actual = (Get-FileHash resources/ffmpeg/win32-x64/ffmpeg.exe -Algorithm SHA256).Hash.ToLower()
+          $pinned = (Get-Content resources/ffmpeg/win32-x64/ffmpeg.exe.sha256).Split(' ')[0]
+          Write-Host "actual $actual"
+          Write-Host "pinned $pinned"
+          if ($actual -eq $pinned) {
+            "match=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "match=false" >> $env:GITHUB_OUTPUT
+            Write-Host "::warning::ffmpeg hash differs from the pin. Download the artifact, run"
+            Write-Host "::warning::node scripts/verify-ffmpeg.mjs --update, commit the new hash, then re-run."
+          }
+
+      # Only on a match (or on an explicit force). Publishing a binary the
+      # repository does not pin would make the next release workflow fail its
+      # own verification step.
+      - name: Package release asset
+        if: steps.hash.outputs.match == 'true' || inputs.force_publish
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force staging/ffmpeg/win32-x64 | Out-Null
+          Copy-Item resources/ffmpeg/win32-x64/ffmpeg.exe staging/ffmpeg/win32-x64/
+          Copy-Item resources/ffmpeg/win32-x64/ffmpeg.exe.sha256 staging/ffmpeg/win32-x64/
+          Compress-Archive -Path staging/ffmpeg -DestinationPath ffmpeg-win32-x64.zip -Force
+
+      # The release workflow downloads this by a tag derived from the pinned
+      # version, so the asset name and the layout inside the zip are a contract:
+      # a zip whose root holds ffmpeg/win32-x64/ffmpeg.exe extracts straight into
+      # resources/ on the other side.
+      # GPL v3 section 6 asks for the corresponding source to accompany the
+      # binary. The tarballs this run verified are exactly that source, so they
+      # are published with the binary rather than only linked to — a vendor URL
+      # that changes years later is not the same offer as the bytes themselves.
+      - name: Publish the corresponding source
+        if: steps.hash.outputs.match == 'true' || inputs.force_publish
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          TEMP_MSYS="$(cygpath -u "${{ runner.temp }}")"
+          REPO_MSYS="$(cygpath -u "$GITHUB_WORKSPACE")"
+          VERSION="$(node -p "(require('$GITHUB_WORKSPACE/scripts/pinned-sources.json').ffmpeg.version)")"
+          STAGE="$TEMP_MSYS/nx-sources-stage"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/sources" "$STAGE/scripts"
+          cp "$TEMP_MSYS/nx-source/ffmpeg-$VERSION.tar.xz" "$STAGE/sources/"
+          cp "$TEMP_MSYS/nx-source"/x264-*.tar.bz2 "$STAGE/sources/"
+          cp "$REPO_MSYS/scripts/build-ffmpeg-slim.sh" "$REPO_MSYS/scripts/fetch-ffmpeg-source.mjs" \
+             "$REPO_MSYS/scripts/pinned-sources.json" "$STAGE/scripts/"
+          tar -C "$STAGE" -cJf "$GITHUB_WORKSPACE/nericx-ffmpeg-sources.tar.xz" .
+
+      - name: Publish as a release asset
+        if: steps.hash.outputs.match == 'true' || inputs.force_publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = 'ffmpeg-' + (Get-Content scripts/pinned-sources.json | ConvertFrom-Json).ffmpeg.version
+          $existing = gh release view $tag --repo "${{ github.repository }}" --json tagName 2>$null
+          if (-not $existing) {
+            gh release create $tag --repo "${{ github.repository }}" `
+              --title "Slim ffmpeg $tag" `
+              --notes "Verified slim ffmpeg build consumed by the Windows release workflow, and the corresponding source. Not a Nericx release."
+          }
+          gh release upload $tag ffmpeg-win32-x64.zip --repo "${{ github.repository }}" --clobber
+          gh release upload $tag nericx-ffmpeg-sources.tar.xz --repo "${{ github.repository }}" --clobber

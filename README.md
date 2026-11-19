@@ -42,8 +42,8 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/MegumiKatou02/Nericx-v2.git
-   cd Nericx-v2
+   git clone https://github.com/MegumiKatou02/Nericx-Player.git
+   cd Nericx-Player
    ```
 
 2. **Install dependencies**
@@ -54,9 +54,12 @@
 3. **Provide the bundled ffmpeg** (needed to play/convert `.avi` and `.mkv`
    beatmap videos; ~24 MB, not committed to the repo)
    ```bash
-   npm run build:ffmpeg     # Windows: builds the slim binary (see below)
+   node scripts/fetch-ffmpeg-source.mjs   # downloads the pinned sources and verifies them
+   npm run build:ffmpeg                   # builds the slim binary (see below)
+   node scripts/stamp-ffmpeg.mjs          # writes the PE version resource
+   node scripts/verify-ffmpeg.mjs --update
 
-   npm run fetch:ffmpeg     # checks it is in place, and says what is missing
+   npm run fetch:ffmpeg                   # checks it is present and matches its hash
    ```
 
    The app ships a custom ffmpeg built only for this job: it demuxes the
@@ -67,6 +70,11 @@
    script documents every component it enables and how to get the toolchain.
    If you have no toolchain, `npm run fetch:ffmpeg:fallback` downloads a
    prebuilt general-purpose build instead.
+
+   Sources are pinned by SHA-256 (and by GPG signature for ffmpeg) in
+   `scripts/pinned-sources.json`; see `scripts/PINNED-SOURCES.md` for why, and
+   for what to update when the version is bumped. The binary that ships is
+   pinned separately, in `resources/ffmpeg/win32-x64/ffmpeg.exe.sha256`.
 
 4. **Start development server**
    ```bash
@@ -92,8 +100,13 @@ npm run dev:electron
 # Build Vue app
 npm run build
 
-# Build for Windows (also checks the bundled ffmpeg is present)
+# Build for Windows: fetch/check the bundled ffmpeg, stamp its version
+# resource, compare it against the committed hash, then build the MSI
 npm run dist:win
+
+# Just transpile + build + package, without the ffmpeg checks
+# (used by CI after it has already signed and verified the binary)
+npm run package:win
 
 # Build for macOS (place the ffmpeg binary in resources/ffmpeg/darwin-arm64/ first)
 npm run dist:mac
@@ -102,14 +115,33 @@ npm run dist:mac
 npm run dist:linux
 ```
 
+The Windows installer is an **MSI** only. There is no portable target: a
+portable build unpacks itself into `%TEMP%` on every launch, which is both
+slower and one of the most common reasons a small application is flagged by
+antivirus software.
+
+Releases are built by GitHub Actions, not on a developer machine:
+
+| Workflow | When | What it does |
+|---|---|---|
+| `Build slim ffmpeg` | manually | Rebuilds the pinned ffmpeg, stamps it, and publishes it as a release asset. Run it only when bumping the version in `scripts/pinned-sources.json`. |
+| `Release (Windows)` | on a `v*` tag | Fetches the pinned ffmpeg, builds the MSI, writes `SHA256SUMS.txt`, attests build provenance, and publishes a GitHub release. Signs everything if a certificate is configured. |
+
+Signing is opt-in and needs no code change: add the `WIN_CSC_LINK` and
+`WIN_CSC_KEY_PASSWORD` repository secrets and electron-builder signs the app
+executable and the MSI with them; the bundled `ffmpeg.exe` gets its own
+`signtool` pass in the workflow.
+
 ## 📁 Project Structure
 
 ```
-Nericx-v2/
+Nericx-Player/
 ├── src/
 │   ├── ui/                 # Vue renderer and components
 │   └── electron/           # Electron main, preload, IPC and services
 ├── tests/                  # Node test-runner unit and contract tests
+├── scripts/                # ffmpeg build, stamp, verify and fetch scripts
+├── resources/licenses/     # Third-party license texts shipped with the app
 ├── dist-vue/               # Generated renderer build
 └── dist-electron/          # Generated Electron main/preload build
 ```
@@ -157,4 +189,67 @@ The Backup tab uses this saved osu! path and opens a native save dialog for the 
 - **Discord RPC** - Discord rich presence integration
 - **Archiver** - File compression for backups
 - **Font Awesome** - Icon library
+
+## 🛡️ Antivirus and SmartScreen
+
+Nericx is unsigned. Without a code-signing certificate, Windows cannot tell you
+who published the download, and a few antivirus engines will guess wrong about
+a small program that ships its own `ffmpeg.exe`. What the release build does
+about it:
+
+- **Complete version resources.** Both `Nericx.exe` and the bundled
+  `ffmpeg.exe` carry FileDescription, ProductName, CompanyName, FileVersion and
+  LegalCopyright, and both name the same publisher. An unsigned binary with an
+  empty version resource is the shape scanners treat as a dropped payload.
+- **No portable build.** The portable target unpacked itself into `%TEMP%` on
+  every launch, which is a well-known false-positive trigger. The Windows
+  release is an MSI that installs to a normal location.
+- **No hidden DevTools.** Developer tools and the F12 / Ctrl+Shift+I / Ctrl+Shift+J
+  shortcuts are compiled out of release builds.
+- **Verified, pinned inputs.** ffmpeg sources are pinned by SHA-256 and by GPG
+  signature; the binary that ships is pinned by its own hash, and the release
+  workflow refuses to build if the two disagree.
+- **Reproducible provenance.** Every release is built on GitHub Actions, and the
+  MSI plus both executables are attested with `actions/attest-build-provenance`.
+  `SHA256SUMS.txt` on the release page lets you check what you downloaded:
+
+  ```powershell
+  Get-FileHash .\Nericx-2.0.0-x64.msi -Algorithm SHA256
+  ```
+
+  and compare it with the line in `SHA256SUMS.txt` (or run
+  `gh attestation verify .\Nericx-2.0.0-x64.msi --repo MegumiKatou02/Nericx-Player`).
+
+### If you get a warning
+
+Be careful here: **do not** disable your antivirus or click through a warning
+for a download you cannot verify. Only do the following for a file whose hash
+matches `SHA256SUMS.txt` on the release page.
+
+- **SmartScreen / "Windows protected your PC"** — click **More info** and check
+  that the app name and publisher line up with what this README says. The
+  publisher will read as unknown until releases are signed, and SmartScreen
+  reputation only accumulates per certificate, so this warning is expected
+  today.
+- **Windows Defender or another engine flags the file** — report it. False
+  positives get fixed, but the fix is per file, and an unsigned build produces a
+  new file on every release:
+
+  - Microsoft: <https://www.microsoft.com/en-us/wdsi/filesubmission> — choose
+    *Software developer* → *Incorrectly detected as malware / PUA*, and include
+    the repository link, the release link and the SHA-256. (You can also report
+    an end-user detection there if you are not the developer.)
+  - Your engine's vendor, if it is not Microsoft (Kaspersky, ESET, Bitdefender
+    and others each have a false-positive form).
+
+  A report that names the exact file hash is the only kind Microsoft can act
+  on. A release bypasses this entirely once it is signed with a stable
+  certificate; until then, each build has to be reported again.
+
+## 📄 License
+
+The application is [MIT licensed](./LICENSE). It bundles a GPL-licensed FFmpeg
+binary that it runs as a separate process; the corresponding license texts and
+the source offer for that binary are in
+[`resources/licenses/NOTICE.md`](./resources/licenses/NOTICE.md).
 

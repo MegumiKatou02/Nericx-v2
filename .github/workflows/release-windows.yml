@@ -1,0 +1,133 @@
+# Builds, signs (when a certificate is configured) and publishes the Windows MSI.
+#
+# Why CI at all: a release built on one developer's machine cannot be checked by
+# anyone. The point of this workflow is that the artifact a user downloads can be
+# traced to this commit and to a log that says how it was built — which is what a
+# false-positive report to Microsoft needs in order to be taken seriously.
+#
+# Signing is opt-in. electron-builder reads WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD
+# from the environment by itself, so adding a certificate later is adding two
+# repository secrets; no change to this file or to the build config is needed.
+# The steps that sign are guarded, and a run without secrets still produces a
+# complete, verifiable release.
+name: Release (Windows)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    # Secrets are not readable in an `if:` expression, so they are lifted into
+    # job-level env first; the guard steps then test the env var. An empty secret
+    # makes the variable empty, which is the "no certificate" case.
+    env:
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The slim ffmpeg is not in git (24 MB). It is published once by the
+      # `Build slim ffmpeg` workflow as a release asset, then fetched here and
+      # checked against the hash this repository commits — so the binary the
+      # installer carries is the one the repo says it is.
+      - name: Fetch the pinned ffmpeg build
+        shell: pwsh
+        run: |
+          $tag = 'ffmpeg-' + (Get-Content scripts/pinned-sources.json | ConvertFrom-Json).ffmpeg.version
+          $url = "https://github.com/${{ github.repository }}/releases/download/$tag/ffmpeg-win32-x64.zip"
+          $zip = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+          # The asset's own root is `ffmpeg/win32-x64/`, so it expands into
+          # `resources/` — not into `resources/ffmpeg/win32-x64`, which would
+          # add a level and leave the binary where the app never looks.
+          Expand-Archive -Path $zip -DestinationPath 'resources' -Force
+          Get-ChildItem resources/ffmpeg/win32-x64
+
+      - name: Verify ffmpeg
+        run: node scripts/verify-ffmpeg.mjs --platform win32 --arch x64
+
+      # The test suite covers the pure parts of the contract — the ffmpeg arg
+      # builders, the media URL encoding, the IPC bridge — which is what a bad
+      # merge actually breaks. A release that skips it is a release nobody
+      # checked.
+      - name: Test
+        run: npm test
+
+      # Only when a certificate is configured. electron-builder signs the main
+      # executable and the MSI; extraResources are not signed, so the bundled
+      # ffmpeg gets its own signtool pass. That is the one binary users actually
+      # run beside the app, and it is the one scanners look at hardest.
+      - name: Sign bundled ffmpeg
+        if: ${{ env.WIN_CSC_LINK != '' }}
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'cert.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env.WIN_CSC_LINK))
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe |
+            Where-Object FullName -like '*\x64\signtool.exe' | Select-Object -First 1 -ExpandProperty FullName
+          # Signing rewrites the binary, so the recorded hash is now stale for
+          # this build. That is expected and is why the authority for a signed
+          # release is the signature, not this local file.
+          & $signtool sign /fd sha256 /td sha256 /tr http://timestamp.digicert.com `
+            /f $pfx /p $env:WIN_CSC_KEY_PASSWORD resources/ffmpeg/win32-x64/ffmpeg.exe
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed with $LASTEXITCODE" }
+
+      # `package:win` is `dist:win` without the ffmpeg verification, because that
+      # check already ran above and a signed ffmpeg would no longer match the
+      # unsigned hash.
+      - name: Build renderer and installer
+        run: npm run package:win
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          $files = @()
+          $files += Get-ChildItem dist/*.msi
+          $files += Get-Item dist/win-unpacked/Nericx.exe
+          $files += Get-Item dist/win-unpacked/resources/ffmpeg/win32-x64/ffmpeg.exe
+          $lines = $files | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$h  $($_.Name)"
+          }
+          $lines -join "`n" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
+
+      # The attestation says "this file was built by this workflow, from this
+      # commit". It is what a reviewer can check without trusting the uploader.
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.msi
+            dist/win-unpacked/Nericx.exe
+            dist/win-unpacked/resources/ffmpeg/win32-x64/ffmpeg.exe
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            dist/*.msi `
+            dist/SHA256SUMS.txt `
+            --title "${{ github.ref_name }}" `
+            --generate-notes `
+            --repo "${{ github.repository }}"
