@@ -48,6 +48,12 @@ jobs:
       # `Build slim ffmpeg` workflow as a release asset, then fetched here and
       # checked against the hash this repository commits — so the binary the
       # installer carries is the one the repo says it is.
+      #
+      # The asset also contains its own `ffmpeg.exe.sha256`. It is deliberately
+      # ignored: expanding the zip straight into `resources/` would overwrite the
+      # committed pin with the one from the download, and the check would then be
+      # a file vouching for itself. The binary is unpacked to a scratch directory
+      # and compared against the hash in the checkout.
       - name: Fetch the pinned ffmpeg build
         shell: pwsh
         run: |
@@ -55,10 +61,24 @@ jobs:
           $url = "https://github.com/${{ github.repository }}/releases/download/$tag/ffmpeg-win32-x64.zip"
           $zip = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
           Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
-          # The asset's own root is `ffmpeg/win32-x64/`, so it expands into
-          # `resources/` — not into `resources/ffmpeg/win32-x64`, which would
-          # add a level and leave the binary where the app never looks.
-          Expand-Archive -Path $zip -DestinationPath 'resources' -Force
+
+          $stage = Join-Path $env:RUNNER_TEMP 'ffmpeg-stage'
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          Expand-Archive -Path $zip -DestinationPath $stage -Force
+
+          # The asset's own root is `ffmpeg/win32-x64/`.
+          $extracted = Join-Path $stage 'ffmpeg/win32-x64/ffmpeg.exe'
+          if (-not (Test-Path $extracted)) { throw "no ffmpeg.exe in $zip" }
+
+          $pinned = (Get-Content 'resources/ffmpeg/win32-x64/ffmpeg.exe.sha256' -Raw).Trim().Split(' ')[0]
+          $actual = (Get-FileHash $extracted -Algorithm SHA256).Hash.ToLower()
+          Write-Host "asset   $actual"
+          Write-Host "pinned  $pinned"
+          if ($actual -ne $pinned) {
+            throw "the published ffmpeg asset does not match the hash this commit pins; refusing to package it"
+          }
+
+          Copy-Item $extracted 'resources/ffmpeg/win32-x64/ffmpeg.exe' -Force
           Get-ChildItem resources/ffmpeg/win32-x64
 
       - name: Verify ffmpeg
