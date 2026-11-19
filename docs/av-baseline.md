@@ -40,11 +40,16 @@ builds this artifact in CI on a `v*` tag.
 
 | File | SHA-256 |
 |---|---|
-| `Nericx-2.0.0-x64.msi` | _(record the hash of the artifact you scanned)_ |
-| `Nericx.exe` | _(record)_ |
+| `Nericx-2.0.0-x64.msi` | `8a1bbeb786abb814faebdaa96075ea811af74ece4852e4d8abe8efd783534026` |
+| `Nericx.exe` | `8e0ecda7f3848f98c5377c30082f6eb2fd2655a50261cc637dbbed528c981fd9` |
 | `ffmpeg.exe` | `fb3b306a3bb67bd11887c1d0fa6d512c69880fa8082b1915d19b3f0b055170a8` |
 
 Signature: `NotSigned` for both executables.
+
+These are the hashes of the locally built artifact. A release built by the
+workflow will differ (a different machine builds the MSI, and a rebuild of the
+ffmpeg is not byte-reproducible across toolchains), so re-hash the downloaded
+files before comparing the scan results.
 
 | File | Engines flagging | Notable detections | Microsoft |
 |---|---|---|---|
