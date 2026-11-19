@@ -65,11 +65,28 @@ test('only .osz files are accepted, case-insensitively', () => {
   assert.equal(isOszFile(''), false)
 })
 
-test('metadata parsing prefers the unicode fields and keeps the set id', () => {
+test('metadata parsing prefers the romanized fields and keeps the set id', () => {
   const metadata = parseOsuMetadata(OSU_TEXT)
   assert.equal(metadata.artist, 'xi')
   assert.equal(metadata.title, 'Blue Zenith')
   assert.equal(metadata.beatmapSetId, '292301')
+})
+
+test('metadata parsing prefers romaji over the unicode display names', () => {
+  const metadata = parseOsuMetadata(
+    '[Metadata]\nArtist: cosMo@bousouP\nArtistUnicode: cosMo＠暴走P\n' +
+    'Title: Gizaba Crazy Letter\nTitleUnicode: ギザバ怪文書\n'
+  )
+  assert.equal(metadata.artist, 'cosMo@bousouP')
+  assert.equal(metadata.title, 'Gizaba Crazy Letter')
+})
+
+test('metadata parsing falls back to the unicode fields when romaji is missing', () => {
+  const metadata = parseOsuMetadata(
+    '[Metadata]\nArtistUnicode: ゆある\nTitleUnicode: アスノヨゾラ哨戒班\n'
+  )
+  assert.equal(metadata.artist, 'ゆある')
+  assert.equal(metadata.title, 'アスノヨゾラ哨戒班')
 })
 
 test('metadata parsing ignores keys outside the [Metadata] block', () => {

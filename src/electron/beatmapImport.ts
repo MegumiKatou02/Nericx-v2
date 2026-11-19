@@ -1,9 +1,10 @@
 /**
  * Installing an `.osz` (a renamed ZIP) into the osu! `Songs` folder.
  *
- * osu! names beatmap folders `<Artist> - <Title>` using the unicode metadata
- * fields, so a dropped archive is extracted under the same name instead of the
- * often-ugly osz filename. Nothing here touches Electron: the outcome carries a
+ * osu! stable names beatmap folders `<Artist> - <Title>` from the romanized
+ * metadata fields (not `ArtistUnicode`/`TitleUnicode`), so a dropped archive is
+ * extracted under the same name instead of the often-ugly osz filename. Nothing
+ * here touches Electron: the outcome carries a
  * code the IPC layer turns into a localized message, which also keeps the
  * module importable by `node --test`.
  */
@@ -45,11 +46,12 @@ export const isOszFile = (filePath: string): boolean =>
   typeof filePath === 'string' && extname(filePath).toLowerCase() === '.osz'
 
 /**
- * Reads the `[Metadata]` block of an `.osu` file. `ArtistUnicode`/`TitleUnicode`
- * win because osu! folders use the display names, not the romanized search
- * names. Downloaded beatmaps also carry `BeatmapSetID`, and osu! prefixes every
- * songs folder with it (`<id> <artist> - <title>`) — reusing it keeps the cover
- * URL and the "view beatmap" button working for imported songs.
+ * Reads the `[Metadata]` block of an `.osu` file. `Artist`/`Title` (romanized)
+ * win because that is what osu! stable builds folder names from; the Unicode
+ * fields are only a fallback for files that omit the romanized ones. Downloaded
+ * beatmaps also carry `BeatmapSetID`, and osu! prefixes every songs folder with
+ * it (`<id> <artist> - <title>`) — reusing it keeps the cover URL and the
+ * "view beatmap" button working for imported songs.
  */
 export function parseOsuMetadata(text: string): {
   artist: string
@@ -80,8 +82,8 @@ export function parseOsuMetadata(text: string): {
     : undefined
 
   return {
-    artist: fields.ArtistUnicode || fields.Artist || '',
-    title: fields.TitleUnicode || fields.Title || '',
+    artist: fields.Artist || fields.ArtistUnicode || '',
+    title: fields.Title || fields.TitleUnicode || '',
     beatmapSetId
   }
 }
@@ -141,8 +143,9 @@ const folderNameFor = (
   metadata: { artist: string; title: string; beatmapSetId?: string },
   oszPath: string
 ): string => {
-  const unicodeName = [metadata.artist, metadata.title].filter(Boolean).join(' - ')
-  const name = sanitizeBeatmapFolderName(unicodeName)
+  const name = sanitizeBeatmapFolderName(
+    [metadata.artist, metadata.title].filter(Boolean).join(' - ')
+  )
   // Same shape osu! itself writes: `<beatmapsetId> <artist> - <title>`.
   const withId = name && metadata.beatmapSetId ? `${metadata.beatmapSetId} ${name}` : name
   const folderName = withId
