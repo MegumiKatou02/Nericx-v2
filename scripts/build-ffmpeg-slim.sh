@@ -62,7 +62,22 @@ PREFIX="${PREFIX:-/opt/nericx-ffmpeg}"
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1735689600}"  # 2025-01-01T00:00:00Z
 
 export PATH="/ucrt64/bin:/usr/bin:$PATH"
-export PKG_CONFIG_PATH="/ucrt64/lib/pkgconfig"
+# Native form (`D:/…/ucrt64/lib/pkgconfig`): pkgconf is a mingw program, and an
+# MSYS path here only works if its path translation happens to be enabled.
+export PKG_CONFIG_PATH="$(cygpath -m /ucrt64/lib/pkgconfig)"
+
+# pkg-config has to hand the compiler paths it can open. MSYS2's patched pkgconf
+# rewrites the `/ucrt64` prefix of a .pc file into the real Windows location; a
+# pkgconf without that patch prints `-I/ucrt64/include`, which a native gcc reads
+# as `C:\ucrt64\include` — so the link test fails and configure reports the
+# misleading "x264 not found using pkg-config" even though x264 is installed.
+# Detecting that here is cheaper than reading a config.log: if the reported
+# include dir is still POSIX-absolute, point the .pc at the native path.
+X264_PC="$PKG_CONFIG_PATH/x264.pc"
+if [ -f "$X264_PC" ] && pkg-config --variable=includedir x264 2>/dev/null | grep -q '^/'; then
+  echo "build-ffmpeg-slim: pkg-config does not translate /ucrt64; rewriting x264.pc prefix"
+  sed -i "s|^prefix=.*|prefix=$(cygpath -m /ucrt64)|" "$X264_PC"
+fi
 
 mkdir -p "$WORK"
 BUILD="$WORK/build-ffmpeg"
@@ -73,6 +88,7 @@ mkdir -p "$WORK/tmp"
 export TMPDIR="$WORK/tmp"
 cd "$BUILD"
 
+configure_ffmpeg() {
 "$FFMPEG_SRC/configure" \
   --prefix="$PREFIX" \
   --arch=x86_64 \
@@ -102,6 +118,19 @@ cd "$BUILD"
   --enable-encoder=libx264,aac \
   --enable-parser=h264,mpeg4video,mpegaudio,aac,vc1,vp9,opus \
   --enable-filter=scale,format,null,anull,aresample
+}
+
+# configure reports a missing library as one line — "ERROR: x264 not found
+# using pkg-config" — and hides the actual failing compile in
+# ffbuild/config.log. Print the part that matters instead of asking whoever
+# reads the CI log to guess.
+if ! configure_ffmpeg; then
+  echo
+  echo "=== configure failed; last pkg-config and x264 lines from config.log ==="
+  grep -nE "pkg-config|x264|error:|cannot find" ffbuild/config.log 2>/dev/null | tail -40 || true
+  echo "=== end of config.log excerpt ==="
+  exit 1
+fi
 
 # h2645_sei.c calls into aom_film_grain.c, but upstream only links that object
 # through CONFIG_H264_SEI when a full build enables it; with --disable-everything
