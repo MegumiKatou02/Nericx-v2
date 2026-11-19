@@ -45,9 +45,20 @@ whitelisting a false-positive report would have earned for the 2.0.0 build.
 
 | File | SHA-256 |
 |---|---|
-| `Nericx-2.0.1-x64.msi` | _(fill in from the release)_ |
-| `Nericx.exe` | _(fill in from the release)_ |
+| `Nericx-2.0.1-x64.msi` | `ffc2040d60d084c139d1cbc5ff89c266928ef73aaf3f716f2ffe38bf09e25214` |
+| `Nericx.exe` | `65eb3b6fe80c12f4ba8d13ff07b23effcf0a6869291327b4be62ee5c1e5fa6aa` |
 | `ffmpeg.exe` | `491ee337c4bb52b0e121bc5b046f772af510fe50a7a0762c6b9b5a72a5116b50` |
+
+These are the files published under the `v2.0.1` release, built by the
+`Release (Windows)` workflow run `44553053748` from commit `19f082a`. They were
+re-hashed after downloading the MSI and expanding it, not copied out of
+`SHA256SUMS.txt`, and all three match it. Each has a build provenance
+attestation (check with `gh attestation verify <file> --repo
+MegumiKatou02/Nericx-Player`), which is the evidence a false-positive report
+should cite.
+
+Signature: `NotSigned` — the release workflow has no certificate configured, so
+it takes the unsigned path.
 
 The `ffmpeg.exe` hash above is the CI build published under the `ffmpeg-7.1.1`
 release, which is the binary a release actually carries. The link timestamp is
