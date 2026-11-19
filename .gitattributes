@@ -1,0 +1,10 @@
+# Line endings are not cosmetic for these files.
+#
+# `core.autocrlf=true` is set on Windows, so a checkout converts these to CRLF.
+# MSYS2's bash then reads `set -euo pipefail\r` and dies on `$'\r': command not
+# found`, and every line of a workflow's `run:` block reaches the runner with a
+# trailing CR. The files are LF today only because nothing has re-checked them
+# out since they were written; this pins LF so a checkout cannot break the build.
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
