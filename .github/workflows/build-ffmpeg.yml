@@ -156,15 +156,17 @@ jobs:
           set -euo pipefail
           TEMP_MSYS="$(cygpath -u "${{ runner.temp }}")"
           REPO_MSYS="$(cygpath -u "$GITHUB_WORKSPACE")"
-          VERSION="$(node -p "(require('$GITHUB_WORKSPACE/scripts/pinned-sources.json').ffmpeg.version)")"
           STAGE="$TEMP_MSYS/nx-sources-stage"
           rm -rf "$STAGE"
           mkdir -p "$STAGE/sources" "$STAGE/scripts"
-          cp "$TEMP_MSYS/nx-source/ffmpeg-$VERSION.tar.xz" "$STAGE/sources/"
+          # Globs rather than the pinned version: setup-msys2 gives the shell a
+          # strict PATH, so `node` is not there to read pinned-sources.json. The
+          # source directory only ever holds the one verified ffmpeg tarball.
+          cp "$TEMP_MSYS/nx-source"/ffmpeg-*.tar.xz "$STAGE/sources/"
           cp "$TEMP_MSYS/nx-source"/x264-*.tar.bz2 "$STAGE/sources/"
           cp "$REPO_MSYS/scripts/build-ffmpeg-slim.sh" "$REPO_MSYS/scripts/fetch-ffmpeg-source.mjs" \
              "$REPO_MSYS/scripts/pinned-sources.json" "$STAGE/scripts/"
-          tar -C "$STAGE" -cJf "$GITHUB_WORKSPACE/nericx-ffmpeg-sources.tar.xz" .
+          tar -C "$STAGE" -cJf "$REPO_MSYS/nericx-ffmpeg-sources.tar.xz" .
 
       - name: Publish as a release asset
         if: steps.hash.outputs.match == 'true' || inputs.force_publish
