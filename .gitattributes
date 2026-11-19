@@ -8,3 +8,7 @@
 *.sh   text eol=lf
 *.yml  text eol=lf
 *.yaml text eol=lf
+
+# `sha256sum -c` treats the trailing CR as part of the filename, so a
+# CRLF checkout makes the recorded hash check fail on a file that is correct.
+*.sha256 text eol=lf
