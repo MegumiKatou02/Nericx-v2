@@ -1,7 +1,7 @@
 # Nericx
 
 <div align="center">
-  <img src="https://i.pinimg.com/736x/e5/c6/1d/e5c61dd2ade7a1630b2f58220b81ee26.jpg" alt="Nericx Logo" width="128" height="128">
+  <img src="./icon.ico" alt="Nericx Logo" width="128" height="128">
   
   **Link and listen to music with osu!**
   
@@ -25,8 +25,10 @@
 
 ## Images
 
-![image](https://github.com/user-attachments/assets/66911028-e436-4148-8a7c-c7727b413fba)
-![image](https://github.com/user-attachments/assets/0dc84482-f129-44e2-b99a-672d2954494d)
+<img width="1247" height="817" alt="image" src="https://github.com/user-attachments/assets/be5a08bb-18f3-41c5-a3fb-23c28c56b18a" />
+<img width="1241" height="814" alt="image" src="https://github.com/user-attachments/assets/1cf1c5de-7361-4a6c-b038-fcad066c09de" />
+
+
 
 ## 🚀 Getting Started
 
