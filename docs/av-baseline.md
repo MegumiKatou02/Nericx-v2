@@ -33,6 +33,33 @@ for an old release verbatim; a new section goes on top.
      Select-Object Status, StatusMessage
    ```
 
+## 2.0.1 (unsigned, MSI only)
+
+Recorded 2026-11-19. The only change from 2.0.0 that affects a scanned file is
+`ffmpeg.exe`: the build now enables the raw MPEG-1/2, MPEG-4 and H.264/HEVC
+elementary-stream demuxers, without which every MPEG-PS file (`.mpg`, `.mpeg`,
+`.vob`) probed as `Video: none` and could not be converted at all. The app was
+shipping a format it advertised and could not handle; that is a functional bug,
+not a security fix, but it changes the binary's hash and so invalidates the
+whitelisting a false-positive report would have earned for the 2.0.0 build.
+
+| File | SHA-256 |
+|---|---|
+| `Nericx-2.0.1-x64.msi` | _(fill in from the release)_ |
+| `Nericx.exe` | _(fill in from the release)_ |
+| `ffmpeg.exe` | `1f4f87a5b59ac3cb4439a07d69f843b81737728aa0b5071592288ddd67bcb61a` |
+
+The `ffmpeg.exe` hash above is the local build. The CI build differs — the
+toolchain is not pinned — so the asset published under the `ffmpeg-7.1.1`
+release is the authority for a release, and the release workflow refuses to
+package an asset that does not match the committed pin.
+
+| File | Engines flagging | Notable detections | Microsoft |
+|---|---|---|---|
+| `Nericx-2.0.1-x64.msi` | _(fill in)_ | | |
+| `Nericx.exe` | _(fill in)_ | | |
+| `ffmpeg.exe` | _(fill in)_ | | |
+
 ## 2.0.0 (unsigned, MSI only)
 
 Recorded 2026-11-19. Built locally with `npm run dist:win`; the same commit also

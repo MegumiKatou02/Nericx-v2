@@ -12,6 +12,9 @@
 #
 #   demuxers  avi matroska mov flv mpegps mpegts asf ogg
 #             — the containers beatmaps actually ship (.avi above all)
+#             mpegvideo m4v h264 hevc
+#             — not containers: raw elementary-stream demuxers that MPEG-PS
+#               probing needs to name a video stream (see below)
 #   muxer     mp4
 #             — the only output Chromium is trusted with
 #   encoders  libx264 aac
@@ -28,6 +31,20 @@
 # compile — dropping it both shrinks the binary and makes the build survive a
 # machine under memory pressure. Its parser stays, because the mov/avi demuxers
 # need it.
+#
+# `mpegvideo` is not a container: it is the raw MPEG-1/2 video demuxer, and the
+# MPEG-PS demuxer (`.mpg`, `.mpeg`, `.vob`) hands each packet to the input
+# format probe to learn the picture size. With it missing, every stream in those
+# files probes as `Video: none` and conversion fails outright — even though the
+# mpeg2video decoder is present and the mpegts demuxer handles `.ts` fine,
+# because mpegts carries a codec descriptor and MPEG-PS does not.
+#
+# `m4v`, `h264` and `hevc` are enabled for the same reason: they are the other
+# raw demuxers that libavformat/demux.c's `set_codec_from_probe_data()` matches
+# a probed video packet against, and an MPEG-PS video stream (start code
+# 0x1e0-0x1ef) arrives with no codec at all. DivX-in-`.mpg` and H.264-in-`.mpg`
+# both fail without them. They are probe/raw-header code only — no decoder, no
+# container support, a few KB each.
 #
 # Requirements (Windows):
 #   - MSYS2 with the UCRT64 toolchain: pacman -S --needed base-devel mingw-w64-ucrt-x86_64-{gcc,nasm,diffutils,pkgconf}
@@ -111,7 +128,7 @@ configure_ffmpeg() {
   --extra-cflags="-Os -ffunction-sections -fdata-sections" \
   --extra-ldflags="-Wl,--gc-sections -static -s" \
   --enable-protocol=file,pipe \
-  --enable-demuxer=avi,matroska,mov,flv,mpegps,mpegts,asf,ogg \
+  --enable-demuxer=avi,matroska,mov,flv,mpegps,mpegvideo,m4v,h264,hevc,mpegts,asf,ogg \
   --enable-muxer=mp4 \
   --enable-decoder=mpeg4,msmpeg4v3,msmpeg4v2,wmv1,wmv2,wmv3,vc1,vp6f,vp8,vp9,mpeg2video,mpeg1video,h263,flv,mjpeg \
   --enable-decoder=mp3,aac,ac3,eac3,flv,mp2,wmav1,wmav2,vorbis,opus,pcm_s16le,pcm_u8 \
