@@ -19,6 +19,13 @@ import { copyFileSync, existsSync, readdirSync } from 'fs'
 let MusicPlayer: any = null
 let setupDiscordHandlers: any = null
 
+// The taskbar's media flyout resolves the app's name and icon from the
+// process's AppUserModelID, matched against a Start Menu shortcut carrying the
+// same ID — the MSI electron-builder writes uses `appId` (`com.nericx.nericx`).
+// Electron's fallback, `electron.app.Nericx`, matched no shortcut, so Windows
+// labelled the whole media session "Unknown app". Must run before any window.
+app.setAppUserModelId('com.nericx.nericx')
+
 // The GPU process otherwise keeps accelerated compositor surfaces for the whole
 // window, which this 1000x660 music player does not need; compositing it in
 // software keeps GPU rasterization while cutting the GPU process roughly in half.
