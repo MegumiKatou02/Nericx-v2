@@ -47,12 +47,14 @@ whitelisting a false-positive report would have earned for the 2.0.0 build.
 |---|---|
 | `Nericx-2.0.1-x64.msi` | _(fill in from the release)_ |
 | `Nericx.exe` | _(fill in from the release)_ |
-| `ffmpeg.exe` | `1f4f87a5b59ac3cb4439a07d69f843b81737728aa0b5071592288ddd67bcb61a` |
+| `ffmpeg.exe` | `491ee337c4bb52b0e121bc5b046f772af510fe50a7a0762c6b9b5a72a5116b50` |
 
-The `ffmpeg.exe` hash above is the local build. The CI build differs — the
-toolchain is not pinned — so the asset published under the `ffmpeg-7.1.1`
-release is the authority for a release, and the release workflow refuses to
-package an asset that does not match the committed pin.
+The `ffmpeg.exe` hash above is the CI build published under the `ffmpeg-7.1.1`
+release, which is the binary a release actually carries. The link timestamp is
+pinned by `SOURCE_DATE_EPOCH` and `rcedit` is deterministic, so a re-run of the
+workflow on the same runner image reproduces it; a local build with a different
+MSYS2 toolchain will not, and the release workflow refuses to package an asset
+that does not match the committed pin.
 
 | File | Engines flagging | Notable detections | Microsoft |
 |---|---|---|---|
