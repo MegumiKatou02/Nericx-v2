@@ -1,6 +1,8 @@
 {
     "appId": "com.nericx.nericx",
     "productName": "Nericx",
+    "copyright": "Copyright © 2026 Yukiookii",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "files": [
         "dist-electron",
         "dist-vue",
@@ -25,6 +27,10 @@
             "from": "resources/ffmpeg",
             "to": "ffmpeg",
             "filter": ["**/ffmpeg", "**/ffmpeg.exe"]
+        },
+        {
+            "from": "resources/licenses",
+            "to": "licenses"
         }
     ],
     "icon": "./icon.ico",
@@ -39,6 +45,9 @@
         "category": "Utility"
     },
     "win": {
-        "target": ["portable", "msi"]
+        "target": ["msi"],
+        "legalTrademarks": "Nericx",
+        "signingHashAlgorithms": ["sha256"],
+        "rfc3161TimeStampServer": "http://timestamp.digicert.com"
     }
 }

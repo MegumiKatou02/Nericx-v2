@@ -294,6 +294,30 @@
         <span>{{ t('settings.cache.description') }}</span>
       </div>
     </div>
+
+    <div class="setting-section">
+      <h3>{{ t('settings.about.title') }}</h3>
+      <div class="setting-option">
+        <label>{{ t('settings.about.version') }}</label>
+        <div class="about-info">
+          <span class="about-value">Nericx {{ appVersion || '—' }}</span>
+          <span class="about-meta">{{ t('settings.about.license') }} {{ t('settings.about.license.value') }}</span>
+          <div class="about-actions">
+            <button @click="openRepository" class="cache-btn save-btn">
+              <i class="fab fa-github"></i>
+              <span>{{ t('settings.about.repository') }}</span>
+            </button>
+            <button @click="openNotices" class="cache-btn save-btn">
+              <i class="fas fa-file-alt"></i>
+              <span>{{ t('settings.about.notices') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="cache-description">
+        <span>{{ t('settings.about.notices.description') }}</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -332,6 +356,18 @@ const cacheStats = ref({
 })
 
 const totalSongs = ref(0)
+const appVersion = ref('')
+
+const PROJECT_URL = 'https://github.com/MegumiKatou02/Nericx-Player'
+
+const openRepository = async () => {
+  await window.electronAPI.openExternal(PROJECT_URL)
+}
+
+const openNotices = async () => {
+  const result = await window.electronAPI.openLicenseNotice()
+  if (!result.success) console.error('Could not open the third-party notices:', result.message)
+}
 
 const updateCSSVariables = inject('updateCSSVariables') as (color: string) => void
 const updateTheme = inject('updateTheme') as (theme: string) => void
@@ -545,6 +581,10 @@ onMounted(async () => {
 
     await ensureDiscordSettingsLoaded()
     await updateCacheStats()
+
+    // Read from the packaged package.json, so the number shown here is the one
+    // the installer and the executable's version resource carry.
+    appVersion.value = (await window.electronAPI.getAppInfo())?.version ?? ''
   } catch (error) {
     console.error('Error loading config:', error)
   }
@@ -843,6 +883,10 @@ h3 {
   flex-direction: column;
   gap: 12px;
   align-items: flex-start;
+}
+
+.setting-option .about-info {
+  flex: 1;
 }
 
 .setting-option .theme-selector {
@@ -1310,6 +1354,31 @@ h3 {
   border-radius: 5px;
   background: rgba(0, 0, 0, 0.03);
   margin-top: 6px;
+}
+
+/* The About block is text plus two buttons, so it needs none of the
+   fixed-width layout the toggles use. */
+.about-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.about-value {
+  font-weight: 600;
+}
+
+.about-meta {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.about-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .dark .normalization-description,

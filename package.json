@@ -3,7 +3,11 @@
   "private": true,
   "version": "2.0.0",
   "description": "Link and listen to music with osu!",
-  "author": "Yukiookii",
+  "author": {
+    "name": "Yukiookii",
+    "email": "khongbachofficial@gmail.com"
+  },
+  "license": "MIT",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -16,10 +20,13 @@
     "build:ffmpeg": "bash scripts/build-ffmpeg-slim.sh",
     "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
     "fetch:ffmpeg:fallback": "node scripts/fetch-ffmpeg.mjs --fallback",
+    "stamp:ffmpeg": "node scripts/stamp-ffmpeg.mjs",
+    "verify:ffmpeg": "node scripts/verify-ffmpeg.mjs",
     "transpile:electron": "tsc --project src/electron/tsconfig.json",
+    "package:win": "npm run transpile:electron && npm run build && electron-builder --win --x64",
     "dist:mac": "node scripts/fetch-ffmpeg.mjs --platform darwin --arch arm64 --optional && npm run transpile:electron && npm run build && electron-builder --mac --arm64",
     "dist:linux": "node scripts/fetch-ffmpeg.mjs --platform linux --arch x64 --optional && npm run transpile:electron && npm run build && electron-builder --linux --x64",
-    "dist:win": "node scripts/fetch-ffmpeg.mjs --platform win32 --arch x64 && npm run transpile:electron && npm run build && electron-builder --win --x64"
+    "dist:win": "node scripts/fetch-ffmpeg.mjs --platform win32 --arch x64 && node scripts/stamp-ffmpeg.mjs --platform win32 --arch x64 && node scripts/verify-ffmpeg.mjs --platform win32 --arch x64 && npm run transpile:electron && npm run build && electron-builder --win --x64"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",

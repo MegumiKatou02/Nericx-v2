@@ -45,3 +45,5 @@ Desktop.ini
 # Bundled ffmpeg (~24 MB slim build; `npm run build:ffmpeg` builds it)
 resources/ffmpeg/*/ffmpeg
 resources/ffmpeg/*/ffmpeg.exe
+# The stamp script's rollback copy; a failed build must not leave one behind.
+resources/ffmpeg/*/*.stamp-backup

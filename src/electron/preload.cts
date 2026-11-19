@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   copyFile: (filePath: string) => ipcRenderer.invoke('copy-file', filePath),
   showItemInFolder: (filePath: string) => ipcRenderer.invoke('show-item-in-folder', filePath),
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
+  getAppInfo: () => ipcRenderer.invoke('get-app-info'),
+  openLicenseNotice: () => ipcRenderer.invoke('open-license-notice'),
   
   setWindowTransparency: (enabled: boolean, opacity: number) => ipcRenderer.invoke('set-window-transparency', enabled, opacity),
   getWindowOpacity: () => ipcRenderer.invoke('get-window-opacity'),

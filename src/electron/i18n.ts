@@ -100,6 +100,14 @@ const en = {
   'settings.cache.songs': '{count} songs',
   'settings.cache.description':
     'The cache stores song metadata to speed up loading. Clear it if something looks wrong or the music files changed.',
+  'settings.about.title': 'About',
+  'settings.about.version': 'Version:',
+  'settings.about.license': 'License:',
+  'settings.about.license.value': 'MIT',
+  'settings.about.repository': 'Open the project page',
+  'settings.about.notices': 'Third-party notices',
+  'settings.about.notices.description':
+    'Nericx bundles an FFmpeg executable licensed under the GPL. Opening the notice shows the license texts and where to get that build\'s source.',
 
   'general.title': 'osu! configuration',
   'general.osuPath': 'Path to the osu! folder:',
@@ -432,6 +440,14 @@ const vi: Record<MessageKey, string> = {
   'settings.cache.songs': '{count} bài hát',
   'settings.cache.description':
     'Cache lưu trữ metadata của bài hát để tăng tốc độ tải. Xóa cache khi có vấn đề hoặc file nhạc thay đổi.',
+  'settings.about.title': 'Giới thiệu',
+  'settings.about.version': 'Phiên bản:',
+  'settings.about.license': 'Giấy phép:',
+  'settings.about.license.value': 'MIT',
+  'settings.about.repository': 'Mở trang dự án',
+  'settings.about.notices': 'Thông báo bên thứ ba',
+  'settings.about.notices.description':
+    'Nericx đi kèm một bản FFmpeg dưới giấy phép GPL. Mở thông báo để xem văn bản giấy phép và nơi lấy mã nguồn của bản build đó.',
 
   'general.title': 'Cấu hình osu!',
   'general.osuPath': 'Đường dẫn tới thư mục osu!:',
@@ -763,6 +779,14 @@ const ja: Record<MessageKey, string> = {
   'settings.cache.songs': '{count} 曲',
   'settings.cache.description':
     'キャッシュは曲のメタデータを保存して読み込みを速くします。問題がある場合や音楽ファイルを変更した場合は削除してください。',
+  'settings.about.title': 'このアプリについて',
+  'settings.about.version': 'バージョン:',
+  'settings.about.license': 'ライセンス:',
+  'settings.about.license.value': 'MIT',
+  'settings.about.repository': 'プロジェクトページを開く',
+  'settings.about.notices': 'サードパーティの通知',
+  'settings.about.notices.description':
+    'Nericx には GPL でライセンスされた FFmpeg が同梱されています。通知を開くとライセンス本文とそのビルドのソースの入手先が表示されます。',
 
   'general.title': 'osu! の設定',
   'general.osuPath': 'osu! フォルダのパス:',
