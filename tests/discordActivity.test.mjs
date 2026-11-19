@@ -21,7 +21,7 @@ test('large image uses the beatmap cover and adds buttons when a beatmapset exis
   assert.equal(activity.assets.large_image, 'https://assets.ppy.sh/beatmaps/123/covers/list@2x.jpg')
   assert.deepEqual(activity.buttons, [
     { label: 'View Beatmap', url: 'https://osu.ppy.sh/beatmapsets/123' },
-    { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
+    { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-Player' }
   ])
 })
 
@@ -90,7 +90,7 @@ test('a beatmapset without a usable cover still links to the beatmap', () => {
   const activity = buildActivity({ name: 'A - B', beatmapsetId: '1000', coverAvailable: false }, NOW)
   assert.deepEqual(activity.buttons, [
     { label: 'View Beatmap', url: 'https://osu.ppy.sh/beatmapsets/1000' },
-    { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
+    { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-Player' }
   ])
 })
 
@@ -180,7 +180,7 @@ test('an over-long title and artist are cut to Discord 128-character limit', () 
 test('the beatmap button can be hidden while the github button stays', () => {
   const activity = buildActivity({ name: 'A - B', beatmapsetId: '123', beatmapButton: false }, NOW)
   assert.deepEqual(activity.buttons, [
-    { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' }
+    { label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-Player' }
   ])
 })
 
