@@ -702,17 +702,20 @@ ipcMain.handle('beatmap:import-osz', createIPCHandler(async (_: any, filePaths: 
   }
 
   // A scan of the whole Songs folder would stall the drop on a large library;
-  // the player can index just the folders that were just installed. When it has
-  // no library loaded at all (the osu! path was only just configured), the scan
-  // is the only way to get a complete list.
-  const installedFolders = results.filter(result => result.success && result.folderName)
-  if (musicPlayerInstance && installedFolders.length > 0) {
-    if (musicPlayerInstance.getFilteredSongs().length === 0) {
-      await musicPlayerInstance.loadSongs(osuPath)
-    } else {
-      for (const result of installedFolders) {
-        await musicPlayerInstance.addSongFolder(osuPath, result.folderName)
-      }
+  // the player can index just the folders that were just installed. The player
+  // is created on demand here too, so an `.osz` dropped before the Music tab
+  // has asked for anything is not skipped: the renderer then refreshes from
+  // `metadataUpdated`, and its own scan (if one is running) finishes after this.
+  const installedFolders = results.filter(
+    (result): result is { success: true; message: string; folderName: string } =>
+      result.success && Boolean(result.folderName)
+  )
+  if (installedFolders.length > 0) {
+    const player = await initMusicPlayer()
+    for (const result of installedFolders) {
+      // `addSongFolder` waits for a scan in flight, so a drop during the first
+      // library read is appended to the scanned list instead of racing it.
+      await player.addSongFolder(osuPath, result.folderName)
     }
     ipcBatcher.add('music:metadataUpdated', {})
   }

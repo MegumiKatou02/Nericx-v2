@@ -420,6 +420,7 @@ import { createAudioGraph, type AudioGraph, type AudioGraphContext } from '../au
 import { fileUrlForPath } from '../fileUrl.js'
 import { VOLUME_CONFIG_KEY, parseStoredVolume } from '../volume.js'
 import { createCoalescingWriter } from '../coalesce.js'
+import { createLibrarySync } from '../librarySync.js'
 import { createProgressTicker, systemTimers, type ProgressTicker } from '../progressTicker.js'
 import { createStateTransition } from '../discordClient.js'
 import { discordSettings, ensureDiscordSettingsLoaded, parseStoredBoolean } from '../discordSettings.js'
@@ -830,6 +831,9 @@ const filteredSongs = shallowRef<Song[]>([])
 const songsListRef = ref<HTMLElement | null>(null)
 const isLoading = ref<boolean>(false)
 const songsCache = shallowRef<Song[]>([])
+// The initial scan and the post-import `metadataUpdated` refresh both replace
+// the list, and either can finish last. Only the newest read may write.
+const librarySync = createLibrarySync()
 const isDropdownOpen = ref(false)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const musicTabRef = ref<HTMLElement | null>(null)
@@ -1587,28 +1591,16 @@ const loadSongs = async () => {
       })
 
       loadingText.value = 'music.loading.scanning'
-      const loadResult = await window.electronAPI.musicGetSongs()
+      const scanResult = await librarySync.load<{ success: boolean; message: string; songs?: Song[] }>(
+        () => window.electronAPI.musicGetSongs()
+      )
 
-      if (loadResult.success) {
-        songsCache.value = loadResult.songs || []
+      if (scanResult.apply && scanResult.value.success) {
+        songsCache.value = scanResult.value.songs || []
         filteredSongs.value = songsCache.value
         updateVisibleSongs()
 
         await updateCacheStats()
-
-        window.electronAPI.onMusicMetadataUpdated(async () => {
-          const updatedSongs = await window.electronAPI.musicGetFilteredSongs()
-          songsCache.value = updatedSongs
-
-          searchCache.clear()
-
-          if (!searchQuery.value.trim()) {
-            filteredSongs.value = [...updatedSongs]
-            updateVisibleSongs()
-          } else {
-            optimizedFilterSongs()
-          }
-        })
       }
     }
   } catch (error) {
@@ -1624,6 +1616,37 @@ const loadSongs = async () => {
       }
     }, 2000)
   }
+}
+
+/**
+ * Applies a refreshed library from the main process. Both this and the mount
+ * scan replace `songsCache`, so they share the `librarySync` gate: if the scan
+ * is still in flight and finishes later, its (older) list is dropped instead of
+ * hiding a song the import just added.
+ */
+const applyUpdatedSongs = (updatedSongs: Song[]) => {
+  songsCache.value = updatedSongs
+
+  searchCache.clear()
+
+  if (!searchQuery.value.trim()) {
+    filteredSongs.value = [...updatedSongs]
+    updateVisibleSongs()
+  } else {
+    optimizedFilterSongs()
+  }
+}
+
+/**
+ * Registered on mount, before the first scan: the main process broadcasts this
+ * after an `.osz` import or a beatmap delete, and an `.osz` dropped while the
+ * library is still loading would otherwise be broadcast to nobody. The import
+ * appends to the main process list before it broadcasts and waits for a scan in
+ * flight, so this read always sees the song that was just installed.
+ */
+const refreshLibrary = async () => {
+  const refresh = await librarySync.load<Song[]>(() => window.electronAPI.musicGetFilteredSongs())
+  if (refresh.apply) applyUpdatedSongs(refresh.value)
 }
 
 const selectSong = (song: Song) => {
@@ -2424,6 +2447,9 @@ const removeSongFromLibrary = (path: string) => {
   if (currentSong.value?.path === path) stopMusic()
   if (selectedSong.value?.path === path) selectedSong.value = null
 
+  // A read that started before the delete would bring the row back; retire it.
+  librarySync.invalidate()
+
   songsCache.value = songsCache.value.filter(song => song.path !== path)
   filteredSongs.value = filteredSongs.value.filter(song => song.path !== path)
   searchCache.clear()
@@ -2520,6 +2546,9 @@ onMounted(async () => {
   discordEnabled.value = discordSettings.enabled
   applyDiscordState(discordEnabled.value)
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  // Registered before the first scan finishes, so an `.osz` imported while the
+  // library is still loading still refreshes the list (see `refreshLibrary`).
+  window.electronAPI.onMusicMetadataUpdated(refreshLibrary)
   windowVisibilityUnsubscribe = window.electronAPI.onWindowVisibilityChanged(handleWindowVisibility)
   trayCommandUnsubscribe = window.electronAPI.onTrayCommand(handleTrayCommand)
   // ffmpeg reports whole percentages; each one only updates the note on the

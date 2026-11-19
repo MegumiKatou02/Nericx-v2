@@ -727,11 +727,17 @@ export class MusicPlayer extends EventEmitter {
   /**
    * The scan is tracked so an `.osz` dropped while the library is still being
    * read is appended after the scan finishes instead of being wiped by it.
+   * A second request also waits for the one in flight: `runSongScan` clears and
+   * refills `songsData`, so two scans at once would corrupt each other's list.
    */
   private scanInFlight: Promise<{ success: boolean; message: string; songs?: Song[] }> | null = null
 
   async loadSongs(osuPath: string): Promise<{ success: boolean; message: string; songs?: Song[] }> {
-    const scan = this.runSongScan(osuPath)
+    const previous = this.scanInFlight
+    const scan = (async () => {
+      if (previous) await previous.catch(() => undefined)
+      return this.runSongScan(osuPath)
+    })()
     this.scanInFlight = scan
     try {
       return await scan
