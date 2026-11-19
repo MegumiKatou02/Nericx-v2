@@ -1,14 +1,14 @@
 import { dirname, join } from 'path'
 import { readdirSync, statSync, existsSync } from 'fs'
-import { readFile, writeFile, mkdir } from 'fs/promises'
+import { readFile, writeFile, mkdir, rename, copyFile, rm } from 'fs/promises'
 import type { Song } from './type.js'
 import { parseBeatmapsetId } from './beatmapsetId.js'
 import { findVideoFile } from './videoFile.js'
 import * as mm from 'music-metadata'
 import { EventEmitter } from 'events'
 import { createHash } from 'crypto'
-import { tmpdir } from 'os'
-import { cpus } from 'os'
+import { cpus, tmpdir } from 'os'
+import { app } from 'electron'
 import { t } from './util.js'
 import { canReuseScan, type FinishedScan } from './scanReuse.js'
 
@@ -125,7 +125,12 @@ export class MusicPlayer extends EventEmitter {
 
   constructor() {
     super()
-    this.cacheFilePath = join(tmpdir(), 'music-player-cache.json')
+    // `userData`, not `tmpdir()`: this is persistent per-user state the app
+    // owns, and a program that writes JSON into %TEMP% and reads it back on the
+    // next launch is the shape of a dropper — the exact heuristic this
+    // repository's ffmpeg work exists to avoid. It sits beside `config.db` and
+    // `video-cache`, which the app already owns.
+    this.cacheFilePath = join(app.getPath('userData'), 'music-player-cache.json')
     
     this.metadataPool = new ObjectPool<CachedMetadata>(
       () => ({
@@ -226,9 +231,35 @@ export class MusicPlayer extends EventEmitter {
   }
 
   /**
+   * Older builds wrote the cache to `%TEMP%\music-player-cache.json`. Moving
+   * that file once keeps the metadata a user already paid for, and leaves no
+   * stray JSON in the temp directory afterwards.
+   */
+  private async migrateLegacyCache(): Promise<void> {
+    const legacyPath = join(tmpdir(), 'music-player-cache.json')
+    if (existsSync(this.cacheFilePath) || !existsSync(legacyPath)) return
+    try {
+      await mkdir(dirname(this.cacheFilePath), { recursive: true })
+      await rename(legacyPath, this.cacheFilePath)
+      console.log('Đã chuyển cache cũ từ thư mục tạm sang thư mục dữ liệu')
+    } catch {
+      // A rename across devices throws; copying is the fallback. A failure here
+      // only costs one rescan, so it must not stop startup.
+      try {
+        await copyFile(legacyPath, this.cacheFilePath)
+      } catch (copyError) {
+        console.warn('Không thể chuyển cache cũ:', copyError)
+        return
+      }
+      await rm(legacyPath, { force: true }).catch(() => {})
+    }
+  }
+
+  /**
    * Streaming cache initialization
    */
   private async initializeCache(): Promise<void> {
+    await this.migrateLegacyCache()
     try {
       if (!existsSync(this.cacheFilePath)) {
         console.log('Cache file không tồn tại, tạo cache mới')
