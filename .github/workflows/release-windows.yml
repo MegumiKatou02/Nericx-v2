@@ -8,6 +8,8 @@
 # Signing is opt-in. electron-builder reads WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD
 # from the environment by itself, so adding a certificate later is adding two
 # repository secrets; no change to this file or to the build config is needed.
+# The first step copies the secrets into the job environment only when they are
+# set, so an unsigned run has no certificate variables rather than empty ones.
 # The steps that sign are guarded, and a run without secrets still produces a
 # complete, verifiable release.
 name: Release (Windows)
@@ -26,15 +28,41 @@ jobs:
   release:
     runs-on: windows-latest
     timeout-minutes: 60
-    # Secrets are not readable in an `if:` expression, so they are lifted into
-    # job-level env first; the guard steps then test the env var. An empty secret
-    # makes the variable empty, which is the "no certificate" case.
-    env:
-      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
     steps:
       - uses: actions/checkout@v4
+
+      # Secrets cannot be read in an `if:` expression, so they are copied into
+      # the job environment here — but only when they are actually set.
+      #
+      # The distinction between "absent" and "empty" is not cosmetic.
+      # electron-builder's `getCscLink()` returns `""` unchanged for an empty
+      # WIN_CSC_LINK (app-builder-lib/out/platformPackager.js: "allow to
+      # specify as empty string"), and the Windows packager then tries to
+      # import `""` as a certificate path. Resolved against the project
+      # directory that is the directory itself, so the build dies with
+      # `Env WIN_CSC_LINK is not correct, cannot resolve: <repo> not a file`.
+      # Declaring the variable at job level unconditionally is exactly that
+      # case, because an unset secret expands to the empty string.
+      #
+      # Writing to GITHUB_ENV instead means a run without a certificate has no
+      # variable at all, which electron-builder reads as "unsigned".
+      - name: Detect code-signing certificate
+        id: cert
+        shell: pwsh
+        env:
+          SECRET_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          SECRET_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if (-not $env:SECRET_CSC_LINK) {
+            Write-Host 'no certificate secret; the release will be unsigned'
+            "present=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          "WIN_CSC_LINK=$($env:SECRET_CSC_LINK)" >> $env:GITHUB_ENV
+          "WIN_CSC_KEY_PASSWORD=$($env:SECRET_CSC_KEY_PASSWORD)" >> $env:GITHUB_ENV
+          "present=true" >> $env:GITHUB_OUTPUT
+          Write-Host 'certificate secret found; the release will be signed'
 
       - uses: actions/setup-node@v4
         with:
@@ -96,7 +124,7 @@ jobs:
       # ffmpeg gets its own signtool pass. That is the one binary users actually
       # run beside the app, and it is the one scanners look at hardest.
       - name: Sign bundled ffmpeg
-        if: ${{ env.WIN_CSC_LINK != '' }}
+        if: steps.cert.outputs.present == 'true'
         shell: pwsh
         run: |
           $pfx = Join-Path $env:RUNNER_TEMP 'cert.pfx'
