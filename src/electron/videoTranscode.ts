@@ -57,6 +57,15 @@ interface ActiveJob {
 
 const jobs = new Map<string, Promise<VideoTranscodeResult>>()
 let activeJob: ActiveJob | null = null
+/**
+ * The probe's child. It is not a transcode job, so `activeJob` cannot track it,
+ * but it is still an ffmpeg process that a quit or a track change must not leave
+ * running. Unlike a conversion it has a hard deadline: reading the stream banner
+ * takes milliseconds, so a probe still alive after this long is stuck on a
+ * malformed file and will never produce a usable answer.
+ */
+let probeChild: ChildProcess | null = null
+const PROBE_TIMEOUT_MS = 15_000
 
 const fileExists = async (filePath: string): Promise<boolean> => {
   try {
@@ -88,6 +97,10 @@ const canRunFfmpeg = async (binary: string): Promise<boolean> => {
  * Reads the source's codecs before converting. ffmpeg with no output file
  * prints the stream banner and exits; a failure here only means the re-encode
  * path is used, which is always correct.
+ *
+ * The child is tracked so `cancelVideoTranscode` can kill it, and raced against
+ * a deadline: a malformed file can leave ffmpeg waiting on a stream forever,
+ * which would keep a process alive for the rest of the session.
  */
 const probeStreams = (binary: string, sourcePath: string): Promise<string> =>
   new Promise((resolvePromise) => {
@@ -102,22 +115,44 @@ const probeStreams = (binary: string, sourcePath: string): Promise<string> =>
       return
     }
 
+    probeChild = child
     let stderr = ''
+    let finished = false
+    const finish = () => {
+      if (finished) return
+      finished = true
+      clearTimeout(timeout)
+      if (probeChild === child) probeChild = null
+      resolvePromise(stderr)
+    }
+    const timeout = setTimeout(() => {
+      child.kill()
+      finish()
+    }, PROBE_TIMEOUT_MS)
+    // The timer must not keep the event loop alive on its own.
+    timeout.unref?.()
+
     child.stderr?.setEncoding('utf8')
     child.stderr?.on('data', (chunk: string) => {
       stderr = (stderr + chunk).slice(-8192)
     })
-    const done = () => resolvePromise(stderr)
-    child.once('error', done)
-    child.once('close', done)
+    child.once('error', finish)
+    child.once('close', finish)
   })
 
 /**
  * A second request while the first is still converting would compete for the
  * CPU and the disk, so a different source cancels the running job. The renderer
  * abandons a `cancelled` result and asks again when the user comes back.
+ *
+ * The probe child is killed here too: it serves the same request, and a quit
+ * must not leave any ffmpeg process behind.
  */
 const cancelActiveJob = (): void => {
+  if (probeChild) {
+    probeChild.kill()
+    probeChild = null
+  }
   if (!activeJob) return
   activeJob.cancelled = true
   activeJob.child.kill()
@@ -269,9 +304,19 @@ export const ensurePlayableVideo = async (
   return job
 }
 
-/** Stops the conversion for `sourcePath`, if one is running. */
+/**
+ * Stops the conversion for `sourcePath`, if one is running.
+ *
+ * Called with no argument it stops everything, which is how a quit reaches this
+ * module: `before-quit` must not leave a transcode — or a probe — running after
+ * the app is gone.
+ */
 export const cancelVideoTranscode = (sourcePath?: unknown): void => {
-  if (!activeJob) return
+  if (!activeJob) {
+    // A probe can be running with no conversion yet; cancelActiveJob handles it.
+    if (probeChild) cancelActiveJob()
+    return
+  }
   if (typeof sourcePath !== 'string' || activeJob.sourcePath === sourcePath) {
     cancelActiveJob()
   }

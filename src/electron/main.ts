@@ -298,7 +298,10 @@ async function createWindow() {
     show: false,
     webPreferences: {
       preload: getPreloadPath(),
-      devTools: true,
+      // DevTools in a shipped build is a way to run arbitrary script inside the
+      // app's renderer, and a packaged app that opens one on F12 looks like a
+      // development artifact to scanners. Development keeps them.
+      devTools: isDev(),
       nodeIntegration: false,
       contextIsolation: true,
       spellcheck: false,
@@ -354,7 +357,12 @@ async function createWindow() {
 
   const handleKeyboardShortcut = (input: any) => {
     const { key, control, shift } = input
-    
+
+    // `webPreferences.devTools` is off in a packaged build, so these would be
+    // dead keys there; keeping the handlers out of the packaged path means a
+    // released app has no code path that opens DevTools.
+    if (!isDev()) return false
+
     if (key === 'F12' || (control && shift && key === 'I')) {
       if (mainWindow?.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools()
@@ -537,6 +545,34 @@ ipcMain.handle('show-item-in-folder', createIPCHandler(async (_: any, filePath: 
   } catch (error) {
     return { success: false, message: await t('dialog.revealError', { message: String(error) }) }
   }
+}))
+
+ipcMain.handle('get-app-info', createIPCHandler(async () => ({
+  version: app.getVersion(),
+  // `app.getVersion()` reads the packaged package.json, which is the value the
+  // MSI and the PE resource carry; in development it reads this repository's.
+  isPackaged: app.isPackaged
+})))
+
+/**
+ * The GPL notice for the bundled FFmpeg ships inside the app, next to the
+ * binary it describes, so it can be opened without relying on a web page that a
+ * future release might move. It is `extraResources`, so in a packaged build it
+ * sits beside `ffmpeg/`, outside the asar archive.
+ */
+ipcMain.handle('open-license-notice', createIPCHandler(async () => {
+  const noticePath = app.isPackaged
+    ? path.join(process.resourcesPath, 'licenses', 'NOTICE.md')
+    : path.join(app.getAppPath(), 'resources', 'licenses', 'NOTICE.md')
+  if (!existsSync(noticePath)) {
+    return { success: false, message: await t('dialog.fileMissing') }
+  }
+  const error = await shell.openPath(noticePath)
+  if (!error) return { success: true, message: '' }
+  // Not every Windows install has a .md handler; showing the folder still gets
+  // the user to the license texts, which are what the notice is about.
+  shell.showItemInFolder(noticePath)
+  return { success: true, message: await t('dialog.revealed') }
 }))
 
 ipcMain.handle('open-external', createIPCHandler(async (_: any, url: string) => {
@@ -923,6 +959,11 @@ app.on('before-quit', (event) => {
   // cleanup again: it would close an already-closing database.
   if (quitCleanupStarted) return
   quitCleanupStarted = true
+
+  // A transcode or probe child must not outlive the app: the renderer that
+  // asked for it is going away, and an ffmpeg process left behind would keep
+  // writing a cache file nobody will read.
+  cancelVideoTranscode()
 
   // The reference is cleared only once the player is gone. Nulling it here
   // would let a request arriving during the flush (`music:get-cache-stats` polls
