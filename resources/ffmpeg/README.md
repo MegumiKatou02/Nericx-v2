@@ -8,11 +8,21 @@ for the codecs mp4 cannot carry, and the libx264/aac encoders.
 
 The binary is not committed. Either:
 
-    npm run build:ffmpeg      # builds the slim binary (needs MSYS2 + x264)
+    node scripts/fetch-ffmpeg-source.mjs   # fetch + verify the pinned sources
+    npm run build:ffmpeg                   # builds the slim binary (needs MSYS2 + x264)
+    node scripts/stamp-ffmpeg.mjs          # writes the PE version resource
+    node scripts/verify-ffmpeg.mjs --update
+
     npm run fetch:ffmpeg:fallback   # downloads a prebuilt general-purpose one
 
-`npm run fetch:ffmpeg` only verifies a binary is in place and explains what
-to do otherwise.
+`npm run fetch:ffmpeg` only checks that a binary is in place and that it
+matches the recorded hash in `<binary>.sha256`; it never downloads the slim
+build itself.
+
+The stamp step matters: a raw MSYS2 build has an *empty* version resource,
+which is one of the cheapest reasons a scanner flags an unsigned binary. The
+recorded hash is of the stamped file — the one that ships — so re-stamp
+before re-recording it.
 
 Either way it lands at `resources/ffmpeg/<platform>-<arch>/ffmpeg(.exe)`,
 which both development and electron-builder read from (`extraResources` in

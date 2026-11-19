@@ -32,11 +32,19 @@
 # Requirements (Windows):
 #   - MSYS2 with the UCRT64 toolchain: pacman -S --needed base-devel mingw-w64-ucrt-x86_64-{gcc,nasm,diffutils,pkgconf}
 #   - x264 built with the same toolchain and installed under /ucrt64
-#   - the ffmpeg source tree, e.g.
-#       curl -LO https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz && tar xf ffmpeg-7.1.1.tar.xz
+#   - the ffmpeg source tree, fetched and verified with
+#       node scripts/fetch-ffmpeg-source.mjs
 #
 # Usage:
 #   FFMPEG_SRC=/e/src/ffmpeg-7.1.1 bash scripts/build-ffmpeg-slim.sh
+#
+# Reproducibility: the configure line below is pinned, including `--prefix`,
+# because the build string is compiled into the binary and a host path in it
+# (`--prefix=/e/Repositories/nx-build/prefix` in an earlier build) is both a
+# fingerprint of the machine that built it and a reason for a scanner to trust
+# the binary less. `SOURCE_DATE_EPOCH` is fixed for the same reason. A matching
+# hash is still not guaranteed — the toolchain version is not pinned here — but
+# the build no longer varies by who ran it or where.
 #
 # Build with -j1: this is a small, memory-hungry link-into-one-binary build, and
 # parallel jobs are what exhaust the pagefile on a 16 GB machine.
@@ -47,6 +55,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 WORK="${WORK:-$REPO/../nx-build}"
 TARGET="$REPO/resources/ffmpeg/win32-x64/ffmpeg.exe"
+
+# A fixed prefix and timestamp: both end up inside the binary, and both must not
+# describe this particular machine.
+PREFIX="${PREFIX:-/opt/nericx-ffmpeg}"
+export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1735689600}"  # 2025-01-01T00:00:00Z
 
 export PATH="/ucrt64/bin:/usr/bin:$PATH"
 export PKG_CONFIG_PATH="/ucrt64/lib/pkgconfig"
@@ -61,6 +74,7 @@ export TMPDIR="$WORK/tmp"
 cd "$BUILD"
 
 "$FFMPEG_SRC/configure" \
+  --prefix="$PREFIX" \
   --arch=x86_64 \
   --target-os=mingw32 \
   --enable-gpl \
@@ -107,3 +121,8 @@ mkdir -p "$(dirname "$TARGET")"
 cp ffmpeg.exe "$TARGET"
 ls -la "$TARGET"
 "$TARGET" -hide_banner -buildconf | tr ' ' '\n' | grep -E 'protocol=|muxer=|encoder=' || true
+
+# The build hash is not the shipped hash: stamp-ffmpeg.mjs writes a version
+# resource afterwards, and that is the file bundling and verification use.
+echo
+echo "Next: node scripts/stamp-ffmpeg.mjs && node scripts/verify-ffmpeg.mjs --update"
