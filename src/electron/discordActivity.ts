@@ -102,7 +102,7 @@ export function buildActivity(songInfo: DiscordSongInfo, now: number = Date.now(
       })
     }
     if (songInfo.githubButton !== false) {
-      buttons.push({ label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-v2' })
+      buttons.push({ label: 'Github', url: 'https://github.com/MegumiKatou02/Nericx-Player' })
     }
     // Discord rejects an empty array, so the field only exists when it has a button.
     if (buttons.length > 0) {
