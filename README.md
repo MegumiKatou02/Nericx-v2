@@ -214,11 +214,11 @@ about it:
   `SHA256SUMS.txt` on the release page lets you check what you downloaded:
 
   ```powershell
-  Get-FileHash .\Nericx-2.0.0-x64.msi -Algorithm SHA256
+  Get-FileHash .\Nericx-*-x64.msi -Algorithm SHA256
   ```
 
   and compare it with the line in `SHA256SUMS.txt` (or run
-  `gh attestation verify .\Nericx-2.0.0-x64.msi --repo MegumiKatou02/Nericx-Player`).
+  `gh attestation verify .\Nericx-*-x64.msi --repo MegumiKatou02/Nericx-Player`).
 
 ### If you get a warning
 
