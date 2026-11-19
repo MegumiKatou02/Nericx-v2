@@ -979,7 +979,13 @@ const handleWindowVisibility = (visible: boolean) => {
 // explicitly; the audio keeps playing, only the decoration stops.
 watch(() => props.isActive, applyInlineVideoState)
 
-const itemHeight = ref(60)
+// The row height is decided by the stylesheet, and the virtual window below
+// assumes it exactly. A hard-coded value that drifts from `.song-item` (it was
+// 60 while rows render ~68px) makes the reserved height too short, so the last
+// screenful gets pushed past the container and the list cannot be scrolled to
+// its end. Measure a rendered row instead and only fall back to this guess
+// before the first one exists.
+const itemHeight = ref(68)
 const visibleCount = ref(20)
 const scrollTop = ref(0)
 const virtualScrollHeight = ref(0)
@@ -1375,9 +1381,29 @@ const handleVirtualScroll = rafThrottle(() => {
   updateVisibleSongs()
 })
 
+// Reading a row's height forces a layout, and this runs on every window update
+// (i.e. every scroll frame). One measurement per row style is enough, so pin it
+// after the first success.
+let itemHeightPinned = false
+
+const measureItemHeightOnce = () => {
+  if (itemHeightPinned) return
+  const row = songsListRef.value?.querySelector<HTMLElement>('.song-item')
+  if (!row) return
+  const height = row.getBoundingClientRect().height
+  if (height <= 0) return
+  itemHeightPinned = true
+  if (Math.abs(height - itemHeight.value) > 0.5) {
+    itemHeight.value = height
+  }
+}
+
 const updateVisibleSongs = () => {
   const { startIndex, endIndex } = virtualScrollData.value
   visibleSongs.value = sortedSongs.value.slice(startIndex, endIndex)
+  // The rendered rows are the only source of truth for the stride; re-read it
+  // once they exist so the window matches what the stylesheet produced.
+  nextTick(measureItemHeightOnce)
 }
 
 watch(sortedSongs, () => {
@@ -2862,6 +2888,11 @@ const showFullVideo = () => {
 <style scoped>
 .music-tab {
   height: 100%;
+  /* No global reset sets this, and with the content box the tab is laid out
+     100% + its own 40px of vertical padding tall: the bottom 20px of the list
+     then sits past the tab's clipped edge and can never be scrolled into
+     view. */
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   padding: 20px 20px 20px 10px;
@@ -3092,7 +3123,6 @@ const showFullVideo = () => {
   user-select: none;
   position: relative;
   min-height: 0;
-  max-height: calc(100vh - 200px);
   outline: none;
   scrollbar-width: thin;
   scrollbar-color: var(--accent-color) var(--bg-tertiary);
