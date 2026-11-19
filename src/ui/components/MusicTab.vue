@@ -1,5 +1,5 @@
 <template>
-  <div class="music-tab" @keydown="handleKeyDown" tabindex="0" ref="musicTabRef">
+  <div class="music-tab" tabindex="0" ref="musicTabRef">
     <div v-if="!osuPath" class="warning">
       {{ t('music.noPath') }}
     </div>
@@ -842,6 +842,7 @@ const progressTicker: ProgressTicker = createProgressTicker(systemTimers, 250, (
   if (!isPlaying.value) return
   currentTime.value = audioPlayer.getCurrentTime()
   duration.value = audioPlayer.getDuration()
+  syncMediaSessionPosition()
   if (updateMiniPlayer) {
     updateMiniPlayer(currentSong.value, isPlaying.value, currentTime.value, duration.value)
   }
@@ -1942,6 +1943,110 @@ const stopMusic = () => {
   }
 }
 
+/**
+ * The Windows media flyout (and the macOS/Linux equivalents) is driven by the
+ * Media Session API, not by the window. Without metadata Chromium advertises
+ * only the document title, which is why the taskbar showed a bare "Nericx";
+ * the actions make the flyout's controls drive this same player.
+ */
+/**
+ * Chromium only accepts http(s)/data/blob artwork URLs — the custom media
+ * scheme is rejected with a console warning — so the cover is fetched and
+ * handed over as an object URL instead.
+ */
+let mediaSessionArtworkUrl: string | null = null
+let mediaSessionArtworkRequest = 0
+
+function releaseMediaSessionArtwork() {
+  if (mediaSessionArtworkUrl) {
+    URL.revokeObjectURL(mediaSessionArtworkUrl)
+    mediaSessionArtworkUrl = null
+  }
+}
+
+async function updateMediaSessionMetadata(song: Song | null) {
+  if (!('mediaSession' in navigator)) return
+
+  const request = ++mediaSessionArtworkRequest
+  releaseMediaSessionArtwork()
+
+  if (!song) {
+    navigator.mediaSession.metadata = null
+    return
+  }
+
+  const title = song.title || song.name
+  const artist = song.artist
+  // Text is immediate; the cover follows once it has been read.
+  navigator.mediaSession.metadata = new MediaMetadata({ title, artist })
+
+  if (!song.image) return
+
+  try {
+    const response = await fetch(fileUrlForPath(song.image))
+    if (!response.ok) return
+    const blob = await response.blob()
+    // A track change while the cover was loading owns the session now.
+    if (request !== mediaSessionArtworkRequest) return
+    const artworkUrl = URL.createObjectURL(blob)
+    mediaSessionArtworkUrl = artworkUrl
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title,
+      artist,
+      artwork: [{ src: artworkUrl, type: blob.type }]
+    })
+  } catch {
+    // A cover that cannot be read is not worth failing playback over.
+  }
+}
+
+/**
+ * Windows needs a consistent (duration, position, playbackRate) tuple to draw
+ * and allow dragging its timeline; an inconsistent one throws, so the position
+ * is clamped to the element's current duration.
+ */
+function syncMediaSessionPosition() {
+  if (!('mediaSession' in navigator) || !navigator.mediaSession.metadata) return
+  const total = audioPlayer.getDuration()
+  if (!isFinite(total) || total <= 0) return
+  const position = Math.min(Math.max(audioPlayer.getCurrentTime(), 0), total)
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: total,
+      playbackRate: audioPlayer.getAudio()?.playbackRate || 1,
+      position
+    })
+  } catch {
+    // A track replaced while this runs can leave a stale duration behind; the
+    // next tick reconciles it.
+  }
+}
+
+function installMediaSessionHandlers() {
+  if (!('mediaSession' in navigator)) return
+  const session = navigator.mediaSession
+  // `play`/`pause` arrive only in the matching state, so one toggle serves both.
+  session.setActionHandler('play', () => void togglePlay())
+  session.setActionHandler('pause', () => void togglePlay())
+  session.setActionHandler('previoustrack', () => void previousSong())
+  session.setActionHandler('nexttrack', () => void nextSong())
+  session.setActionHandler('stop', () => stopMusic())
+  session.setActionHandler('seekto', (details) => {
+    const total = audioPlayer.getDuration()
+    if (details.seekTime == null || total <= 0) return
+    if (audioPlayer.seek(details.seekTime / total)) {
+      currentTime.value = audioPlayer.getCurrentTime()
+      syncMediaSessionPosition()
+      if (isPlaying.value) void updateDiscordStatus()
+    }
+  })
+}
+
+watch(currentSong, (song) => {
+  updateMediaSessionMetadata(song)
+  syncMediaSessionPosition()
+})
+
 const togglePlayMode = () => {
   if (!shuffleMode.value && !repeatOne.value) {
     shuffleMode.value = true
@@ -2137,6 +2242,7 @@ const onSeek = (event: Event) => {
   const value = +(event.target as HTMLInputElement).value
   audioPlayer.seek(value / 100)
   currentTime.value = audioPlayer.getCurrentTime()
+  syncMediaSessionPosition()
 
   if (isPlaying.value) {
     updateDiscordStatus()
@@ -2174,7 +2280,34 @@ const closeImageViewer = () => {
   currentImageName.value = ''
 }
 
+/**
+ * A key that is being typed into a field belongs to that field — including the
+ * arrow keys on the volume/progress sliders, which the tab used to steal.
+ */
+const isTypingTarget = (target: EventTarget | null): boolean => {
+  const el = target as HTMLElement | null
+  if (!el) return false
+  const tag = el.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable === true
+}
+
+/**
+ * Enter is how a focused control is activated; the document-level handler must
+ * not swallow it for a button the user tabbed to.
+ */
+const isActivatableTarget = (target: EventTarget | null): boolean => {
+  const el = target as HTMLElement | null
+  if (!el) return false
+  return el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button'
+}
+
 const handleKeyDown = async (event: KeyboardEvent) => {
+  // Bound to `document` (see `onMounted`), so it also fires for clicks outside
+  // the tab — the sidebar, the player chrome. Everything that would make a key
+  // mean something else gets out of the way first.
+  if (props.isActive === false) return
+  if (showImageViewer.value || songInfoModal.value.visible || deleteDialog.value.visible) return
+
   if (event.ctrlKey && event.key === 'k') {
     event.preventDefault()
     event.stopPropagation()
@@ -2183,17 +2316,32 @@ const handleKeyDown = async (event: KeyboardEvent) => {
     return
   }
 
-  if (document.activeElement === searchInputRef.value) {
+  // Ctrl/Alt/Meta combinations belong to the app (Ctrl+1..6 switch tabs), not
+  // to playback.
+  if (event.ctrlKey || event.altKey || event.metaKey) return
+
+  if (isTypingTarget(event.target) || document.activeElement === searchInputRef.value) {
     return
   }
 
-  if (!sortedSongs.value.length && !['u', 'i', 'o', 'x', 'p', 'q', 'm'].includes(event.key.toLowerCase())) return
+  if (!sortedSongs.value.length && !['u', 'i', 'o', 'x', 'p', 'q', 'm', ' '].includes(event.key.toLowerCase())) return
 
   const currentIndex = selectedSong.value
     ? sortedSongs.value.findIndex(song => song.path === selectedSong.value?.path)
     : -1
 
   switch (event.key) {
+    case ' ':
+      // Space is the browser's "activate the focused control" key. On a button
+      // or link it must press that control; on `body` and elsewhere it is a
+      // second play/pause, like `u`.
+      if (isActivatableTarget(event.target)) return
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      await togglePlay()
+      break
+
     case 'u':
     case 'U':
       event.preventDefault()
@@ -2291,6 +2439,8 @@ const handleKeyDown = async (event: KeyboardEvent) => {
       break
 
     case 'Enter':
+      // Tabbing to a button and pressing Enter must press that button.
+      if (isActivatableTarget(event.target)) return
       event.preventDefault()
       event.stopPropagation()
       if (selectedSong.value) {
@@ -2649,6 +2799,9 @@ onMounted(async () => {
     transcodeStates.value = { ...transcodeStates.value, [sourcePath]: { ...entry, percent } }
   })
   reportTrayPlayback()
+  // Registered once for the app's lifetime; the handlers close over the same
+  // player the UI drives, so the flyout's buttons behave like the local ones.
+  installMediaSessionHandlers()
   // The tab may already be hidden on mount; this seeds the flag before any
   // audio/video element exists and starts the polling timers.
   applyWindowState()
@@ -2697,6 +2850,11 @@ onMounted(async () => {
 
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('click', handleGlobalClick)
+  // On `document`, not on the tab element: the shortcuts are meant to work
+  // while this tab is the one on screen, no matter where focus sits (the
+  // sidebar, the player chrome, `body`). The handler itself bails when another
+  // tab is showing.
+  document.addEventListener('keydown', handleKeyDown)
   window.addEventListener('resize', () => {
     if (isDropdownOpen.value) {
       updateDropdownPosition()
@@ -2707,6 +2865,7 @@ onMounted(async () => {
 onUnmounted(() => {
   stopCacheTimers()
 
+  document.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('keydown', handleDeleteDialogKey, true)
 
   if (notificationTimer) {

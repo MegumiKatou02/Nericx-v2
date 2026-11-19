@@ -848,6 +848,7 @@ h3 {
 .setting-option .theme-selector {
   flex-direction: row;
   align-items: center;
+  min-width: 280px;
 }
 
 .setting-option .transparency-section,

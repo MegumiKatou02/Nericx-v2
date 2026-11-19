@@ -20,7 +20,7 @@
             <h3>{{ t('keyboard.playback') }}</h3>
             <div class="shortcut-items">
               <div class="shortcut-item">
-                <span class="key">U</span>
+                <span class="key">U / Space</span>
                 <div class="shortcut-info">
                   <span class="action">{{ t('keyboard.playback.toggle') }}</span>
                   <span class="desc">{{ t('keyboard.playback.toggleDesc') }}</span>
