@@ -146,6 +146,20 @@ grep -n 'CONFIG_H264_SEI' "$MAKEFILE"
 
 make -j1 ffmpeg.exe
 
+# Nothing may be loaded from a DLL beside the executable. The app ships this one
+# file and nothing else, so an import the machine happens to satisfy in MSYS2
+# but does not have on a user's PC would make every conversion fail with a
+# dialog the app never shows. x264 is the realistic way that happens: built
+# --enable-shared, its .pc pulls in -DX264_API_IMPORTS and this build links the
+# import library instead of the archive.
+DLL_IMPORTS="$(objdump -p ffmpeg.exe | awk '/DLL Name:/{print $3}' | grep -viE '^api-ms-win-|^(KERNEL32|SHELL32|USER32|GDI32|ADVAPI32|bcrypt|msvcrt|ucrtbase|WS2_32|IPHLPAPI|ole32|winmm|secur32|CRYPT32|bcryptprimitives|USERENV|SHLWAPI|PSAPI|dbghelp|VERSION)\.dll$' || true)"
+if [ -n "$DLL_IMPORTS" ]; then
+  echo "build-ffmpeg-slim: ffmpeg.exe imports non-system DLLs:" >&2
+  echo "$DLL_IMPORTS" >&2
+  echo "These would not exist on a user's machine; rebuild with static x264." >&2
+  exit 1
+fi
+
 mkdir -p "$(dirname "$TARGET")"
 cp ffmpeg.exe "$TARGET"
 ls -la "$TARGET"

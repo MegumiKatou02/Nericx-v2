@@ -66,7 +66,13 @@ jobs:
           tar -xjf x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2
           cd x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55
           export PATH="/ucrt64/bin:$PATH"
-          ./configure --prefix=/ucrt64 --enable-static --enable-shared --disable-cli --disable-opencl
+          # Static only. x264's .pc adds `-DX264_API_IMPORTS` when it was built
+          # with --enable-shared, which makes x264.h declare dllimport'ed
+          # symbols; ffmpeg links x264 statically, so the link test then asks
+          # for `__imp_x264_encoder_encode`, which a static archive does not
+          # define. Building only the archive is also what the shipped binary
+          # does — it imports no x264 DLL.
+          ./configure --prefix=/ucrt64 --enable-static --disable-shared --disable-cli --disable-opencl
           make -j1
           make install
 
