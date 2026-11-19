@@ -192,14 +192,40 @@ const main = async () => {
 
   const { appBuilderPath } = require('app-builder-bin')
   try {
+    // `rcedit` is not inside app-builder: it is extracted from electron-builder's
+    // winCodeSign cache on first use, and app-builder unpacks that archive with
+    // the 7za it is told about through SZA_PATH. electron-builder sets this in
+    // `executeAppBuilder`; calling app-builder directly skips it, so on a machine
+    // that has never run electron-builder the call fails with "7za: executable
+    // file not found" — which is every fresh CI runner and no developer machine,
+    // where the cache is already extracted. 7zip-bin is not a new dependency: it
+    // comes with electron-builder and is what electron-builder passes too.
+    const { path7za } = require('7zip-bin')
     execFileSync(appBuilderPath, ['rcedit', '--args', JSON.stringify(rceditArgs(targetPath))], {
       encoding: 'utf8',
-      windowsHide: true
+      windowsHide: true,
+      env: { ...process.env, SZA_PATH: path7za }
     })
   } catch (error) {
     await restore(backupPath)
     await rm(backupPath, { force: true })
-    console.error(`stamp-ffmpeg: rcedit failed, binary restored.\n${error.message ?? error}`)
+    const message = String(error.message ?? error)
+    console.error(`stamp-ffmpeg: rcedit failed, binary restored.\n${message}`)
+    // The two ways this fails on a machine that has never built with
+    // electron-builder are worth naming: both read as generic tool errors and
+    // neither is about ffmpeg.
+    if (message.includes('7za')) {
+      console.error(
+        '\napp-builder could not unzip its own tools because it was not told where 7za is.\n' +
+          'That means SZA_PATH above did not take effect; check that `7zip-bin` is installed.'
+      )
+    } else if (message.includes('symbolic link')) {
+      console.error(
+        '\nWindows refused to create the symlinks in electron-builder\'s winCodeSign archive\n' +
+          '(it contains darwin dylibs this step never uses). Run once from an elevated shell,\n' +
+          'or enable Developer Mode, and the cache it extracts will be reused afterwards.'
+      )
+    }
     process.exitCode = 1
     return
   }
