@@ -69,9 +69,9 @@ that does not match the committed pin.
 
 | File | Engines flagging | Notable detections | Microsoft |
 |---|---|---|---|
-| `Nericx-2.0.1-x64.msi` | _(fill in)_ | | |
-| `Nericx.exe` | _(fill in)_ | | |
-| `ffmpeg.exe` | _(fill in)_ | | |
+| `Nericx-2.0.1-x64.msi` | `0/42` | — | Undetected |
+| `Nericx.exe` | `0/68` | — | Undetected |
+| `ffmpeg.exe` | `0/70` | — | Undetected |
 
 ## 2.0.0 (unsigned, MSI only)
 
