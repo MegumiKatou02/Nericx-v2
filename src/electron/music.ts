@@ -10,6 +10,7 @@ import { createHash } from 'crypto'
 import { tmpdir } from 'os'
 import { cpus } from 'os'
 import { t } from './util.js'
+import { canReuseScan, type FinishedScan } from './scanReuse.js'
 
 interface CachedMetadata {
   duration: number
@@ -86,6 +87,22 @@ export class MusicPlayer extends EventEmitter {
   private cleanupInterval: NodeJS.Timeout | null = null
   private readonly maxCacheSize: number = 15000
   private readonly cacheCleanupThreshold: number = 0.75
+
+  /**
+   * Set by `destroy`. A scan already running cannot be interrupted mid-batch, so
+   * it checks this before it touches the library again: without it the scan
+   * would keep reading files for an instance the main process already dropped,
+   * refill `songsData` after it was cleared and keep the object (and its pools)
+   * alive until the last file was measured.
+   */
+  private destroyed = false
+
+  /**
+   * Bumped by `resetLibrary` when the configured osu! folder changes. A scan
+   * started against the previous folder checks it between batches and stops
+   * instead of writing its songs over the new, still-empty library.
+   */
+  private libraryGeneration = 0
   
   private metadataPool: ObjectPool<CachedMetadata>
   private songPool: ObjectPool<Song>
@@ -219,7 +236,8 @@ export class MusicPlayer extends EventEmitter {
       }
 
       const cacheData = await readFile(this.cacheFilePath, 'utf-8')
-      
+      if (this.destroyed) return
+
       if (cacheData.length > 10 * 1024 * 1024) { // 10MB
         console.log('Cache file lớn, sử dụng streaming parse')
         await this.streamParseCache(cacheData)
@@ -296,10 +314,13 @@ export class MusicPlayer extends EventEmitter {
   }
 
   /**
-   * Optimized cache saving with compression
+   * `flush` is only set by `destroy`: it must write the cache while the map is
+   * still populated, whereas a save scheduled by a scan must not resurrect the
+   * file after teardown cleared it.
    */
-  private async saveCache(): Promise<void> {
-    if (!this.cacheDirty) return
+  private async saveCache(flush: boolean = false): Promise<void> {
+    if (!flush && (this.destroyed || !this.cacheDirty)) return
+    if (flush && !this.cacheDirty) return
     
     try {
       const cacheObject = Object.fromEntries(this.metadataCache)
@@ -342,6 +363,13 @@ export class MusicPlayer extends EventEmitter {
    */
   private async executeConcurrent(task: () => Promise<void>, priority: number = 0): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Nothing may start once the instance is gone: the scan is only waiting on
+      // these promises to settle.
+      if (this.destroyed) {
+        resolve()
+        return
+      }
+
       const queueItem: ConcurrencyQueue & { priority: number } = {
         task,
         resolve,
@@ -729,35 +757,102 @@ export class MusicPlayer extends EventEmitter {
    * read is appended after the scan finishes instead of being wiped by it.
    * A second request also waits for the one in flight: `runSongScan` clears and
    * refills `songsData`, so two scans at once would corrupt each other's list.
+   *
+   * `scanPath` lets a caller asking for the folder that is already being read
+   * join that scan instead of queueing a second walk over the same directories
+   * (the Music tab and the Filters tab both ask for the library on startup).
    */
   private scanInFlight: Promise<{ success: boolean; message: string; songs?: Song[] }> | null = null
+  private scanPath: string | null = null
+  private lastScan: FinishedScan | null = null
+
+  /**
+   * False until a full scan has finished on this instance. Until then the
+   * in-memory list only holds folders an import appended, so `filteredSongs` is
+   * not the library and a reader must not present it as one.
+   */
+  private libraryLoaded = false
 
   async loadSongs(osuPath: string): Promise<{ success: boolean; message: string; songs?: Song[] }> {
+    if (this.scanInFlight && this.scanPath === osuPath) {
+      const result = await this.scanInFlight
+      // The scan's own snapshot predates a folder an import appended while it
+      // was running; the current list is the truthful answer for a joiner.
+      return result.success ? { ...result, songs: [...this.filteredSongs] } : result
+    }
+
+    // The Music tab and the Filters tab both ask for the library as the app
+    // starts. Serving a scan that just finished keeps that from walking the
+    // same Songs folder twice; a later request (a reload, a manual refresh)
+    // still rescans, which is how songs added outside the app are picked up.
+    if (this.libraryLoaded && canReuseScan(this.lastScan, osuPath, Date.now())) {
+      return {
+        success: true,
+        message: await t('music.loadedCount', { count: this.filteredSongs.length }),
+        // A copy: the list is replaced by the next scan, and a renderer holding
+        // the same array would see its songs disappear mid-render.
+        songs: [...this.filteredSongs]
+      }
+    }
+
     const previous = this.scanInFlight
     const scan = (async () => {
       if (previous) await previous.catch(() => undefined)
       return this.runSongScan(osuPath)
     })()
     this.scanInFlight = scan
+    this.scanPath = osuPath
     try {
       return await scan
     } finally {
-      if (this.scanInFlight === scan) this.scanInFlight = null
+      if (this.scanInFlight === scan) {
+        this.scanInFlight = null
+        this.scanPath = null
+      }
     }
   }
 
   private async runSongScan(osuPath: string): Promise<{ success: boolean; message: string; songs?: Song[] }> {
     const songsPath = join(osuPath, 'Songs')
+    const generation = this.libraryGeneration
+    /** A scan that was torn down or overtaken by a folder change must stop. */
+    const abandoned = () => this.destroyed || generation !== this.libraryGeneration
+
+    /**
+     * Gives back whatever this scan built before it noticed it was abandoned.
+     * `destroy` and `resetLibrary` already cleared the list, so anything here
+     * was pushed after that and belongs to nobody.
+     */
+    const discardBuilt = () => {
+      this.songsData.forEach(song => this.songPool.release(song))
+      this.songsData = []
+      this.filteredSongs = []
+      this.processingStats = null
+    }
 
     // Wait for the metadata cache to finish loading from disk. Without this
     // the first scan runs against an empty cache (constructor fires
     // initializeCache without awaiting), so every lookup misses.
     await this.cacheReady
 
+    // `destroy` cannot stop a scan mid-file; every stage below re-checks this
+    // flag so a dropped instance stops reading instead of refilling the list it
+    // just cleared.
+    if (abandoned()) return { success: false, message: '' }
+
     this.songsData.forEach(song => this.songPool.release(song))
     this.songsData = []
+    // While the scan rebuilds the list, `filteredSongs` would otherwise keep
+    // describing the previous library. Clearing it with the same flag means a
+    // reader during the scan sees "not loaded yet" instead of stale songs.
+    this.filteredSongs = []
+    this.libraryLoaded = false
 
     if (!existsSync(songsPath)) {
+      // An authoritative answer about a folder with no `Songs`: the list is
+      // empty on purpose, not merely unscanned.
+      this.libraryLoaded = true
+      this.lastScan = { path: osuPath, finishedAt: Date.now() }
       return { success: false, message: await t('music.songsFolderMissing') }
     }
 
@@ -790,16 +885,25 @@ export class MusicPlayer extends EventEmitter {
       const directoryBatchSize = Math.max(50, Math.min(200, cpus().length * 25))
       
       for (let i = 0; i < songFolders.length; i += directoryBatchSize) {
+        if (abandoned()) {
+          discardBuilt()
+          return { success: false, message: '' }
+        }
         const batch = songFolders.slice(i, i + directoryBatchSize)
-        
+
         await Promise.all(batch.map(async (songFolder) => {
           const fileInfo = await this.scanSongFolder(songsPath, songFolder)
           if (fileInfo) audioFiles.push(fileInfo)
         }))
-        
+
         if (i % (directoryBatchSize * 2) === 0) {
           await new Promise(resolve => setImmediate(resolve))
         }
+      }
+
+      if (abandoned()) {
+        discardBuilt()
+        return { success: false, message: '' }
       }
 
       this.processingStats.total = audioFiles.length
@@ -808,6 +912,13 @@ export class MusicPlayer extends EventEmitter {
       await this.processBatchStreaming(audioFiles, async (fileInfo) => {
         this.songsData.push(await this.buildSong(fileInfo))
       })
+
+      // The library rebuilt while the instance was being torn down belongs to
+      // nobody; release it instead of publishing it.
+      if (abandoned()) {
+        discardBuilt()
+        return { success: false, message: '' }
+      }
 
       this.songsData.sort((a, b) => {
         const compareResult = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
@@ -831,8 +942,10 @@ export class MusicPlayer extends EventEmitter {
       
       this.songsData = Array.from(uniqueSongs.values())
       this.filteredSongs = [...this.songsData]
-      
-      setImmediate(() => this.saveCache())
+      this.libraryLoaded = true
+      this.lastScan = { path: osuPath, finishedAt: Date.now() }
+
+      setImmediate(() => void this.saveCache())
       
       const processingTime = Date.now() - this.processingStats.startTime
       const avgFileSize = this.songsData.reduce((sum, song) => sum + (song.fileSize || 0), 0) / this.songsData.length / (1024 * 1024)
@@ -861,7 +974,7 @@ export class MusicPlayer extends EventEmitter {
       return { 
         success: true, 
         message: await t('music.loadedCount', { count: this.songsData.length }), 
-        songs: this.filteredSongs 
+        songs: [...this.filteredSongs]
       }
 
     } catch (error) {
@@ -886,9 +999,11 @@ export class MusicPlayer extends EventEmitter {
     folderName: string
   ): Promise<{ success: boolean; song?: Song; message: string }> {
     await this.cacheReady
+    if (this.destroyed) return { success: false, message: '' }
     // The scan clears `songsData` before it rebuilds it; appending during that
     // window would either lose this folder or leave it duplicated.
     if (this.scanInFlight) await this.scanInFlight.catch(() => undefined)
+    if (this.destroyed) return { success: false, message: '' }
 
     const songsPath = join(osuPath, 'Songs')
     const folderPath = join(songsPath, folderName)
@@ -924,6 +1039,7 @@ export class MusicPlayer extends EventEmitter {
   async removeSongFolder(folderPath: string): Promise<{ success: boolean; removed: number }> {
     await this.cacheReady
     if (this.scanInFlight) await this.scanInFlight.catch(() => undefined)
+    if (this.destroyed) return { success: true, removed: 0 }
 
     // Windows paths are case-insensitive, and realpath hands back the on-disk
     // casing, which can differ from the string the renderer sent.
@@ -976,25 +1092,44 @@ export class MusicPlayer extends EventEmitter {
   }
 
   /**
-   * Enhanced cleanup
+   * Stops the player for good: no new scan work, queued work settled, and the
+   * metadata cache written to disk before the maps are cleared.
+   *
+   * Resolves once the cache flush finished — `before-quit` waits on it because
+   * this is the only write for changes the LRU eviction and `removeSongFolder`
+   * marked dirty (neither flushes on a timer). Fire-and-forget left a partial
+   * or missing cache behind on every quit.
    */
-  public destroy(): void {
+  public async destroy(): Promise<void> {
+    if (this.destroyed) return
+    // Set first: a scan still in flight checks this between batches and stops,
+    // and the `setImmediate` save it scheduled skips itself.
+    this.destroyed = true
+
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval)
       this.cleanupInterval = null
     }
-    
-    this.saveCache()
-    
+
+    // Queued task promises belong to callers awaiting them (a scan, an import);
+    // dropping the array without settling left those awaits pending forever.
+    const queued = this.concurrencyQueue
+    this.concurrencyQueue = []
+    for (const item of queued) {
+      item.reject(new Error('MusicPlayer was destroyed'))
+    }
+
+    await this.saveCache(true)
+
     this.songsData.forEach(song => this.songPool.release(song))
-    
+
     this.songsData = []
     this.filteredSongs = []
+    this.libraryLoaded = false
     this.metadataCache.clear()
     this.cacheAccessOrder.clear()
     this.fileStatCache.clear()
-    this.concurrencyQueue = []
-    
+
     console.log('MusicPlayer đã được cleanup hoàn toàn')
   }
 
@@ -1030,8 +1165,36 @@ export class MusicPlayer extends EventEmitter {
     }
   }
 
-  getFilteredSongs(): Song[] {
-    return this.filteredSongs
+  /**
+   * Answers a reader with the current library plus whether it is authoritative.
+   * `loaded: false` means no full scan has finished yet (the player was just
+   * created, or a scan is rebuilding the list), so the renderer must not
+   * replace a good list with this one.
+   */
+  getLibrary(): { loaded: boolean; scanning: boolean; songs: Song[] } {
+    return {
+      loaded: this.libraryLoaded,
+      scanning: this.scanInFlight !== null,
+      // A copy, like every other reply: the IPC copy is what the renderer
+      // stores, but nothing should be able to mutate the live list through it.
+      songs: [...this.filteredSongs]
+    }
+  }
+
+  /**
+   * Drops the library built from the previous osu! folder. The configured path
+   * changed, so every path in `songsData` is now outside the media root and
+   * must not be served or displayed; the next `loadSongs` rebuilds it.
+   */
+  resetLibrary(): void {
+    this.libraryGeneration++
+    this.songsData.forEach(song => this.songPool.release(song))
+    this.songsData = []
+    this.filteredSongs = []
+    this.libraryLoaded = false
+    this.lastScan = null
+    // A scan abandoned midway left its progress behind; a fresh one starts over.
+    this.processingStats = null
   }
 
   clearCache(): void {

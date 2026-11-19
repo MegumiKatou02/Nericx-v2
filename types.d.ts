@@ -31,11 +31,10 @@ declare global {
     discordClear(): Promise<void>
     discordDestroy(): Promise<void>
 
-    musicGetFilteredSongs(): Promise<any[]>
+    musicGetFilteredSongs(): Promise<{ loaded: boolean; scanning: boolean; songs: Song[] }>
     musicSetPlaybackMode(shuffle: boolean, repeatOne: boolean): Promise<void>
     musicGetSongs(): Promise<{ success: boolean; message: string; songs?: Song[] }>
-    removeMusicMetadataListener(): void
-    onMusicMetadataUpdated(callback: () => void): void
+    onMusicMetadataUpdated(callback: () => void): () => void
 
     musicGetCacheStats(): Promise<{
       size: number
@@ -45,7 +44,6 @@ declare global {
     }>
     musicClearCache(): Promise<void>
     musicForceSaveCache(): Promise<void>
-    musicCleanup(): Promise<void>
     importOsz(filePaths: string[]): Promise<{
       success: boolean
       message: string
@@ -60,8 +58,7 @@ declare global {
       folderName?: string
       missingPath?: boolean
     }>
-    onMusicScanProgress(callback: (progress: any) => void): void
-    removeMusicScanProgressListener(): void
+    onMusicScanProgress(callback: (progress: any) => void): () => void
     ensureVideoPlayable(sourcePath: string): Promise<{
       success: boolean
       code?: string

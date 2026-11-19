@@ -211,27 +211,66 @@ const onHoverImageError = () => {
   hoverImageFailed.value = true
 }
 
+const applySongImages = (songs: { path: string; image?: string }[]) => {
+  const map = new Map<string, string>()
+  for (const song of songs) {
+    if (song.path && song.image) map.set(song.path, song.image)
+  }
+  imagePathBySong.value = map
+}
+
+/**
+ * The initial read: `music:get-songs` joins the scan the Music tab starts on
+ * mount (or starts it), so the two tabs do not each walk the Songs folder.
+ */
 const loadSongImages = async () => {
   try {
     const result = await window.electronAPI.musicGetSongs()
-    const songs = result?.songs ?? []
-    const map = new Map<string, string>()
-    for (const song of songs) {
-      if (song.path && song.image) map.set(song.path, song.image)
-    }
-    imagePathBySong.value = map
+    applySongImages(result?.songs ?? [])
   } catch (error) {
     console.warn('Could not load song cover images:', error)
   }
 }
 
+/**
+ * A refresh after an import, a delete, or an osu! folder change. It reads the
+ * main process's current list instead of forcing a scan: the covers it needs
+ * are already attached to those songs. When no full scan stands behind that
+ * list yet (`loaded: false`, e.g. the folder just changed), the read joins the
+ * scan the Music tab started, which `music:get-songs` does without starting a
+ * second one.
+ */
+const refreshSongImages = async () => {
+  try {
+    const snapshot = await window.electronAPI.musicGetFilteredSongs()
+    if (snapshot.loaded) {
+      applySongImages(snapshot.songs)
+      return
+    }
+  } catch (error) {
+    console.warn('Could not refresh song cover images:', error)
+    return
+  }
+  await loadSongImages()
+}
+
+// A cover for an imported beatmap, or a stale one for a deleted one, arrives
+// through the same broadcast the Music tab refreshes on. Waiting for the next
+// full scan would leave the popup showing a placeholder in the meantime.
+let metadataUnsubscribe: (() => void) | null = null
+
 onMounted(() => {
   void ensureSongPreferencesLoaded()
   void loadSongImages()
+  metadataUnsubscribe = window.electronAPI.onMusicMetadataUpdated(() => {
+    void refreshSongImages()
+  })
 })
 
 onBeforeUnmount(() => {
   if (hoverTimer) clearTimeout(hoverTimer)
+  metadataUnsubscribe?.()
+  metadataUnsubscribe = null
 })
 </script>
 

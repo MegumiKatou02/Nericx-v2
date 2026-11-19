@@ -6,32 +6,56 @@
  * would silently drop the song the newer one had just added — the library then
  * looks stale until the renderer is reloaded.
  *
- * Every read takes a ticket when it *starts*; only the read still holding the
- * newest ticket may apply its result. A local change (a delete) takes a ticket
- * too, so a read that was already in flight cannot bring the deleted row back.
+ * The rule: of the reads that produced an answer, the one that *started* last
+ * wins. A read that fails, or that `applyWhen` rejects, produced no answer at
+ * all, so it neither applies nor takes the win away from a read still in
+ * flight — otherwise a throwaway refresh could cancel the scan it raced.
  */
+export interface LoadOptions<T> {
+  /**
+   * Rejects a result without applying it. Use it for a reply that cannot be
+   * trusted to be the library (the main process has not finished a scan yet);
+   * the read then behaves like a failure and leaves the newest answer alone.
+   */
+  applyWhen?: (value: T) => boolean
+}
+
 export interface LibrarySync {
   /**
    * Runs `fetchSongs` and reports whether its result may still be applied.
-   * `apply: false` means a newer read or an `invalidate` superseded it.
+   * `apply: false` means a newer answer was applied, or an `invalidate` came
+   * after this read started.
    */
-  load: <T>(fetchSongs: () => Promise<T>) => Promise<{ apply: false } | { apply: true; value: T }>
+  load: <T>(fetchSongs: () => Promise<T>, options?: LoadOptions<T>) => Promise<{ apply: false } | { apply: true; value: T }>
   /** Drops the result of any read already in flight, without starting one. */
   invalidate: () => void
 }
 
 export function createLibrarySync(): LibrarySync {
-  let latest = 0
+  /** Increments for every read and every invalidate; orders the answers. */
+  let counter = 0
+  /** Ticket of the newest read that was applied (or of the last invalidate). */
+  let applied = 0
 
   return {
-    async load(fetchSongs) {
-      const ticket = ++latest
+    async load<T>(fetchSongs: () => Promise<T>, options?: LoadOptions<T>) {
+      const ticket = ++counter
       const value = await fetchSongs()
-      if (ticket !== latest) return { apply: false }
+
+      // A read that started after this one already applied its answer, so this
+      // result is older than what the renderer shows.
+      if (ticket < applied) return { apply: false }
+      if (options?.applyWhen && !options.applyWhen(value)) {
+        // Not an answer, so it must not count as one. `applied` stays where it
+        // was: a read that started earlier can still apply its own result.
+        return { apply: false }
+      }
+
+      applied = ticket
       return { apply: true, value }
     },
     invalidate() {
-      latest++
+      applied = ++counter
     }
   }
 }

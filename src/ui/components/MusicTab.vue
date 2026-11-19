@@ -892,6 +892,7 @@ const videoBadgeFor = (videoPath: string): { playable: boolean; title?: string }
 }
 
 let windowVisibilityUnsubscribe: (() => void) | null = null
+let metadataUnsubscribe: (() => void) | null = null
 let videoProgressUnsubscribe: (() => void) | null = null
 // The player can advance to a track with a video while the window is hidden
 // or another tab is open; that element loads with `autoplay`, so it has to be
@@ -1543,6 +1544,22 @@ const applyWindowState = () => {
   syncCacheTimers()
 }
 
+/**
+ * What `music:get-filtered-songs` answers. `loaded` is false while the main
+ * process has no full scan behind its list, which is exactly the case right
+ * after an import created the player: `songs` then holds only the dropped
+ * beatmap and must not replace a library the renderer already shows.
+ */
+interface LibrarySnapshot {
+  loaded: boolean
+  scanning: boolean
+  songs: Song[]
+}
+
+// The listener returns an unsubscribe function; the preload used to expose
+// only a "remove every listener" call, which a second tab could not use.
+let scanProgressUnsubscribe: (() => void) | null = null
+
 const loadSongs = async () => {
   try {
     isLoading.value = true
@@ -1563,32 +1580,36 @@ const loadSongs = async () => {
         return
       }
 
-      window.electronAPI.onMusicScanProgress((progress: any) => {
-        if (!progress) {
-          console.warn('Invalid progress data:', progress)
-          return
-        }
+      // Registered once: `loadSongs` also runs after an osu! folder change, and
+      // re-registering would stack a second handler on every switch.
+      if (!scanProgressUnsubscribe) {
+        scanProgressUnsubscribe = window.electronAPI.onMusicScanProgress((progress: any) => {
+          if (!progress) {
+            console.warn('Invalid progress data:', progress)
+            return
+          }
 
-        let latestProgress = progress
-        if (Array.isArray(progress) && progress.length > 0) {
-          latestProgress = progress[progress.length - 1]
-        }
+          let latestProgress = progress
+          if (Array.isArray(progress) && progress.length > 0) {
+            latestProgress = progress[progress.length - 1]
+          }
 
-        console.log('Latest progress:', latestProgress);
-        const total = typeof latestProgress.total === 'number' ? latestProgress.total : 0
-        const processed = typeof latestProgress.processed === 'number' ? latestProgress.processed : 0
-        const percentage = typeof latestProgress.percentage === 'number' ? latestProgress.percentage :
-                          (total > 0 ? Math.round((processed / total) * 100) : 0)
+          console.log('Latest progress:', latestProgress)
+          const total = typeof latestProgress.total === 'number' ? latestProgress.total : 0
+          const processed = typeof latestProgress.processed === 'number' ? latestProgress.processed : 0
+          const percentage = typeof latestProgress.percentage === 'number' ? latestProgress.percentage :
+                            (total > 0 ? Math.round((processed / total) * 100) : 0)
 
-        loadingText.value = 'music.loading.metadata'
-        scanProgress.value = {
-          total,
-          processed,
-          percentage
-        }
+          loadingText.value = 'music.loading.metadata'
+          scanProgress.value = {
+            total,
+            processed,
+            percentage
+          }
 
-        console.log(`Quét nhạc: ${processed}/${total} (${percentage}%)`)
-      })
+          console.log(`Quét nhạc: ${processed}/${total} (${percentage}%)`)
+        })
+      }
 
       loadingText.value = 'music.loading.scanning'
       const scanResult = await librarySync.load<{ success: boolean; message: string; songs?: Song[] }>(
@@ -1598,6 +1619,7 @@ const loadSongs = async () => {
       if (scanResult.apply && scanResult.value.success) {
         songsCache.value = scanResult.value.songs || []
         filteredSongs.value = songsCache.value
+        searchCache.clear()
         updateVisibleSongs()
 
         await updateCacheStats()
@@ -1643,10 +1665,52 @@ const applyUpdatedSongs = (updatedSongs: Song[]) => {
  * library is still loading would otherwise be broadcast to nobody. The import
  * appends to the main process list before it broadcasts and waits for a scan in
  * flight, so this read always sees the song that was just installed.
+ *
+ * `loaded: false` means the player holds no full scan yet (it was just created
+ * for an import, or `resetLibrary` cleared it after an osu! folder change), so
+ * its list is a partial one and must not replace the one on screen.
  */
 const refreshLibrary = async () => {
-  const refresh = await librarySync.load<Song[]>(() => window.electronAPI.musicGetFilteredSongs())
-  if (refresh.apply) applyUpdatedSongs(refresh.value)
+  try {
+    const refresh = await librarySync.load<LibrarySnapshot>(
+      () => window.electronAPI.musicGetFilteredSongs(),
+      { applyWhen: snapshot => snapshot.loaded }
+    )
+    if (refresh.apply) applyUpdatedSongs(refresh.value.songs)
+  } catch (error) {
+    // A refresh that could not read the library (the window is being torn down,
+    // the main process is closing) leaves the list on screen alone; the mount
+    // scan or the next broadcast will bring a fresh one.
+    console.warn('Could not refresh the song library:', error)
+  }
+}
+
+/**
+ * The configured osu! folder changed. The old list is unusable — its paths sit
+ * outside the new media root, so covers and audio would answer 403 — and the
+ * main process already dropped its own copy (`resetLibrary`). Clearing here
+ * first is what makes `loadSongs` scan instead of returning the cached list.
+ */
+const handleOsuPathChanged = async (nextPath: string) => {
+  // Saving the same folder again is a no-op: clearing the list would stop the
+  // track and rescan for nothing. This compares the two strings literally while
+  // the main process folds case and trailing separators, so a respelling can
+  // still rescan here — the same folder, so it is only wasted work, never a
+  // wrong list. The reverse (the main process resetting while this does not)
+  // is the direction that would strand the renderer on old songs.
+  if (!nextPath || nextPath === osuPath.value) return
+
+  osuPath.value = nextPath
+  stopMusic()
+  selectedSong.value = null
+  librarySync.invalidate()
+  searchCache.clear()
+  songDetailsCache.clear()
+  songsCache.value = []
+  filteredSongs.value = []
+  visibleSongs.value = []
+  await loadSongs()
+  updateVisibleSongs()
 }
 
 const selectSong = (song: Song) => {
@@ -2548,7 +2612,7 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
   // Registered before the first scan finishes, so an `.osz` imported while the
   // library is still loading still refreshes the list (see `refreshLibrary`).
-  window.electronAPI.onMusicMetadataUpdated(refreshLibrary)
+  metadataUnsubscribe = window.electronAPI.onMusicMetadataUpdated(refreshLibrary)
   windowVisibilityUnsubscribe = window.electronAPI.onWindowVisibilityChanged(handleWindowVisibility)
   trayCommandUnsubscribe = window.electronAPI.onTrayCommand(handleTrayCommand)
   // ffmpeg reports whole percentages; each one only updates the note on the
@@ -2594,6 +2658,8 @@ onMounted(async () => {
       }
     } else if (key === 'videoEnabled') {
       videoEnabled.value = parseStoredBoolean(value, false)
+    } else if (key === 'osuPath') {
+      void handleOsuPathChanged(value)
     }
   })
 
@@ -2644,19 +2710,17 @@ onUnmounted(() => {
     clearDiscordStatus()
   }
 
-  window.electronAPI.removeMusicMetadataListener()
+  metadataUnsubscribe?.()
+  metadataUnsubscribe = null
 
-  try {
-    window.electronAPI.removeMusicScanProgressListener()
-  } catch (error) {
-    console.warn('Lỗi khi remove scan progress listener:', error)
-  }
+  scanProgressUnsubscribe?.()
+  scanProgressUnsubscribe = null
 
-  try {
-    window.electronAPI.musicCleanup()
-  } catch (error) {
-    console.warn('Lỗi khi cleanup music player:', error)
-  }
+  // Deliberately no `music:cleanup` here. Every tab stays mounted (`v-show`),
+  // so this hook runs only when the whole window goes away — and on a reload it
+  // would destroy the player and leave the new renderer reading a library the
+  // main process had already emptied. The player lives for the app's lifetime
+  // and `before-quit` is what tears it down.
 
   songDetailsCache.clear()
   searchCache.clear()

@@ -35,7 +35,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   musicGetCacheStats: () => ipcRenderer.invoke('music:get-cache-stats'),
   musicClearCache: () => ipcRenderer.invoke('music:clear-cache'),
   musicForceSaveCache: () => ipcRenderer.invoke('music:force-save-cache'),
-  musicCleanup: () => ipcRenderer.invoke('music:cleanup'),
   importOsz: (filePaths: string[]) => ipcRenderer.invoke('beatmap:import-osz', filePaths),
   deleteBeatmap: (songPath: string, name: string) => ipcRenderer.invoke('beatmap:delete', songPath, name),
   ensureVideoPlayable: (sourcePath: string) => ipcRenderer.invoke('video:ensure-playable', sourcePath),
@@ -47,14 +46,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   onMusicMetadataUpdated: (callback: () => void) => {
-    ipcRenderer.on('music:metadataUpdated', () => callback())
-  },
-  removeMusicMetadataListener: () => {
-    ipcRenderer.removeAllListeners('music:metadataUpdated')
+    // Returned like the other subscriptions: a second listener (the Filters
+    // tab also refreshes on it) must be able to leave without clearing the
+    // first one, which is what `removeAllListeners` would do.
+    const listener = () => callback()
+    ipcRenderer.on('music:metadataUpdated', listener)
+    return () => ipcRenderer.removeListener('music:metadataUpdated', listener)
   },
 
   onMusicScanProgress: (callback: (progress: any) => void) => {
-    ipcRenderer.on('music:scanProgress', (_, progress) => callback(progress))
+    const listener = (_: unknown, progress: any) => callback(progress)
+    ipcRenderer.on('music:scanProgress', listener)
+    return () => ipcRenderer.removeListener('music:scanProgress', listener)
   },
   onConfigChanged: (callback: (key: string, value: string) => void) => {
     const listener = (_: unknown, key: string, value: string) => callback(key, value)
@@ -75,9 +78,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('tray:command', listener)
   },
   setCloseToTray: (enabled: boolean) => ipcRenderer.invoke('set-close-to-tray', enabled),
-  removeMusicScanProgressListener: () => {
-    ipcRenderer.removeAllListeners('music:scanProgress')
-  },
 })
 
 contextBridge.exposeInMainWorld('windowControls', {

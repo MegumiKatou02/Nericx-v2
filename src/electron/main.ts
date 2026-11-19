@@ -8,6 +8,7 @@ import { handleMediaRequests, registerMediaScheme } from './mediaProtocol.js'
 import { LOCALE_CONFIG_KEY, resolveLocale } from './i18n.js'
 import { parseStoredBoolean } from './storedBoolean.js'
 import { CLOSE_TO_TRAY_KEY } from './configKeys.js'
+import { isOsuPathChange } from './osuPathChange.js'
 import { summarizeAppMetrics } from './appMetrics.js'
 import { installOszFile, type BeatmapImportCode, type BeatmapImportResult } from './beatmapImport.js'
 import { deleteBeatmapFolder, type BeatmapDeleteCode } from './beatmapDelete.js'
@@ -36,6 +37,10 @@ let tray: Tray | null = null
 // Distinguishes "the user hid the window" from "the app is really ending":
 // the close button hides, it does not destroy.
 let isQuitting = false
+// `before-quit` intercepts the first pass to flush the music cache; this keeps
+// the re-quit and the database close from running twice.
+let storeClosed = false
+let quitCleanupStarted = false
 // Close-to-tray is the default because the player keeps running in the tray,
 // but it is stored so a user can make the X button quit like any other app.
 let closeToTray = true
@@ -203,7 +208,9 @@ class IPCBatcher {
 
   private flush(event: string) {
     const batch = this.batches.get(event)
-    if (batch && batch.length > 0 && mainWindow) {
+    // A batch scheduled 16 ms ago can arrive after the window was closed or
+    // reloaded; sending into destroyed webContents throws from a timer.
+    if (batch && batch.length > 0 && mainWindow && !mainWindow.webContents.isDestroyed()) {
       mainWindow.webContents.send(event, batch)
       this.batches.set(event, [])
     }
@@ -442,7 +449,23 @@ ipcMain.handle('set-config', createIPCHandler(async (_: any, key: string, value:
     // language until the next restart without this.
     void rebuildTrayMenu()
   }
+  // `setConfig` reports whether the write succeeded, not whether anything
+  // changed, and the General tab's Save button writes the unchanged path too.
+  // Resetting on that would empty a perfectly good library while the renderer
+  // keeps showing it (its own handler ignores the no-op), so the next `.osz`
+  // would be appended to an empty, not-yet-loaded list and never displayed.
+  const previousOsuPath = key === 'osuPath' ? await getConfig('osuPath') : null
   const saved = await setConfig(key, value)
+  if (saved && key === 'osuPath' && isOsuPathChange(previousOsuPath, value)) {
+    // Every path in the in-memory library points outside the new media root, so
+    // covers and audio would start returning 403 while the list kept the old
+    // songs. Resetting here makes the next read rebuild from the new folder
+    // instead of waiting for the user to reload the window by hand.
+    musicPlayerInstance?.resetLibrary()
+    // Re-read the covers the Filters tab caches per song path (the list itself
+    // is rebuilt by the Music tab's own `config:changed` handler).
+    ipcBatcher.add('music:metadataUpdated', {})
+  }
   // The renderer keeps a few settings in local state; a broadcast keeps them in
   // sync without each tab polling the database on a timer.
   if (saved) {
@@ -579,6 +602,12 @@ const initMusicPlayer = async () => {
   }
   
   if (!musicPlayerInstance) {
+    // The quit path keeps the instance alive while it flushes the cache, so
+    // reaching this during teardown can only mean the reference was already
+    // cleared — a request arriving after that point would otherwise build a
+    // second player that nothing ever destroys and whose cache write races the
+    // flush that is already running.
+    if (quitCleanupStarted) throw new Error('MusicPlayer is shutting down')
     musicPlayerInstance = new MusicPlayer()
     
     musicPlayerInstance.on('metadataUpdated', () => {
@@ -607,7 +636,7 @@ const initDiscordHandlers = async () => {
 
 ipcMain.handle('music:get-filtered-songs', createIPCHandler(async () => {
   const player = await initMusicPlayer()
-  return player.getFilteredSongs()
+  return player.getLibrary()
 }))
 
 ipcMain.handle('music:setPlaybackMode', createIPCHandler(async (_: any, shuffle: boolean, repeatOne: boolean) => {
@@ -635,13 +664,6 @@ ipcMain.handle('music:clear-cache', createIPCHandler(async () => {
 ipcMain.handle('music:force-save-cache', createIPCHandler(async () => {
   const player = await initMusicPlayer()
   return player.forceSaveCache()
-}))
-
-ipcMain.handle('music:cleanup', createIPCHandler(async () => {
-  if (musicPlayerInstance) {
-    musicPlayerInstance.destroy()
-    musicPlayerInstance = null
-  }
 }))
 
 const BEATMAP_IMPORT_MESSAGES: Record<BeatmapImportCode, MessageKey> = {
@@ -880,16 +902,45 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   isQuitting = true
+  // Second pass, after everything below finished: let the quit proceed.
+  if (storeClosed) return
 
-  if (musicPlayerInstance) {
-    musicPlayerInstance.destroy()
-  }
+  // Both the metadata cache and the config database close asynchronously, and
+  // the cache flush is the only write for changes the LRU eviction and a
+  // beatmap delete marked dirty. The quit is held back once so those finish;
+  // the timeout keeps a stuck disk from keeping the app open forever.
+  event.preventDefault()
+  // A second quit request (tray menu, a window closing) must not start the
+  // cleanup again: it would close an already-closing database.
+  if (quitCleanupStarted) return
+  quitCleanupStarted = true
 
+  // The reference is cleared only once the player is gone. Nulling it here
+  // would let a request arriving during the flush (`music:get-cache-stats` polls
+  // every 30 s) build a second player through `initMusicPlayer()` — one that is
+  // outside this teardown and outlives the one being destroyed. Every handler is
+  // safe on the destroying instance: `destroy` cleared the maps, a scan returns
+  // through `abandoned()`, and add/remove return early on `destroyed`.
+  const player = musicPlayerInstance
   ipcBatcher.destroy()
 
-  void closeConfigStore()
+  const flushCache = player
+    ? Promise.race([
+        player.destroy().catch(() => undefined),
+        new Promise<void>(resolve => setTimeout(resolve, 2000))
+      ])
+    : Promise.resolve()
+
+  void flushCache
+    .then(() => closeConfigStore())
+    .catch(() => undefined)
+    .finally(() => {
+      musicPlayerInstance = null
+      storeClosed = true
+      app.quit()
+    })
 })
 
 process.on('uncaughtException', (error) => {

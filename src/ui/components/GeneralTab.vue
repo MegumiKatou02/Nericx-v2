@@ -32,10 +32,8 @@
       </div>
       <div class="notification-content">
         <div class="notification-title">{{ t('general.saved') }}</div>
-        <div class="notification-subtitle">
-          {{ t('general.restart.before') }} <kbd>Ctrl + R</kbd> {{ t('general.restart.middle') }}
-          <button @click="reloadApp" class="reload-btn">{{ t('general.restart.click') }}</button>
-          {{ t('general.restart.after') }}
+        <div v-if="showReloaded" class="notification-subtitle">
+          {{ t('general.reloaded') }}
         </div>
       </div>
       <button @click="closeNotification" class="close-btn">
@@ -59,6 +57,15 @@ import { t } from '../i18n.js'
 
 const osuPath = ref('')
 const showSuccessNotification = ref(false)
+/** Whether the save that opened the notification actually switched folders. */
+const showReloaded = ref(false)
+/**
+ * The folder as it was last written. The Save button stays enabled on a path
+ * that has not changed, and the library is only dropped and rebuilt when the
+ * value differs — the Music tab compares the two strings the same way — so a
+ * save with nothing to change must not claim a reload happened.
+ */
+const storedPath = ref('')
 
 const selectOsuFolder = async () => {
   const result = await window.electronAPI.selectDirectory()
@@ -68,16 +75,21 @@ const selectOsuFolder = async () => {
 }
 
 const saveConfig = async () => {
-  await window.electronAPI.setConfig('osuPath', osuPath.value)
+  const changed = osuPath.value !== storedPath.value
+  const saved = await window.electronAPI.setConfig('osuPath', osuPath.value)
+  // A failed write must not leave `storedPath` claiming a folder the database
+  // does not have: the next Save would then skip the reload that is still due.
+  if (!saved) {
+    console.error('Could not save the osu! folder')
+    return
+  }
+  storedPath.value = osuPath.value
+  showReloaded.value = changed
   showSuccessNotification.value = true
 
   setTimeout(() => {
     showSuccessNotification.value = false
   }, 10000)
-}
-
-const reloadApp = () => {
-  window.location.reload()
 }
 
 const closeNotification = () => {
@@ -90,6 +102,7 @@ onMounted(async () => {
 
     if (savedPath) {
       osuPath.value = savedPath
+      storedPath.value = savedPath
     }
   } catch (error) {
     console.error('Error loading config:', error)
@@ -238,35 +251,6 @@ h2, h3 {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.notification-subtitle kbd {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.reload-btn {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 4px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  text-decoration: none;
-}
-
-.reload-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .close-btn {
