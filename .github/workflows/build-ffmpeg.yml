@@ -42,6 +42,14 @@ jobs:
 
       # The build script is bash and expects the MSYS2 UCRT64 layout at
       # /ucrt64, which is where msys2/setup-msys2 installs it.
+      #
+      # `update: true` upgrades the toolchain on every run, so gcc can move
+      # between builds and the output can stop matching the pin. That is the
+      # reason the comparison below is a warning plus a deliberate re-pin
+      # rather than a hard failure: a changed hash is the signal that the
+      # toolchain moved, not that this run did something wrong. What the
+      # pinned hash does guarantee is that no binary ships that this
+      # repository has not looked at and recorded.
       - uses: msys2/setup-msys2@v2
         id: msys2
         with:
